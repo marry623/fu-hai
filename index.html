@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>浮骸 · 海上肉鸽</title>
+  <link rel="stylesheet" href="css/style.css?v=16e" />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+SC:wght@700;900&family=Black+Ops+One&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="game-root">
+    <canvas id="c"></canvas>
+    <div id="hud" class="hidden">
+      <div class="hud-top">
+        <div class="speed-panel">
+          <div class="player-row"><div class="avatar"></div><span class="player-name">浮骸船长</span></div>
+          <div class="speed-box"><span id="speed-value">000</span><span class="speed-unit">节</span></div>
+          <div class="stat-row"><span class="stat-label hp">耐久</span><div class="stat-bar"><div id="hp-fill"></div></div><span id="hp-text">100</span></div>
+        </div>
+        <div class="map-panel">
+          <canvas id="minimap" width="140" height="140"></canvas>
+          <div class="map-meta">
+            <div class="meta-chip gold" id="zone-name">珊瑚浅滩</div>
+            <div class="meta-chip" id="frag-count">海图 0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="distance-hero"><span id="run-dist">0</span><small>米</small></div>
+
+      <div class="hud-center">
+        <div id="toast" class="toast hidden"></div>
+        <div id="prompt" class="prompt hidden"></div>
+        <div id="combo-hint" class="prompt hidden"></div>
+        <div id="qte" class="qte hidden">
+          <div class="qte-label">空格 · 绿区收竿 <span id="qte-hits"></span></div>
+          <div class="qte-track"><div id="qte-green" class="qte-green"></div><div id="qte-pointer" class="qte-pointer"></div></div>
+        </div>
+      </div>
+
+      <div id="slots-bar" class="slots-bar">
+        <div class="slot-col">
+          <button type="button" class="slot-chip" data-slot="bow">头</button>
+          <div class="slot-vita" title="鱼活性"><div class="slot-vita-fill" data-slot="bow"></div></div>
+        </div>
+        <div class="slot-col">
+          <button type="button" class="slot-chip" data-slot="stern">尾</button>
+          <div class="slot-vita" title="鱼活性"><div class="slot-vita-fill" data-slot="stern"></div></div>
+        </div>
+        <div class="slot-col">
+          <button type="button" class="slot-chip" data-slot="sideL">左</button>
+          <div class="slot-vita" title="鱼活性"><div class="slot-vita-fill" data-slot="sideL"></div></div>
+        </div>
+        <div class="slot-col">
+          <button type="button" class="slot-chip" data-slot="sideR">右</button>
+          <div class="slot-vita" title="鱼活性"><div class="slot-vita-fill" data-slot="sideR"></div></div>
+        </div>
+        <div class="slot-col">
+          <button type="button" class="slot-chip" data-slot="keel">底</button>
+          <div class="slot-vita" title="鱼活性"><div class="slot-vita-fill" data-slot="keel"></div></div>
+        </div>
+        <div class="slot-col">
+          <button type="button" class="slot-chip" data-slot="sail">帆</button>
+          <div class="slot-vita" title="鱼活性"><div class="slot-vita-fill" data-slot="sail"></div></div>
+        </div>
+        <button type="button" class="slot-chip bag" id="btn-backpack" title="背包 (Tab / B)">包</button>
+      </div>
+
+      <div id="weapon-bar" class="weapon-bar">
+        <button type="button" class="weapon-chip active" data-w="0">1 鱼叉</button>
+        <button type="button" class="weapon-chip" data-w="1">2 刀</button>
+        <button type="button" class="weapon-chip" data-w="2">3 投石</button>
+      </div>
+
+      <div id="backpack" class="backpack hidden" aria-hidden="true">
+        <div class="bp-desk">
+          <aside class="bp-nav">
+            <button type="button" class="bp-return" id="bp-close" title="关闭 (Tab)">←</button>
+            <button type="button" class="bp-tab active" data-tab="catch">
+              <span class="bp-tab-icon bp-ico-fish"></span>
+              <span class="bp-tab-label">鱼获</span>
+            </button>
+            <button type="button" class="bp-tab" data-tab="slots">
+              <span class="bp-tab-icon bp-ico-slot"></span>
+              <span class="bp-tab-label">船槽</span>
+            </button>
+            <button type="button" class="bp-tab" data-tab="supplies">
+              <span class="bp-tab-icon bp-ico-box"></span>
+              <span class="bp-tab-label">物资</span>
+            </button>
+            <p class="bp-nav-hint">Tab 关闭</p>
+          </aside>
+          <section class="bp-mat">
+            <div class="bp-mat-head">
+              <span class="bp-mat-title" id="bp-mat-title">鱼获</span>
+              <span class="bp-mat-count" id="fish-count">0</span>
+              <div class="bp-col-nums" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
+            </div>
+            <div id="bp-grid" class="bp-grid"></div>
+          </section>
+          <aside class="bp-clip">
+            <div class="bp-clip-metal"></div>
+            <div class="bp-clip-body">
+              <div class="bp-clip-empty" id="bp-empty">选中格子查看详情</div>
+              <div class="bp-clip-detail hidden" id="bp-detail">
+                <div class="bp-clip-head">
+                  <h3 id="bp-name">—</h3>
+                  <span class="bp-serial" id="bp-serial">No. —</span>
+                </div>
+                <div class="bp-preview">
+                  <div class="bp-preview-swatch" id="bp-swatch"></div>
+                  <div class="bp-ribbon" id="bp-ribbon">普通</div>
+                </div>
+                <p class="bp-tagline" id="bp-tagline"></p>
+                <p class="bp-desc" id="bp-desc"></p>
+                <div class="bp-meta" id="bp-meta"></div>
+                <div class="bp-slot-pick" id="bp-slot-pick">
+                  <span class="bp-slot-label">专属槽位</span>
+                  <div class="bp-slot-row" id="bp-slot-row"></div>
+                </div>
+                <div class="bp-actions">
+                  <button type="button" id="btn-use" class="bp-btn bright">使用</button>
+                  <button type="button" id="btn-eat" class="bp-btn bright">食用/修理</button>
+                  <button type="button" id="btn-equip" class="bp-btn bright">绑定</button>
+                  <button type="button" id="btn-feed" class="bp-btn bright">投喂</button>
+                  <button type="button" id="btn-discard" class="bp-btn dim">丢弃</button>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <div id="event-modal" class="event-modal hidden">
+        <div class="event-card">
+          <h3 id="event-title">漂流瓶</h3>
+          <p id="event-desc">纸条…</p>
+          <div class="event-btns">
+            <button type="button" id="event-a" class="mini-btn">A</button>
+            <button type="button" id="event-b" class="mini-btn alt">B</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="lighthouse-modal" class="event-modal hidden">
+        <div class="event-card">
+          <h3>灯塔港口</h3>
+          <p>耐久已回满。归航回岛屿基地结算，或继续向深海航行。</p>
+          <div class="event-btns">
+            <button type="button" id="btn-lh-return" class="mini-btn">归航回基地</button>
+            <button type="button" id="btn-lh-continue" class="mini-btn alt">继续深航</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="sea-map-modal" class="sea-map-modal hidden">
+        <canvas id="sea-map-canvas" width="720" height="720"></canvas>
+        <p class="sea-map-hint">M / Esc 关闭</p>
+      </div>
+
+      <div id="settle-modal" class="event-modal hidden">
+        <div class="event-card">
+          <h3 id="settle-title">航程结算</h3>
+          <p id="settle-stats">—</p>
+          <div class="event-btns">
+            <button type="button" id="btn-settle-hub" class="mini-btn">回岛屿基地</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="sink-modal" class="event-modal hidden">
+        <div class="event-card">
+          <h3>木筏沉没</h3>
+          <p id="sink-stats">—</p>
+          <div class="event-btns">
+            <button type="button" id="btn-retry" class="mini-btn">回岛屿基地</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="hud-bottom">
+        <div class="steer-panel">
+          <div class="steer-label">双桨 <span>A左 · D右 · 同时进</span></div>
+          <div class="steer-visual">
+            <div class="steer-wing left" id="oar-l"></div>
+            <div class="steer-dial"><div id="steer-knob"></div></div>
+            <div class="steer-wing right" id="oar-r"></div>
+          </div>
+        </div>
+        <div class="action-panel">
+          <button type="button" class="action-btn drift" id="btn-fish"><span class="cn" id="btn-fish-cn">抛竿</span><span class="en">空格</span></button>
+          <button type="button" class="action-btn boost" id="btn-salvage"><span class="cn">打捞</span><span class="en">E</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div id="cover-overlay">
+      <div class="cover-title-wrap">
+        <h1 class="cover-title" aria-label="浮骸">浮骸</h1>
+        <p class="cover-sub">海上生存肉鸽</p>
+      </div>
+      <div class="cover-actions">
+        <button type="button" id="btn-cover-start" class="cover-btn">开始游戏</button>
+        <button type="button" id="btn-cover-tutorial" class="cover-btn">新手教程</button>
+        <button type="button" id="btn-cover-quit" class="cover-btn cover-btn-muted">结束游戏</button>
+      </div>
+      <div id="cover-tutorial" class="cover-tutorial hidden">
+        <div class="cover-tutorial-card">
+          <h2>新手教程</h2>
+          <ul>
+            <li><b>A / D</b> — 左桨右转 · 右桨左转，同时按下前进</li>
+            <li><b>空格</b> — 漩涡旁抛竿，绿区收竿</li>
+            <li><b>E</b> — 打捞漂浮物 · <b>Tab</b> 打开背包绑鱼</li>
+            <li>靠近<strong>灯塔</strong>可回满耐久，选择归航回基地或继续深航</li>
+            <li>基地可配装、整备仓库、解锁船型与海域</li>
+            <li><b>M</b> — 打开本海域地图</li>
+          </ul>
+          <button type="button" id="btn-tutorial-close" class="cover-btn">知道了</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="hub-overlay" class="hidden">
+      <header class="hub-topbar">
+        <div class="hub-topbar-brand">
+          <p class="eyebrow">岛屿基地</p>
+          <h1>浮骸</h1>
+        </div>
+        <div class="hub-meta">
+          <span>海图碎片 <strong id="hub-frags">0</strong></span>
+          <span>最远 <strong id="hub-best">0m</strong></span>
+        </div>
+      </header>
+      <p class="hub-island-hint">点击建筑进入功能 · 港口出港 · 船坞整备 · 市集商店 · 展馆图鉴</p>
+      <div id="hub-markers" class="hub-markers"></div>
+      <div id="hub-drawer" class="hub-drawer hidden">
+        <div class="hub-drawer-card">
+          <div class="hub-drawer-head">
+            <h2 id="hub-drawer-title">出港</h2>
+            <button type="button" id="hub-drawer-close" class="hub-drawer-close" aria-label="关闭">×</button>
+          </div>
+          <nav class="hub-tabs hub-tabs-compact">
+            <button type="button" data-hub-tab="depart" class="active">出港</button>
+            <button type="button" data-hub-tab="prep">整备</button>
+            <button type="button" data-hub-tab="shop">商店</button>
+            <button type="button" data-hub-tab="codex">图鉴</button>
+          </nav>
+          <div class="hub-body">
+            <section id="hub-panel-depart" class="hub-panel">
+              <h2>本局目标海域</h2>
+              <p class="hub-sea-hint">出港后本局只在所选海域航行 · 靠近灯塔可归航</p>
+              <div id="hub-zones" class="hub-zones"></div>
+              <h2>船型</h2>
+              <div id="hub-boats" class="hub-boats"></div>
+              <h2>出港配装</h2>
+              <div id="hub-slots" class="hub-slots"></div>
+              <h2>携带鱼获</h2>
+              <div id="hub-cargo" class="hub-warehouse"></div>
+              <button type="button" id="btn-depart" class="hub-depart">出港航行</button>
+            </section>
+            <section id="hub-panel-prep" class="hub-panel hidden">
+              <h2>仓库与投喂</h2>
+              <div id="hub-warehouse" class="hub-warehouse"></div>
+              <h2>物资</h2>
+              <div id="hub-supplies" class="hub-supplies"></div>
+              <button type="button" id="btn-hub-repair" class="hub-mini">花 2 碎片换修补剂</button>
+            </section>
+            <section id="hub-panel-shop" class="hub-panel hidden">
+              <h2>基地商店</h2>
+              <div id="hub-shop" class="hub-shop"></div>
+            </section>
+            <section id="hub-panel-codex" class="hub-panel hidden">
+              <h2>鱼种图鉴</h2>
+              <div id="hub-codex" class="hub-codex"></div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="importmap">
+  {"imports":{"three":"https://unpkg.com/three@0.170.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.170.0/examples/jsm/"}}
+  </script>
+  <div id="boot-error" hidden style="position:fixed;inset:auto 12px 12px 12px;z-index:9999;background:#3a1020;color:#ffb4c0;border:3px solid #000;border-radius:12px;padding:12px 14px;font:13px/1.45 Consolas,monospace;max-height:40vh;overflow:auto;white-space:pre-wrap"></div>
+  <script type="module">
+    const box = document.getElementById('boot-error');
+    const show = (msg) => {
+      if (!box) return;
+      box.hidden = false;
+      box.textContent = String(msg);
+      console.error(msg);
+    };
+    window.addEventListener('error', (e) => show((e.error && e.error.stack) || e.message));
+    window.addEventListener('unhandledrejection', (e) => show(e.reason && e.reason.stack || e.reason));
+    try {
+      await import('./js/main.js?v=16e');
+    } catch (err) {
+      show(err && err.stack || err);
+    }
+  </script>
+</body>
+</html>

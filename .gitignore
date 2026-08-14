@@ -1,0 +1,16 @@
+node_modules/
+package-lock.json
+.netlify/
+ref/shot.mjs
+ref/gameplay_*.png
+ref/title_check.png
+ref/frame_*.png
+*.mp4
+*.bak
+_parse_test.mjs
+_*.txt
+_*.html
+_es*.txt
+probe_errors.html
+.DS_Store
+Thumbs.db

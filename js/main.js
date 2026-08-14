@@ -1,0 +1,1560 @@
+import * as THREE from 'three';
+import { createToonGradient, clamp } from './stylekit.js';
+import {
+  createDuskSky, createSun, createClouds, createWater, updateWater,
+  createFoamRings,
+} from './world.js';
+import { createBoat, createWakeSystem, setOarStroke } from './boat.js?v=16c';
+import { createPaddleController } from './paddle.js?v=16c';
+import { createHull, updateCorrosion, damageHull, repairHull } from './hull.js?v=16c';
+import {
+  createFlotsamField, updateFlotsam, findNearestFlotsam, respawnFlotsam, rollSalvage,
+} from './flotsam.js?v=16c';
+import {
+  createVortexField, updateVortices, findNearestVortex, createFishingController,
+} from './fishing.js?v=16c';
+import { createHazards } from './hazards.js?v=16c';
+import {
+  equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
+  SLOT_ORDER, SLOT_LABELS, feedSlot,
+} from './slots.js?v=16c';
+import { getFishDef, pickFishForZone, RARITY } from './fishCatalog.js?v=16c';
+import { createFishMesh } from './fishMeshes.js?v=16c';
+import { getZone } from './zones.js?v=16c';
+import {
+  loadMeta, settleRun, hullMaxForBoat, thrustMulForBoat,
+  discoverFish, syncLoadoutSuppliesFromWarehouse, consumeLoadoutOnDepart,
+} from './meta.js?v=16c';
+import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=16c';
+import { createHub } from './hub.js?v=16c';
+import { createCoverScene } from './coverScene.js?v=16c';
+import { createHubIsland } from './hubIsland.js?v=16c';
+import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=16c';
+import { getSeaMap } from './seaMaps.js?v=16c';
+
+const canvas = document.getElementById('c');
+const minimapCtx = document.getElementById('minimap').getContext('2d');
+
+const ui = {
+  speed: document.getElementById('speed-value'),
+  hpFill: document.getElementById('hp-fill'),
+  hpText: document.getElementById('hp-text'),
+  invText: document.getElementById('inv-text'),
+  comboText: document.getElementById('combo-text'),
+  zoneName: document.getElementById('zone-name'),
+  fragCount: document.getElementById('frag-count'),
+  runDist: document.getElementById('run-dist'),
+  toast: document.getElementById('toast'),
+  prompt: document.getElementById('prompt'),
+  comboHint: document.getElementById('combo-hint'),
+  qte: document.getElementById('qte'),
+  qteGreen: document.getElementById('qte-green'),
+  qtePointer: document.getElementById('qte-pointer'),
+  qteHits: document.getElementById('qte-hits'),
+  btnFish: document.getElementById('btn-fish'),
+  btnFishCn: document.getElementById('btn-fish-cn'),
+  btnSalvage: document.getElementById('btn-salvage'),
+  title: document.getElementById('hub-overlay'),
+  btnStart: null,
+  backpack: document.getElementById('backpack'),
+  bpGrid: document.getElementById('bp-grid'),
+  bpMatTitle: document.getElementById('bp-mat-title'),
+  fishCount: document.getElementById('fish-count'),
+  bpEmpty: document.getElementById('bp-empty'),
+  bpDetail: document.getElementById('bp-detail'),
+  bpName: document.getElementById('bp-name'),
+  bpSerial: document.getElementById('bp-serial'),
+  bpSwatch: document.getElementById('bp-swatch'),
+  bpRibbon: document.getElementById('bp-ribbon'),
+  bpTagline: document.getElementById('bp-tagline'),
+  bpDesc: document.getElementById('bp-desc'),
+  bpMeta: document.getElementById('bp-meta'),
+  bpSlotPick: document.getElementById('bp-slot-pick'),
+  bpSlotRow: document.getElementById('bp-slot-row'),
+  btnCloseBp: document.getElementById('bp-close'),
+  btnBackpack: document.getElementById('btn-backpack'),
+  btnDiscard: document.getElementById('btn-discard'),
+  btnUse: document.getElementById('btn-use'),
+  btnEat: document.getElementById('btn-eat'),
+  btnEquip: document.getElementById('btn-equip'),
+  btnFeed: document.getElementById('btn-feed'),
+  eventModal: document.getElementById('event-modal'),
+  eventTitle: document.getElementById('event-title'),
+  eventDesc: document.getElementById('event-desc'),
+  eventA: document.getElementById('event-a'),
+  eventB: document.getElementById('event-b'),
+  sinkModal: document.getElementById('sink-modal'),
+  sinkStats: document.getElementById('sink-stats'),
+  btnRetry: document.getElementById('btn-retry'),
+  btnCheckpoint: document.getElementById('btn-checkpoint'),
+  lighthouseModal: document.getElementById('lighthouse-modal'),
+  seaMapModal: document.getElementById('sea-map-modal'),
+  seaMapCanvas: document.getElementById('sea-map-canvas'),
+  btnLhReturn: document.getElementById('btn-lh-return'),
+  btnLhContinue: document.getElementById('btn-lh-continue'),
+  settleModal: document.getElementById('settle-modal'),
+  settleTitle: document.getElementById('settle-title'),
+  settleStats: document.getElementById('settle-stats'),
+  btnSettleHub: document.getElementById('btn-settle-hub'),
+  cover: document.getElementById('cover-overlay'),
+  btnCoverStart: document.getElementById('btn-cover-start'),
+  btnCoverTutorial: document.getElementById('btn-cover-tutorial'),
+  btnCoverQuit: document.getElementById('btn-cover-quit'),
+  coverTutorial: document.getElementById('cover-tutorial'),
+  btnTutorialClose: document.getElementById('btn-tutorial-close'),
+  hud: document.getElementById('hud'),
+  oarL: document.getElementById('oar-l'),
+  oarR: document.getElementById('oar-r'),
+};
+
+let meta = loadMeta();
+let selectedBoat = meta.loadout?.boatId || 'raft';
+let startZone = meta.unlockedZones?.[0] ?? 0;
+let phase = 'cover'; // cover | hub | run | settle
+let pendingCheckpoint = 0;
+let runNewFish = 0;
+/** @type {ReturnType<typeof createHub> | null} */
+let hub = null;
+
+const state = {
+  started: false,
+  inventory: { bait: 3, plank: 1, repair: 1 },
+  fishHold: [],
+  selectedFish: -1,
+  selectedSlot: 'bow',
+  slots: { bow: null, stern: null, sideL: null, sideR: null, keel: null, sail: null },
+  weapon: 0,
+  toastTimer: 0,
+  shellBlocks: 0,
+  speedBuffUntil: 0,
+  jumpUntil: 0,
+  invulnUntil: 0,
+  inkCd: 0,
+  inkShots: 0,
+  pendingEvent: null,
+  lighthouseOpen: false,
+  seaMapOpen: false,
+  fishPanelOpen: false,
+  backpackTab: 'catch',
+  selectedSupply: null,
+  runDistance: 0,
+  maxZ: 0,
+  checkpoint: 0,
+  checkpointUsed: false,
+  kills: 0,
+  mods: 0,
+  zone: 0,
+  captainLocal: new THREE.Vector3(0, 0.45, 0.6),
+};
+
+const paddle = createPaddleController();
+let hull = createHull(100);
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xa5d8ff, 120, 420);
+scene.background = new THREE.Color(0x7dd3fc);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 2200);
+const gradientMap = createToonGradient();
+
+scene.add(new THREE.HemisphereLight(0xffe8d0, 0x2ecfc4, 1.1));
+const sun = new THREE.DirectionalLight(0xffd2a0, 1.1);
+sun.position.set(-80, 50, -120);
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0xfff0e8, 0.35));
+
+scene.add(createDuskSky());
+const duskSun = createSun();
+scene.add(duskSun);
+const worldClouds = createClouds(gradientMap);
+scene.add(worldClouds);
+const water = createWater();
+scene.add(water);
+const foam = createFoamRings();
+scene.add(foam);
+
+const boat = createBoat(gradientMap);
+scene.add(boat);
+const wake = createWakeSystem(scene);
+const { root: flotRoot, list: flotsam } = createFlotsamField(gradientMap, 22);
+scene.add(flotRoot);
+const { root: vRoot, list: vortices } = createVortexField(gradientMap, 10);
+scene.add(vRoot);
+const hazards = createHazards(gradientMap, scene);
+const seaWorld = createSeaWorld();
+scene.add(seaWorld.root);
+
+const coverScene = createCoverScene(gradientMap);
+scene.add(coverScene.root);
+const hubIsland = createHubIsland(gradientMap);
+scene.add(hubIsland.root);
+
+const playVisuals = [water, foam, boat, flotRoot, vRoot, hazards.root, seaWorld.root, worldClouds, duskSun];
+const duskBits = [];
+scene.traverse((o) => {
+  if (o.name === 'duskSky') duskBits.push(o);
+});
+
+const hubRay = new THREE.Raycaster();
+const hubPointer = new THREE.Vector2();
+const hubProj = new THREE.Vector3();
+
+function setWorldMode(mode) {
+  // mode: 'cover' | 'hub' | 'play'
+  phase = mode === 'play' ? phase : mode;
+  if (mode === 'cover') phase = 'cover';
+  if (mode === 'hub') phase = 'hub';
+
+  coverScene.setActive(mode === 'cover');
+  hubIsland.setActive(mode === 'hub');
+  playVisuals.forEach((o) => { if (o) o.visible = mode === 'play'; });
+  duskBits.forEach((o) => { o.visible = mode === 'play'; });
+
+  if (ui.cover) ui.cover.classList.toggle('hidden', mode !== 'cover');
+  if (ui.hud) ui.hud.classList.toggle('hidden', mode !== 'play');
+
+  if (mode === 'cover') {
+    scene.background.set(0xb8dff5);
+    scene.fog.near = 80;
+    scene.fog.far = 220;
+    scene.fog.color.set(0xc5e8f8);
+  } else if (mode === 'hub') {
+    scene.background.set(0xb8dff5);
+    scene.fog.near = 70;
+    scene.fog.far = 200;
+    scene.fog.color.set(0xc5e8f8);
+  } else {
+    scene.fog.near = 120;
+    scene.fog.far = 420;
+  }
+}
+
+function setCoverMode(on) {
+  if (on) setWorldMode('cover');
+  else if (phase === 'cover') setWorldMode('hub');
+}
+
+function projectHubAnchor(id) {
+  const a = hubIsland.anchors[id];
+  if (!a) return null;
+  a.getWorldPosition(hubProj);
+  hubProj.project(camera);
+  return {
+    x: (hubProj.x + 1) / 2,
+    y: 1 - (hubProj.y + 1) / 2,
+    behind: hubProj.z > 1,
+  };
+}
+
+function pickHubBuilding(clientX, clientY) {
+  if (phase !== 'hub' || !hubIsland.root.visible) return null;
+  const rect = canvas.getBoundingClientRect();
+  hubPointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  hubPointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+  hubRay.setFromCamera(hubPointer, camera);
+  const hits = hubRay.intersectObjects(hubIsland.hits, true);
+  if (!hits.length) return null;
+  let o = hits[0].object;
+  while (o && !o.userData.hubId) o = o.parent;
+  return o?.userData.hubId || null;
+}
+
+const tmp = new THREE.Vector3();
+const vel = new THREE.Vector3();
+let camInit = false;
+let wakeAcc = 0;
+let edgeToastAt = 0;
+let lastBoatX = 0;
+let lastBoatZ = 0;
+const clock = new THREE.Clock();
+
+function now() { return performance.now() / 1000; }
+function boatPos() {
+  return {
+    x: paddle.state.x, y: 0, z: paddle.state.z,
+    distanceTo(p) { return Math.hypot(this.x - p.x, this.z - p.z); },
+  };
+}
+
+function showToast(msg, ms = 1800) {
+  ui.toast.textContent = msg;
+  ui.toast.classList.remove('hidden');
+  state.toastTimer = ms / 1000;
+}
+function setPrompt(el, msg) {
+  if (!msg) { el.classList.add('hidden'); return; }
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+function bonuses() { return computeBonuses(state.slots); }
+
+function applyDamage(amount, reason) {
+  if (now() < state.invulnUntil || hull.sunk) return;
+  const b = bonuses();
+  if (b.block > 0 || state.shellBlocks > 0) {
+    state.shellBlocks = Math.max(0, (state.shellBlocks || b.block) - 1);
+    if (state.slots.sideR?.defId === 'shell') state.slots.sideR = null;
+    showToast('贝壳挡下攻击！');
+    refreshSlots();
+    return;
+  }
+  damageHull(hull, amount);
+  showToast(`${reason} −${amount | 0}`);
+  updateHp();
+  if (hull.sunk) onSink();
+}
+
+function updateHp() {
+  ui.hpFill.style.width = `${(hull.durability / hull.maxDurability) * 100}%`;
+  ui.hpText.textContent = String(Math.round(hull.durability));
+}
+function updateInv() {
+  const i = state.inventory;
+  if (ui.invText) ui.invText.textContent = `饵${i.bait} · 板${i.plank} · 剂${i.repair}`;
+  if (state.fishPanelOpen && state.backpackTab === 'supplies') renderBackpack();
+}
+
+const fishing = createFishingController({
+  toast: showToast,
+  onPhase(ph) {
+    if (ph === 'qte') {
+      ui.qte.classList.remove('hidden');
+      ui.btnFishCn.textContent = '收竿';
+    } else if (ph === 'wait') {
+      ui.qte.classList.add('hidden');
+      ui.btnFishCn.textContent = '等待';
+    } else {
+      ui.qte.classList.add('hidden');
+      ui.btnFishCn.textContent = '抛竿';
+    }
+  },
+  onQte(p, c, w) {
+    ui.qteGreen.style.left = `${(c - w / 2) * 100}%`;
+    ui.qteGreen.style.width = `${w * 100}%`;
+    ui.qtePointer.style.left = `${p * 100}%`;
+  },
+  onRod(on) { if (boat.userData.rodArm) boat.userData.rodArm.visible = on; },
+  onCatch(fish) {
+    state.fishHold.push(fish);
+    state.selectedFish = state.fishHold.length - 1;
+    syncDeckFish(boat, state.fishHold, gradientMap);
+    showCatchLift(fish);
+    const disc = discoverFish(meta, [fish.defId]);
+    meta = disc.meta;
+    if (disc.newIds.length) {
+      runNewFish += disc.newIds.length;
+      showToast(`新鱼种！${fish.name} 已记入图鉴`);
+    } else {
+      showToast(`钓到 ${fish.name}（${'★'.repeat(Math.min(5, fish.rarity))}）· Tab 查看`);
+    }
+    renderFishList();
+  },
+});
+
+function showCatchLift(fish) {
+  const m = createFishMesh(fish.defId, gradientMap, 1.1);
+  m.position.set(paddle.state.x + 1, 1.5, paddle.state.z);
+  scene.add(m);
+  let t = 0;
+  const id = setInterval(() => {
+    t += 0.05;
+    m.position.y = 1.5 + t * 1.2;
+    m.rotation.y += 0.1;
+    if (t > 1.2) { scene.remove(m); clearInterval(id); }
+  }, 40);
+}
+
+function onSpace() {
+  if (hull.sunk) return;
+  if (fishing.phase === 'qte') { fishing.onSpace(); return; }
+  if (fishing.phase === 'wait') return;
+  const near = findNearestVortex(vortices, boatPos());
+  if (!near) { showToast('附近没有鱼群漩涡'); return; }
+  const bait = state.inventory.bait > 0;
+  if (bait) { state.inventory.bait--; updateInv(); }
+  const greenBonus = meta.unlocks.fishmongerEye ? 1.2 : 1;
+  fishing.tryCast(true, bait, state.runDistance, greenBonus, startZone);
+  ui.btnFish.classList.add('pressed');
+}
+
+function trySalvage() {
+  if (hull.sunk || state.pendingEvent) return;
+  const hit = findNearestFlotsam(flotsam, boatPos(), 7);
+  if (!hit) { showToast('附近没有漂浮物'); return; }
+  const obj = hit.item;
+  obj.visible = false;
+  obj.userData.collected = true;
+  const r = rollSalvage(obj.userData.type);
+  if (r.type === 'trap') applyDamage(20, '箱型海性');
+  else if (r.type === 'event') {
+    state.pendingEvent = r.event;
+    ui.eventTitle.textContent = r.event.title;
+    ui.eventDesc.textContent = '瓶中纸条让你选择…';
+    ui.eventA.textContent = r.event.a.label;
+    ui.eventB.textContent = r.event.b.label;
+    ui.eventModal.classList.remove('hidden');
+  } else {
+    state.inventory[r.supply] = (state.inventory[r.supply] || 0) + r.amount;
+    showToast(`打捞 ${r.name}×${r.amount}`);
+    updateInv();
+  }
+  setTimeout(() => {
+    respawnFlotsam(obj, obj.userData.id);
+    obj.position.z = paddle.state.z + 40 + Math.random() * 60;
+    obj.position.x = (Math.random() - 0.5) * 40;
+  }, 8000);
+}
+
+function resolveEvent(which) {
+  const ev = state.pendingEvent;
+  state.pendingEvent = null;
+  ui.eventModal.classList.add('hidden');
+  if (!ev) return;
+  const key = which === 'a' ? ev.a.key : ev.b.key;
+  if (key === 'repair') state.inventory.repair++;
+  if (key === 'bait') state.inventory.bait += 2;
+  showToast(which === 'a' ? ev.a.label : ev.b.label);
+  updateInv();
+}
+
+function hexColor(n) {
+  return `#${(n >>> 0).toString(16).padStart(6, '0')}`;
+}
+
+function fishBlurb(def) {
+  if (def.desc) return def.desc;
+  const bits = [];
+  const e = def.effect || {};
+  const s = def.side || {};
+  if (e.ramMul) bits.push(`冲撞×${e.ramMul}`);
+  if (e.dash) bits.push(`冲刺 ${e.dash}m`);
+  if (e.freeze) bits.push(`冰冻 ${e.freeze}s`);
+  if (e.shockwave) bits.push('龙震冲击波');
+  if (e.autoThrust) bits.push(`持续推进 ${e.autoThrust}`);
+  if (e.burst) bits.push(`爆发推进 ${e.burst}s`);
+  if (e.hover) bits.push(`悬浮 ${e.hover}s`);
+  if (e.phase) bits.push(`相位 ${e.phase}s`);
+  if (e.autoShot) bits.push('自动喷墨');
+  if (e.grab) bits.push('钳抓');
+  if (e.whip) bits.push('鞭击');
+  if (e.chargeCrush) bits.push('蓄力碎击');
+  if (e.block) bits.push(`格挡×${e.block}`);
+  if (e.reflect) bits.push('反弹');
+  if (e.wallHits) bits.push('珊瑚墙');
+  if (e.reflectRanged) bits.push('镜面弹反');
+  if (e.corrosionMul) bits.push(`腐蚀×${e.corrosionMul}`);
+  if (e.jump) bits.push('可跳跃');
+  if (e.dive) bits.push(`潜游 ${e.dive}s`);
+  if (e.quake) bits.push('地脉震');
+  if (e.tailwind) bits.push(`顺风×${e.tailwind}`);
+  if (e.scan) bits.push(`扫描 ${e.scan}m`);
+  if (e.storm) bits.push(`风暴 ${e.storm}s`);
+  if (e.slowMo) bits.push(`时缓 ${e.slowMo}s`);
+  if (s.speedMul) bits.push(`移速×${s.speedMul}`);
+  if (s.turnMul) bits.push(`转向×${s.turnMul}`);
+  if (s.weight) bits.push(`负重×${s.weight}`);
+  if (s.frictionDps) bits.push('缓慢磨损船体');
+  if (s.blur) bits.push('视野模糊');
+  if (s.noPaddle) bits.push('无法划桨');
+  if (s.lockSteer) bits.push('转向锁定');
+  if (s.slip) bits.push('打滑');
+  if (s.reloadEvery) bits.push(`需定期补墨`);
+  if (s.shake) bits.push('船体震动');
+  if (s.recovery) bits.push('恢复延迟');
+  if (s.accelMul) bits.push(`加速×${s.accelMul}`);
+  if (s.loosenChance) bits.push('偶发松脱');
+  if (s.hideSurface) bits.push('水面隐匿');
+  if (s.scatterLoot) bits.push('打散浮物');
+  if (s.headwind) bits.push(`逆风×${s.headwind}`);
+  if (s.wakeSleepers) bits.push('惊醒沉睡者');
+  return bits.length ? bits.join(' · ') : '海上奇物，绑到对应船槽生效。';
+}
+
+function categoryLabel(cat) {
+  return ({ food: '消耗', weapon: '武器', engine: '动力', defense: '防御', utility: '机能', sense: '感知' })[cat] || '杂项';
+}
+
+function setBackpackOpen(open) {
+  state.fishPanelOpen = !!open;
+  ui.backpack.classList.toggle('hidden', !open);
+  ui.backpack.setAttribute('aria-hidden', open ? 'false' : 'true');
+  ui.btnBackpack?.classList.toggle('open', !!open);
+  if (open) {
+    if (state.backpackTab === 'catch' && state.selectedFish < 0 && state.fishHold.length) {
+      state.selectedFish = 0;
+    }
+    renderBackpack();
+  }
+}
+
+function toggleBackpack() {
+  setBackpackOpen(!state.fishPanelOpen);
+}
+
+function tryToggleBackpack() {
+  if (!state.started) {
+    showToast('先点「开始游戏」，再按 Tab / B 开背包');
+    return;
+  }
+  if (!ui.sinkModal.classList.contains('hidden') || !ui.eventModal.classList.contains('hidden')) {
+    return;
+  }
+  toggleBackpack();
+}
+
+function isBagpackKey(e) {
+  return e.code === 'Tab' || e.key === 'Tab'
+    || e.code === 'KeyB' || e.key === 'b' || e.key === 'B';
+}
+
+function renderBackpack() {
+  const tab = state.backpackTab;
+  document.querySelectorAll('.bp-tab').forEach((el) => {
+    el.classList.toggle('active', el.dataset.tab === tab);
+  });
+  ui.bpMatTitle.textContent = tab === 'catch' ? '鱼获' : tab === 'slots' ? '船槽' : '物资';
+  ui.bpGrid.innerHTML = '';
+  ui.bpSlotRow.innerHTML = '';
+
+  const selectedDef = tab === 'catch' && state.fishHold[state.selectedFish]
+    ? getFishDef(state.fishHold[state.selectedFish].defId)
+    : null;
+  const exclusiveSlot = selectedDef?.slot || null;
+  if (exclusiveSlot) state.selectedSlot = exclusiveSlot;
+
+  SLOT_ORDER.forEach((slot) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    const allowed = !exclusiveSlot || slot === exclusiveSlot;
+    b.className = 'bp-slot-btn'
+      + (state.selectedSlot === slot ? ' active' : '')
+      + (state.slots[slot] ? ' filled' : '')
+      + (exclusiveSlot && slot === exclusiveSlot ? ' exclusive' : '')
+      + (!allowed ? ' locked' : '');
+    b.textContent = SLOT_LABELS[slot];
+    b.disabled = !allowed;
+    b.title = allowed
+      ? (exclusiveSlot ? `专属槽：${SLOT_LABELS[slot]}` : SLOT_LABELS[slot])
+      : `只能绑在${SLOT_LABELS[exclusiveSlot]}`;
+    if (allowed) {
+      b.onclick = () => {
+        state.selectedSlot = slot;
+        refreshSlots();
+        renderBackpack();
+      };
+    }
+    ui.bpSlotRow.appendChild(b);
+  });
+
+  if (tab === 'catch') {
+    ui.fishCount.textContent = String(state.fishHold.length);
+    const cells = Math.max(20, Math.ceil((state.fishHold.length + 1) / 5) * 5);
+    for (let i = 0; i < cells; i++) {
+      const f = state.fishHold[i];
+      ui.bpGrid.appendChild(makePolaroidCell({
+        kind: 'fish',
+        index: i,
+        item: f,
+        selected: i === state.selectedFish && !!f,
+        onClick: f ? () => {
+          state.selectedFish = i;
+          state.selectedSupply = null;
+          const d = getFishDef(f.defId);
+          if (d.slot) state.selectedSlot = d.slot;
+          refreshSlots();
+          renderBackpack();
+        } : null,
+      }));
+    }
+  } else if (tab === 'slots') {
+    ui.fishCount.textContent = String(SLOT_ORDER.filter((s) => state.slots[s]).length);
+    SLOT_ORDER.forEach((slot, i) => {
+      const f = state.slots[slot];
+      ui.bpGrid.appendChild(makePolaroidCell({
+        kind: 'slot',
+        index: i,
+        item: f,
+        badge: SLOT_LABELS[slot],
+        selected: state.selectedSlot === slot,
+        onClick: () => {
+          state.selectedSlot = slot;
+          state.selectedFish = -1;
+          state.selectedSupply = null;
+          refreshSlots();
+          renderBackpack();
+        },
+      }));
+    });
+    for (let i = SLOT_ORDER.length; i < 20; i++) {
+      ui.bpGrid.appendChild(makePolaroidCell({ kind: 'empty', index: i }));
+    }
+  } else {
+    const supplies = [
+      { id: 'bait', name: '鱼饵', count: state.inventory.bait, color: 0x7dffc0, desc: '抛竿消耗。有饵时更容易钓到高阶鱼。' },
+      { id: 'plank', name: '木板', count: state.inventory.plank, color: 0xc48a4a, desc: '按 R 消耗木板，立即修理船体 +15。' },
+      { id: 'repair', name: '修补剂', count: state.inventory.repair, color: 0xffd24a, desc: '打捞或漂流瓶获得，可用于应急修复。' },
+    ];
+    ui.fishCount.textContent = String(supplies.reduce((a, s) => a + s.count, 0));
+    supplies.forEach((s, i) => {
+      ui.bpGrid.appendChild(makePolaroidCell({
+        kind: 'supply',
+        index: i,
+        item: s,
+        selected: state.selectedSupply === s.id,
+        onClick: () => {
+          state.selectedSupply = s.id;
+          state.selectedFish = -1;
+          renderBackpack();
+        },
+      }));
+    });
+    for (let i = supplies.length; i < 20; i++) {
+      ui.bpGrid.appendChild(makePolaroidCell({ kind: 'empty', index: i }));
+    }
+  }
+
+  renderBackpackDetail();
+  syncDeckFish(boat, state.fishHold, gradientMap);
+}
+
+function makePolaroidCell({ kind, index, item, selected, onClick, badge }) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'bp-cell'
+    + (selected ? ' selected' : '')
+    + (!item ? ' empty' : '')
+    + (kind === 'supply' ? ' bp-supply-card' : '');
+  btn.style.setProperty('--tilt', `${((index % 5) - 2) * 0.6}deg`);
+
+  if (!item) {
+    btn.innerHTML = `<div class="bp-polaroid"><div class="bp-thumb"></div><div class="bp-cell-name">—/div></div>`;
+    return btn;
+  }
+
+  const rarity = item.rarity || 1;
+  const color = hexColor(item.color ?? getFishDef(item.defId || 'food').color);
+  const name = kind === 'supply' ? `${item.name}×${item.count}` : item.name;
+  btn.innerHTML = `
+    <span class="bp-tape top"></span>
+    ${badge ? `<span class="bp-slot-badge">${badge}</span>` : ''}
+    <div class="bp-polaroid">
+      <div class="bp-thumb"><div class="bp-thumb-blob" style="background:${color}"></div></div>
+      <div class="bp-cell-name">${name}</div>
+      <div class="bp-rarity-bar r${rarity}"></div>
+    </div>
+    <span class="bp-tape bot"></span>`;
+  if (onClick) btn.onclick = onClick;
+  return btn;
+}
+
+function renderBackpackDetail() {
+  const tab = state.backpackTab;
+  let show = false;
+
+  if (tab === 'catch' && state.fishHold[state.selectedFish]) {
+    show = true;
+    const f = state.fishHold[state.selectedFish];
+    const def = getFishDef(f.defId);
+    const r = RARITY[f.rarity] || RARITY[1];
+    fillDetail({
+      name: f.name,
+      serial: `No. ${String(1000 + (state.selectedFish + 1) * 37 + (f.defId?.length || 0)).slice(0, 4)}`,
+      color: f.color ?? def.color,
+      rarity: f.rarity,
+      ribbon: r.label,
+      tagline: `${categoryLabel(def.category)} · ${'★'.repeat(Math.min(5, f.rarity || 1))}`,
+      desc: fishBlurb(def),
+      meta: [
+        def.slot ? `只能绑在：${SLOT_LABELS[def.slot]}（其他槽位不可用）` : '不可绑槽（食用/修理/投喂）',
+        `活性参考：${Math.floor(f.vitality ?? 100)}`,
+      ].join('<br>'),
+      showSlots: !!def.slot,
+      actions: {
+        discard: true,
+        eat: true,
+        equip: !!def.slot,
+        feed: def.category === 'food',
+        use: false,
+      },
+    });
+  } else if (tab === 'slots' && state.slots[state.selectedSlot]) {
+    show = true;
+    const f = state.slots[state.selectedSlot];
+    const def = getFishDef(f.defId);
+    const r = RARITY[f.rarity] || RARITY[1];
+    fillDetail({
+      name: f.name,
+      serial: `槽· ${SLOT_LABELS[state.selectedSlot]}`,
+      color: f.color ?? def.color,
+      rarity: f.rarity,
+      ribbon: r.label,
+      tagline: `已绑定 · ${categoryLabel(def.category)}`,
+      desc: fishBlurb(def),
+      meta: `活性${Math.floor(f.vitality ?? 0)} / 100<br>力竭后会自动脱落回海里。`,
+      showSlots: false,
+      actions: { discard: false, eat: false, equip: false, feed: false, use: false },
+    });
+  } else if (tab === 'supplies' && state.selectedSupply) {
+    show = true;
+    const map = {
+      bait: { name: '鱼饵', color: 0x7dffc0, desc: '抛竿消耗。有饵时更容易钓到高阶鱼。', count: state.inventory.bait },
+      plank: { name: '木板', color: 0xc48a4a, desc: '按 R 消耗木板，立即修理船体 +15。', count: state.inventory.plank },
+      repair: { name: '修补剂', color: 0xffd24a, desc: '打捞或漂流瓶获得，可用于应急修复。', count: state.inventory.repair },
+    };
+    const s = map[state.selectedSupply];
+    const canUse = state.selectedSupply === 'plank' || state.selectedSupply === 'repair';
+    fillDetail({
+      name: s.name,
+      serial: `库存 ×${s.count}`,
+      color: s.color,
+      rarity: 1,
+      ribbon: '物资',
+      tagline: '航行补给',
+      desc: s.desc,
+      meta: state.selectedSupply === 'bait'
+        ? '抛竿时自动消耗，无需手动使用。'
+        : '可在背包直接使用，立即作用于船体。',
+      showSlots: false,
+      actions: {
+        use: canUse && s.count > 0,
+        discard: s.count > 0,
+        eat: false,
+        equip: false,
+        feed: false,
+      },
+    });
+  }
+
+  ui.bpEmpty.classList.toggle('hidden', show);
+  ui.bpDetail.classList.toggle('hidden', !show);
+}
+
+function fillDetail({ name, serial, color, rarity, ribbon, tagline, desc, meta, showSlots, actions }) {
+  ui.bpName.textContent = name;
+  ui.bpSerial.textContent = serial;
+  ui.bpSwatch.style.background = hexColor(color);
+  ui.bpRibbon.textContent = ribbon;
+  ui.bpRibbon.className = `bp-ribbon r${rarity}`;
+  ui.bpTagline.textContent = tagline;
+  ui.bpDesc.textContent = desc;
+  ui.bpMeta.innerHTML = meta;
+  ui.bpSlotPick.style.display = showSlots ? '' : 'none';
+  const show = {
+    use: !!actions.use,
+    eat: !!actions.eat,
+    equip: !!actions.equip,
+    feed: !!actions.feed,
+    discard: !!actions.discard,
+  };
+  ui.btnUse.disabled = !show.use;
+  ui.btnEat.disabled = !show.eat;
+  ui.btnEquip.disabled = !show.equip;
+  ui.btnFeed.disabled = !show.feed;
+  ui.btnDiscard.disabled = !show.discard;
+  ui.btnUse.style.display = show.use ? '' : 'none';
+  ui.btnEat.style.display = show.eat ? '' : 'none';
+  ui.btnEquip.style.display = show.equip ? '' : 'none';
+  ui.btnFeed.style.display = show.feed ? '' : 'none';
+  ui.btnDiscard.style.display = show.discard ? '' : 'none';
+}
+
+function renderFishList() {
+  if (state.fishPanelOpen) renderBackpack();
+  else {
+    ui.fishCount.textContent = String(state.fishHold.length);
+    syncDeckFish(boat, state.fishHold, gradientMap);
+  }
+}
+
+function discardFish() {
+  if (state.backpackTab === 'supplies') {
+    discardSupply();
+    return;
+  }
+  const f = state.fishHold[state.selectedFish];
+  if (!f) return showToast('先选鱼');
+  state.fishHold.splice(state.selectedFish, 1);
+  state.selectedFish = Math.min(state.selectedFish, state.fishHold.length - 1);
+  showToast(`丢弃 ${f.name}`);
+  renderFishList();
+}
+
+function discardSupply() {
+  const id = state.selectedSupply;
+  if (!id || !(state.inventory[id] > 0)) return showToast('没有可丢弃的物资');
+  const names = { bait: '鱼饵', plank: '木板', repair: '修补剂' };
+  state.inventory[id]--;
+  updateInv();
+  showToast(`丢弃 ${names[id] || id}`);
+  if (state.inventory[id] <= 0) state.selectedSupply = null;
+  renderBackpack();
+}
+
+function useSupply() {
+  const id = state.selectedSupply;
+  if (!id) return showToast('先选物资');
+  if (id === 'bait') return showToast('鱼饵在抛竿时自动消耗');
+  if (!(state.inventory[id] > 0)) return showToast('库存不足');
+  if (id === 'plank') {
+    state.inventory.plank--;
+    repairHull(hull, 15);
+    updateHp();
+    updateInv();
+    showToast('使用木板：船体 +15');
+  } else if (id === 'repair') {
+    state.inventory.repair--;
+    repairHull(hull, 25);
+    updateHp();
+    updateInv();
+    showToast('使用修补剂：船体 +25');
+  }
+  if (state.inventory[id] <= 0) state.selectedSupply = null;
+  renderBackpack();
+}
+
+function eatOrRepair() {
+  const f = state.fishHold[state.selectedFish];
+  if (!f) return showToast('先选鱼');
+  const def = getFishDef(f.defId);
+  state.fishHold.splice(state.selectedFish, 1);
+  state.selectedFish = -1;
+  if (def.id === 'glue' || (def.category === 'food' && Math.random() < 0.35)) {
+    repairHull(hull, 15);
+    showToast(`${f.name}：修理 +15`);
+  } else if (def.category === 'food') {
+    if (Math.random() < 0.5) {
+      repairHull(hull, 20);
+      showToast(`${f.name}：+20 耐久`);
+    } else {
+      state.speedBuffUntil = now() + 10;
+      showToast(`${f.name}：加速 10 秒`);
+    }
+  } else {
+    repairHull(hull, 10);
+    showToast(`勉强吃了 ${f.name}… +10`);
+  }
+  updateHp();
+  renderFishList();
+}
+
+function doEquip() {
+  const f = state.fishHold[state.selectedFish];
+  if (!f) return showToast('先选鱼');
+  const def = getFishDef(f.defId);
+  if (!def.slot) return showToast('此鱼不能绑槽');
+  state.selectedSlot = def.slot;
+  refreshSlots();
+  const res = equipFish(boat, state.slots, f, def.slot, gradientMap);
+  if (!res.ok) return showToast(res.msg);
+  state.fishHold.splice(state.selectedFish, 1);
+  state.selectedFish = -1;
+  state.mods++;
+  if (f.defId === 'shell') state.shellBlocks = 1;
+  showToast(res.msg);
+  renderFishList();
+  refreshSlots();
+  updateComboHint();
+}
+
+function doFeed() {
+  const f = state.fishHold[state.selectedFish];
+  if (!f || getFishDef(f.defId).category !== 'food') return showToast('需要食物鱼投喂');
+  const slot = state.selectedSlot;
+  if (!feedSlot(state.slots, slot, 30)) return showToast('该槽无需投喂（活性≥30或空）');
+  state.fishHold.splice(state.selectedFish, 1);
+  state.selectedFish = -1;
+  showToast(`投喂 ${SLOT_LABELS[slot]} +30 活性`);
+  renderFishList();
+}
+
+function refreshSlots() {
+  document.querySelectorAll('.slot-chip[data-slot]').forEach((el) => {
+    const s = el.dataset.slot;
+    el.classList.toggle('active', s === state.selectedSlot);
+    el.classList.toggle('filled', !!state.slots[s]);
+    const v = state.slots[s];
+    el.title = v ? `${SLOT_LABELS[s]}：${v.name} 活性${Math.floor(v.vitality)}` : SLOT_LABELS[s];
+  });
+  document.querySelectorAll('.slot-vita-fill').forEach((fill) => {
+    const s = fill.dataset.slot;
+    const v = state.slots[s];
+    const bar = fill.parentElement;
+    const pct = v ? Math.max(0, Math.min(100, v.vitality)) : 0;
+    fill.style.width = `${pct}%`;
+    fill.classList.toggle('low', !!v && pct < 50 && pct >= 20);
+    fill.classList.toggle('critical', !!v && pct < 20);
+    bar.classList.toggle('empty', !v);
+    bar.title = v ? `${v.name} 活性${Math.floor(pct)}/100` : '空槽';
+  });
+}
+
+function updateComboHint() {
+  const b = bonuses();
+  if (b.combos.length) setPrompt(ui.comboHint, `联动：${b.combos.map((c) => c.name).join(' · ')}`);
+  else setPrompt(ui.comboHint, '');
+}
+
+function tryJump() {
+  if (!bonuses().hasBounce) return showToast('需要船底弹跳鱼');
+  if (now() < state.jumpUntil - 0.5) return;
+  state.jumpUntil = now() + 1.0;
+  state.invulnUntil = now() + 0.9;
+  showToast('弹跳！');
+}
+
+function finishRun(outcome) {
+  setBackpackOpen(false);
+  setSeaMapOpen(false);
+  state.started = false;
+  phase = 'settle';
+  ui.lighthouseModal?.classList.add('hidden');
+  const dist = Math.floor(state.runDistance);
+  const fishToStore = outcome === 'return' ? collectRunFish(state) : [];
+  const suppliesToStore = outcome === 'return' ? { ...state.inventory } : null;
+  const { meta: m, gain, success } = settleRun(meta, {
+    distance: dist,
+    mods: state.mods,
+    kills: state.kills,
+    newFishCount: runNewFish,
+    outcome,
+    fishToStore,
+    suppliesToStore,
+    startZone,
+  });
+  meta = m;
+  const title = success ? '成功归航' : '沉船结算';
+  const storeNote = success
+    ? `鱼获入库 ${fishToStore.length} · 新鱼种 ${runNewFish}`
+    : '沉船未入库活鱼（防刷）';
+  const stats = `航行 ${dist} 米 · 改装 ${state.mods} · 击杀 ${state.kills} · 海图碎片 +${gain}
+${storeNote}`;
+  if (ui.settleTitle) ui.settleTitle.textContent = title;
+  if (ui.settleStats) ui.settleStats.textContent = stats;
+  ui.sinkStats.textContent = stats;
+  if (outcome === 'sink') {
+    ui.sinkModal.classList.remove('hidden');
+    ui.settleModal?.classList.add('hidden');
+  } else {
+    ui.settleModal?.classList.remove('hidden');
+    ui.sinkModal.classList.add('hidden');
+  }
+  refreshTitleMeta();
+}
+
+function onSink() {
+  finishRun('sink');
+}
+
+function openHub() {
+  phase = 'hub';
+  state.started = false;
+  camInit = false;
+  setSeaMapOpen(false);
+  ui.sinkModal.classList.add('hidden');
+  ui.settleModal?.classList.add('hidden');
+  ui.lighthouseModal?.classList.add('hidden');
+  setWorldMode('hub');
+  hub?.show();
+}
+
+function openCover() {
+  phase = 'cover';
+  state.started = false;
+  hub?.hide();
+  ui.sinkModal.classList.add('hidden');
+  ui.settleModal?.classList.add('hidden');
+  setWorldMode('cover');
+}
+
+function startRun(fromCheckpoint = false) {
+  setBackpackOpen(false);
+  setSeaMapOpen(false);
+  hub?.hide();
+  setWorldMode('play');
+  phase = 'run';
+  camInit = false;
+  selectedBoat = meta.loadout?.boatId || selectedBoat;
+  const maxHp = hullMaxForBoat(meta.unlocks, selectedBoat);
+  hull = createHull(maxHp);
+
+  const map = getSeaMap(startZone);
+  const sp = map.spawn;
+  paddle.reset(sp.x, sp.z);
+  paddle.state.yaw = sp.yaw || 0;
+  lastBoatX = sp.x;
+  lastBoatZ = sp.z;
+
+  state.started = true;
+  state.runDistance = fromCheckpoint ? state.runDistance : 0;
+  state.maxZ = paddle.state.z;
+  state.zone = startZone;
+  if (!fromCheckpoint) {
+    state.checkpoint = 0;
+    state.checkpointUsed = false;
+    state.kills = 0;
+    state.mods = 0;
+    runNewFish = 0;
+    meta = syncLoadoutSuppliesFromWarehouse(meta);
+    applyLoadoutToRun(boat, state, meta, gradientMap);
+    meta = consumeLoadoutOnDepart(meta);
+    if (selectedBoat === 'cursedBoat' && meta.unlocks.cursedBoat) {
+      const f = pickFishForZone(Math.max(1, startZone));
+      state.fishHold.push(f);
+      const disc = discoverFish(meta, [f.defId]);
+      meta = disc.meta;
+      if (disc.newIds.length) runNewFish += disc.newIds.length;
+    }
+  } else {
+    state.checkpointUsed = true;
+  }
+  state.shellBlocks = 0;
+  ui.sinkModal.classList.add('hidden');
+  ui.settleModal?.classList.add('hidden');
+  ui.lighthouseModal?.classList.add('hidden');
+
+  const loaded = seaWorld.load(startZone, scene, gradientMap, water);
+  hazards.setSpawnLayout(loaded.spawnPoints, seaWorld.getLighthouses());
+  seaWorld.scatterProps(vortices, flotsam);
+  applyZoneVisual(getZone(0, startZone));
+
+  updateHp();
+  updateInv();
+  renderFishList();
+  refreshSlots();
+  showToast(fromCheckpoint ? '从灯塔再次起航' : `进入 ${loaded.name} · A/D 划桨 · M 海域地图`);
+}
+
+function applyZoneVisual(z) {
+  const map = getSeaMap(z.id);
+  scene.fog.color.set(map.fog);
+  scene.background.set(map.sky);
+  scene.fog.near = map.feature === 'fog' ? 120 : 220;
+  scene.fog.far = map.feature === 'fog' ? 520 : 980;
+  setWaterColor(water, map.water);
+  ui.zoneName.textContent = z.name;
+}
+
+function setSeaMapOpen(open) {
+  state.seaMapOpen = !!open;
+  ui.seaMapModal?.classList.toggle('hidden', !open);
+  if (open) drawSeaMapOverlay();
+}
+
+function drawSeaMapOverlay() {
+  const canvas = ui.seaMapCanvas;
+  const map = seaWorld.getMap() || getSeaMap(startZone);
+  if (!canvas || !map) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  const b = map.bounds;
+  const pad = 24;
+  const bw = b.maxX - b.minX || 1;
+  const bh = b.maxZ - b.minZ || 1;
+  const scale = Math.min((w - pad * 2) / bw, (h - pad * 2) / bh);
+  const ox = (w - bw * scale) / 2;
+  const oy = (h - bh * scale) / 2;
+  const tx = (x) => ox + (x - b.minX) * scale;
+  const tz = (z) => h - (oy + (z - b.minZ) * scale);
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = 'rgba(8, 18, 28, 0.92)';
+  ctx.fillRect(0, 0, w, h);
+
+  const waterHex = '#' + (map.water >>> 0).toString(16).padStart(6, '0');
+  ctx.beginPath();
+  map.navigable.forEach((p, i) => {
+    if (i === 0) ctx.moveTo(tx(p.x), tz(p.z));
+    else ctx.lineTo(tx(p.x), tz(p.z));
+  });
+  ctx.closePath();
+  ctx.fillStyle = waterHex;
+  ctx.globalAlpha = 0.55;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = '#6b7a88';
+  for (const r of map.reefs) {
+    ctx.beginPath();
+    ctx.arc(tx(r.x), tz(r.z), Math.max(3, r.r * scale * 0.35), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#c4a574';
+  for (const isl of map.islands) {
+    ctx.beginPath();
+    ctx.arc(tx(isl.x), tz(isl.z), Math.max(4, isl.r * scale * 0.4), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = '#ffe066';
+  ctx.strokeStyle = '#e85d4c';
+  for (const lh of map.lighthouses) {
+    const x = tx(lh.x);
+    const y = tz(lh.z);
+    ctx.beginPath();
+    ctx.moveTo(x, y - 8);
+    ctx.lineTo(x + 6, y + 6);
+    ctx.lineTo(x - 6, y + 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  const bx = tx(paddle.state.x);
+  const by = tz(paddle.state.z);
+  ctx.fillStyle = '#ff6b4a';
+  ctx.beginPath();
+  ctx.moveTo(bx, by - 7);
+  ctx.lineTo(bx + 5, by + 5);
+  ctx.lineTo(bx - 5, by + 5);
+  ctx.fill();
+
+  ctx.fillStyle = '#e8f4f4';
+  ctx.font = '600 18px Fredoka, sans-serif';
+  ctx.fillText(map.name, 20, 32);
+  ctx.font = '14px Noto Sans SC, sans-serif';
+  ctx.fillStyle = '#9ab';
+  ctx.fillText('灯塔 ×3 · M 关闭', 20, 54);
+}
+
+function refreshTitleMeta() {
+  if (ui.fragCount) ui.fragCount.textContent = `海图 ${meta.fragments}`;
+}
+
+function updatePrompts() {
+  if (fishing.phase === 'qte') return setPrompt(ui.prompt, '空格 — 停在绿色区域');
+  if (fishing.phase === 'wait') return setPrompt(ui.prompt, '等待咬钩…');
+  if (findNearestVortex(vortices, boatPos())) return setPrompt(ui.prompt, '漩涡 · 空格抛竿');
+  if (findNearestFlotsam(flotsam, boatPos(), 7)) return setPrompt(ui.prompt, '漂浮物 · E 打捞');
+  setPrompt(ui.prompt, '');
+}
+
+function drawMinimap() {
+  const ctx = minimapCtx;
+  const w = 140; const h = 140;
+  const map = seaWorld.getMap() || getSeaMap(startZone);
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = map.minimap || '#0d3d42';
+  ctx.fillRect(0, 0, w, h);
+  const scale = 0.045;
+  const cx = w / 2; const cy = h / 2;
+  // outline snippet of navigable near boat
+  if (map.navigable) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.beginPath();
+    map.navigable.forEach((p, i) => {
+      const mx = cx + (p.x - paddle.state.x) * scale * 0.15;
+      const my = cy - (p.z - paddle.state.z) * scale * 0.15;
+      if (i === 0) ctx.moveTo(mx, my); else ctx.lineTo(mx, my);
+    });
+    ctx.closePath();
+    ctx.stroke();
+  }
+  for (const lh of (seaWorld.getLighthouses() || [])) {
+    const mx = cx + (lh.position.x - paddle.state.x) * scale;
+    const my = cy - (lh.position.z - paddle.state.z) * scale;
+    if (mx > 2 && mx < w - 2 && my > 2 && my < h - 2) {
+      ctx.fillStyle = lh.userData.claimed ? '#888' : '#ffe066';
+      ctx.beginPath();
+      ctx.moveTo(mx, my - 5);
+      ctx.lineTo(mx + 4, my + 3);
+      ctx.lineTo(mx - 4, my + 3);
+      ctx.fill();
+    }
+  }
+  for (const v of vortices) {
+    const mx = cx + (v.position.x - paddle.state.x) * scale;
+    const my = cy - (v.position.z - paddle.state.z) * scale;
+    if (mx > 2 && mx < w - 2 && my > 2 && my < h - 2) {
+      ctx.strokeStyle = '#5dffb0';
+      ctx.beginPath(); ctx.arc(mx, my, 4, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+  ctx.fillStyle = '#c48a4a';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 6);
+  ctx.lineTo(cx + 5, cy + 5);
+  ctx.lineTo(cx - 5, cy + 5);
+  ctx.fill();
+}
+
+function tick() {
+  const dt = Math.min(0.033, clock.getDelta());
+  const t = clock.elapsedTime;
+  const b = bonuses();
+
+  if (state.started && !hull.sunk && !state.fishPanelOpen && !state.lighthouseOpen && !state.seaMapOpen) {
+    const thrustBoat = thrustMulForBoat(selectedBoat, meta.unlocks);
+    const buff = now() < state.speedBuffUntil ? 1.3 : 1;
+    const phys = paddle.update(dt, now(), {
+      thrustMul: b.thrustMul * b.speedMul * b.accelMul * thrustBoat * buff,
+      turnMul: b.turnMul,
+      autoThrust: b.autoThrust,
+    });
+
+    if (seaWorld.constrainBoat(paddle.state)) {
+      phys.x = paddle.state.x;
+      phys.z = paddle.state.z;
+      if (now() - edgeToastAt > 2) {
+        edgeToastAt = now();
+        showToast('已到海域边缘');
+      }
+    }
+
+    // Path length as run distance
+    const step = Math.hypot(phys.x - lastBoatX, phys.z - lastBoatZ);
+    if (step < 40) state.runDistance += step;
+    lastBoatX = phys.x;
+    lastBoatZ = phys.z;
+    state.maxZ = Math.max(state.maxZ, phys.z);
+    ui.runDist.textContent = String(Math.floor(state.runDistance));
+    if (ui.comboText) ui.comboText.textContent = `×${phys.combo}`;
+    ui.speed.textContent = String(Math.round(phys.speed * 4)).padStart(3, '0');
+    ui.oarL.classList.toggle('pulled', phys.leftPhase > 0.4);
+    ui.oarR.classList.toggle('pulled', phys.rightPhase > 0.4);
+    setOarStroke(boat, -1, phys.leftPhase);
+    setOarStroke(boat, 1, phys.rightPhase);
+
+    const zone = getZone(state.runDistance, startZone);
+    state.zone = zone.id;
+
+    let corrMul = zone.corrosionMul * b.corrosionMul;
+    // simulate corrosion rates via scaled dt
+    const sailing = phys.sailing;
+    const before = hull.durability;
+    updateCorrosion(hull, dt * corrMul, sailing);
+    if (b.frictionDps) damageHull(hull, b.frictionDps * dt);
+    if (zone.feature === 'current') paddle.state.x += Math.sin(t * 0.5) * 4 * dt;
+    updateHp();
+    if (hull.sunk) onSink();
+
+    let y = Math.sin(t * 2 + boat.userData.bobPhase) * 0.1;
+    if (now() < state.jumpUntil) y += Math.sin((1 - (state.jumpUntil - now())) * Math.PI) * 2.8;
+    boat.position.set(phys.x, y, phys.z);
+    boat.rotation.set(0, phys.yaw + Math.PI, (1 - hull.durability / hull.maxDurability) * 0.15);
+
+    // captain mouse follow on deck (simple)
+    boat.userData.captain.position.x = clamp(state.captainLocal.x, -0.7, 0.7);
+    boat.userData.captain.position.z = clamp(state.captainLocal.z, -1.6, 1.8);
+
+    foam.position.set(phys.x, 0.05, phys.z);
+    foam.rotation.y = phys.yaw;
+
+    wakeAcc += dt;
+    if (phys.speed > 3 && wakeAcc > 0.08) {
+      wakeAcc = 0;
+      vel.set(Math.sin(phys.yaw) * phys.speed, 0, Math.cos(phys.yaw) * phys.speed);
+      tmp.set(phys.x - Math.sin(phys.yaw) * 2, 0.15, phys.z - Math.cos(phys.yaw) * 2);
+      wake.spawn(tmp, vel, Math.min(1.2, phys.speed / 14));
+    }
+
+    fishing.update(dt);
+    const dropped = updateSlotsVitality(state.slots, boat, dt, gradientMap);
+    if (dropped.length) showToast(`${dropped.join('、')} 力竭脱落`);
+    refreshSlots();
+
+    hazards.update(dt, t, boatPos(), {
+      onHit: (a, r) => applyDamage(a, r),
+      addPlank: (n) => { state.inventory.plank += n; showToast('获得木板'); updateInv(); },
+      hasSucker: state.slots.sideL?.defId === 'sucker' || state.slots.sideR?.defId === 'sucker',
+      boatJumping: now() < state.jumpUntil,
+      onKill: () => { state.kills++; },
+      onCheckpoint: (cp) => {
+        pendingCheckpoint = cp;
+        state.checkpoint = typeof cp === 'number' ? cp : Math.floor(state.runDistance);
+        repairHull(hull, hull.maxDurability);
+        updateHp();
+        state.lighthouseOpen = true;
+        ui.lighthouseModal?.classList.remove('hidden');
+        showToast('灯塔港口：耐久回满！', 2500);
+      },
+      cutWrap: state.weapon === 1,
+    });
+
+    if (b.hasInk && state.inkCd <= 0) {
+      const tgen = hazards.nearestEnemy(boatPos(), 8 * (b.combos.some((c) => c.id === 'inkscan') ? 1.4 : 1));
+      if (tgen) {
+        hazards.shootInk(boatPos(), tgen, gradientMap);
+        state.inkCd = 1.8;
+        state.inkShots++;
+        if (state.inkShots >= 10) {
+          showToast('喷墨耗尽，空格附近补墨…');
+          state.inkShots = 0;
+          state.inkCd = 3;
+        }
+      }
+    }
+    if (state.inkCd > 0) state.inkCd -= dt;
+
+    if (b.hasPuffer) {
+      hazards.ramKill(boatPos(), phys.speed, b.ramMul, () => { state.kills++; showToast('撞角击沉！'); });
+    }
+
+    // Keep flotsam / vortices from drifting too far —soft pull back into map
+    const map = seaWorld.getMap();
+    if (map) {
+      for (const f of flotsam) {
+        if (!f.visible) continue;
+        const d = Math.hypot(f.position.x - phys.x, f.position.z - phys.z);
+        if (d > 90) {
+          f.position.x = phys.x + (Math.random() - 0.5) * 50;
+          f.position.z = phys.z + 20 + Math.random() * 40;
+        }
+      }
+    }
+
+    // camera
+    const back = 16;
+    const desired = tmp.set(
+      phys.x - Math.sin(phys.yaw) * back,
+      11,
+      phys.z - Math.cos(phys.yaw) * back
+    );
+    if (!camInit) { camera.position.copy(desired); camInit = true; }
+    else camera.position.lerp(desired, 1 - Math.pow(0.0003, dt));
+    camera.lookAt(phys.x, 1.2, phys.z + Math.cos(phys.yaw) * 3);
+
+    if (state.toastTimer > 0) {
+      state.toastTimer -= dt;
+      if (state.toastTimer <= 0) ui.toast.classList.add('hidden');
+    }
+    updatePrompts();
+    updateComboHint();
+  } else if (phase === 'cover') {
+    coverScene.update(t);
+    const fr = coverScene.cameraFrame(t);
+    camera.position.copy(fr.pos);
+    camera.lookAt(fr.look);
+  } else if (phase === 'hub') {
+    hubIsland.update(t);
+    const fr = hubIsland.cameraFrame(t);
+    camera.position.copy(fr.pos);
+    camera.lookAt(fr.look);
+    hub?.syncMarkers();
+  } else if (!state.started) {
+    camera.position.set(Math.sin(t * 0.2) * 18, 10, 12 + Math.cos(t * 0.2) * 10);
+    camera.lookAt(0, 1, 5);
+  }
+
+  if (phase === 'play' || phase === 'run' || state.started) {
+    updateWaterFollow(water, t, boat.position);
+    seaWorld.updateBeacons(t);
+  } else {
+    updateWater(water, t, boat.position);
+  }
+  if (state.seaMapOpen) drawSeaMapOverlay();
+  updateFlotsam(flotsam, t);
+  updateVortices(vortices, t);
+  wake.update(dt);
+  drawMinimap();
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+
+// Input —capture Tab early (some browsers / IDE webviews steal it otherwise)
+window.addEventListener('keydown', (e) => {
+  if (isBagpackKey(e)) {
+    e.preventDefault();
+    e.stopPropagation();
+    tryToggleBackpack();
+    return;
+  }
+  if (state.fishPanelOpen) {
+    if (e.code === 'Escape' || e.key === 'Escape') { setBackpackOpen(false); return; }
+    return;
+  }
+  if (state.seaMapOpen) {
+    if (e.code === 'KeyM' || e.code === 'Escape' || e.key === 'Escape') {
+      e.preventDefault();
+      setSeaMapOpen(false);
+    }
+    return;
+  }
+  if (phase === 'hub' && (e.code === 'Escape' || e.key === 'Escape')) {
+    hub?.closeDrawer();
+    return;
+  }
+  if (state.lighthouseOpen) return;
+  if (e.code === 'KeyM' && state.started && !hull.sunk) {
+    e.preventDefault();
+    setSeaMapOpen(true);
+    return;
+  }
+  paddle.setKey(e.code, true);
+  if (!state.started) return;
+  if (e.code === 'Space') { e.preventDefault(); onSpace(); }
+  if (e.code === 'KeyE') trySalvage();
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') tryJump();
+  const d = e.code.match(/^Digit([1-6])$/);
+  if (d) {
+    const n = Number(d[1]);
+    if (n <= 3) {
+      state.weapon = n - 1;
+      document.querySelectorAll('.weapon-chip').forEach((el) => {
+        el.classList.toggle('active', Number(el.dataset.w) === state.weapon);
+      });
+    }
+    if (n >= 1 && n <= 6) {
+      state.selectedSlot = SLOT_ORDER[n - 1];
+      refreshSlots();
+    }
+  }
+}, true);
+window.addEventListener('keyup', (e) => {
+  paddle.setKey(e.code, false);
+  if (e.code === 'Space') ui.btnFish.classList.remove('pressed');
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (!state.started || state.fishPanelOpen) return;
+  const nx = (e.clientX / innerWidth) * 2 - 1;
+  const ny = (e.clientY / innerHeight) * 2 - 1;
+  state.captainLocal.x = nx * 0.9;
+  state.captainLocal.z = -ny * 1.2;
+});
+canvas.addEventListener('pointerdown', (e) => {
+  if (!state.started || state.fishPanelOpen || e.button !== 0) return;
+  if (state.weapon === 1 && hazards.cutNearestWrap(boatPos())) {
+    state.kills++;
+    showToast('斩断触手！');
+  } else {
+    const tgen = hazards.nearestEnemy(boatPos(), 12);
+    if (tgen) {
+      hazards.shootInk(boatPos(), tgen, gradientMap);
+      showToast(state.weapon === 0 ? '鱼叉掷出' : state.weapon === 2 ? '投石' : '挥刀');
+    }
+  }
+});
+
+ui.btnFish.onclick = () => { if (!state.fishPanelOpen && !state.lighthouseOpen && !state.seaMapOpen) onSpace(); };
+ui.btnSalvage.onclick = () => { if (!state.fishPanelOpen && !state.lighthouseOpen && !state.seaMapOpen) trySalvage(); };
+ui.btnCloseBp.onclick = () => setBackpackOpen(false);
+ui.btnBackpack.onclick = (e) => {
+  e.stopPropagation();
+  tryToggleBackpack();
+};
+ui.backpack.addEventListener('click', (e) => {
+  if (e.target === ui.backpack) setBackpackOpen(false);
+});
+canvas.addEventListener('click', () => canvas.focus?.());
+canvas.tabIndex = 0;
+ui.btnDiscard.onclick = discardFish;
+ui.btnUse.onclick = useSupply;
+ui.btnEat.onclick = eatOrRepair;
+ui.btnEquip.onclick = doEquip;
+ui.btnFeed.onclick = doFeed;
+document.querySelectorAll('.bp-tab').forEach((el) => {
+  el.onclick = () => {
+    state.backpackTab = el.dataset.tab;
+    state.selectedFish = state.backpackTab === 'catch' && state.fishHold.length
+      ? Math.max(0, Math.min(state.selectedFish < 0 ? 0 : state.selectedFish, state.fishHold.length - 1))
+      : -1;
+    if (state.backpackTab !== 'supplies') state.selectedSupply = null;
+    renderBackpack();
+  };
+});
+ui.eventA.onclick = () => resolveEvent('a');
+ui.eventB.onclick = () => resolveEvent('b');
+ui.btnRetry.onclick = () => openHub();
+ui.btnSettleHub?.addEventListener('click', () => openHub());
+ui.btnLhContinue?.addEventListener('click', () => {
+  state.lighthouseOpen = false;
+  ui.lighthouseModal?.classList.add('hidden');
+  showToast('继续向深海航行…');
+});
+ui.btnLhReturn?.addEventListener('click', () => {
+  state.lighthouseOpen = false;
+  finishRun('return');
+});
+
+hub = createHub({
+  getMeta: () => meta,
+  setMeta: (m) => { meta = m; refreshTitleMeta(); },
+  getBoat: () => selectedBoat,
+  setBoat: (id) => { selectedBoat = id; },
+  getStartZone: () => startZone,
+  setStartZone: (id) => { startZone = id; },
+  onDepart: () => startRun(false),
+  toast: showToast,
+  projectAnchor: projectHubAnchor,
+  onSpotOpen: (id) => hubIsland.setHighlight(id),
+  onHubShow: () => setWorldMode('hub'),
+  onHubHide: () => {},
+});
+
+ui.btnCoverStart?.addEventListener('click', () => {
+  openHub();
+});
+ui.btnCoverTutorial?.addEventListener('click', () => {
+  ui.coverTutorial?.classList.remove('hidden');
+});
+ui.btnTutorialClose?.addEventListener('click', () => {
+  ui.coverTutorial?.classList.add('hidden');
+});
+ui.btnCoverQuit?.addEventListener('click', () => {
+  const card = document.createElement('div');
+  card.className = 'cover-quit-msg';
+  card.textContent = '感谢游玩「浮骸」— 可以关闭本页了';
+  ui.cover?.appendChild(card);
+  ui.btnCoverStart.disabled = true;
+  ui.btnCoverTutorial.disabled = true;
+  ui.btnCoverQuit.disabled = true;
+});
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (phase !== 'hub') return;
+  if (hub?.drawerOpen) return;
+  const id = pickHubBuilding(e.clientX, e.clientY);
+  if (id) hub?.openSpot(id);
+});
+
+document.querySelectorAll('.slot-chip[data-slot]').forEach((el) => {
+  el.onclick = () => { state.selectedSlot = el.dataset.slot; refreshSlots(); };
+});
+document.querySelectorAll('.weapon-chip').forEach((el) => {
+  el.onclick = () => {
+    state.weapon = Number(el.dataset.w);
+    document.querySelectorAll('.weapon-chip').forEach((x) => x.classList.toggle('active', x === el));
+  };
+});
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (!state.started || state.fishPanelOpen || state.lighthouseOpen || state.seaMapOpen) return;
+  if (e.code === 'KeyR' && state.inventory.plank > 0) {
+    state.inventory.plank--;
+    repairHull(hull, 15);
+    updateHp(); updateInv();
+    showToast('木板修理 +15');
+  }
+});
+
+applyZoneVisual(getZone(0, startZone));
+refreshTitleMeta();
+updateHp();
+updateInv();
+refreshSlots();
+renderFishList();
+setWorldMode('cover');
+hub.hide();
+{
+  const fr = coverScene.cameraFrame(0);
+  camera.position.copy(fr.pos);
+  camera.lookAt(fr.look);
+}
+tick();
+
+globalThis.__FU = { paddle, hull, state, fishing, bonuses, startRun, hazards, seaWorld, openHub, openCover, finishRun, meta: () => meta };

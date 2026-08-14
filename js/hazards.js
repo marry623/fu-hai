@@ -1,0 +1,702 @@
+import * as THREE from 'three';
+import { addOutline, toonMat } from './stylekit.js';
+
+const C = {
+  shark: 0x2a3a5a,
+  sharkFin: 0x6a2030,
+  sharkMouth: 0x5a2030,
+  sharkEye: 0xffe566,
+  serpent: 0x4a6a7a,
+  serpentBelly: 0x8aa0a8,
+  serpentSpine: 0x7a3aa8,
+  serpentEye: 0xffe566,
+  ice: 0x9ad8ff,
+  iceCore: 0xe8f6ff,
+  kraken: 0x5a2a8a,
+  krakenDark: 0x3a1860,
+  krakenEye: 0xffe566,
+  splash: 0xb8e8f8,
+  splashWhite: 0xe8f8ff,
+};
+
+/**
+ * Hazards: ram / wrap / ranged + planks + external lighthouses
+ * Territory AI: patrol anchors, limited chasers, no full swarm.
+ */
+export function createHazards(gradientMap, scene) {
+  const root = new THREE.Group();
+  scene.add(root);
+  const enemies = [];
+  const wraps = [];
+  const planks = [];
+  const shots = [];
+  const inkShots = [];
+  /** @type {THREE.Object3D[]} */
+  let lighthouses = [];
+  /** @type {{x:number,z:number,kind:string}[]} */
+  let spawnPoints = [];
+
+  const AGRO_RANGE = 20;
+  const DROP_RANGE = 30;
+  const PATROL_R = 14;
+  const MAX_CHASERS = 3;
+  const RANGED_SHOT = 19;
+
+  for (let i = 0; i < 8; i++) {
+    const e = makeEnemy(gradientMap, i);
+    e.visible = false;
+    e.userData.anchor = null;
+    e.userData.chasing = false;
+    e.userData.patrolT = Math.random() * 10;
+    root.add(e);
+    enemies.push(e);
+  }
+  for (let i = 0; i < 4; i++) {
+    const w = makeKraken(gradientMap, i);
+    w.visible = false;
+    w.userData.active = false;
+    w.userData.cd = 4;
+    w.userData.anchor = null;
+    root.add(w);
+    wraps.push(w);
+  }
+  for (let i = 0; i < 8; i++) {
+    const p = makePlank(gradientMap, i);
+    p.visible = false;
+    p.userData.anchor = null;
+    root.add(p);
+    planks.push(p);
+  }
+
+  function assignToAnchor(obj, anchor) {
+    obj.userData.anchor = anchor;
+    obj.position.set(anchor.x, 0, anchor.z);
+    obj.visible = true;
+    obj.userData.chasing = false;
+    obj.userData.hitCd = 0;
+    if (obj.userData.shotCd != null) obj.userData.shotCd = 1 + Math.random();
+  }
+
+  function nearestAnchor(kind, from) {
+    let best = null;
+    let bestD = Infinity;
+    for (const sp of spawnPoints) {
+      if (kind && sp.kind !== kind && !(kind === 'enemy' && (sp.kind === 'ram' || sp.kind === 'ranged'))) continue;
+      if (kind === 'enemy' && sp.kind !== 'ram' && sp.kind !== 'ranged') continue;
+      const d = Math.hypot(sp.x - from.x, sp.z - from.z);
+      if (d < bestD) { bestD = d; best = sp; }
+    }
+    return best;
+  }
+
+  function setSpawnLayout(points, lhMeshes = []) {
+    spawnPoints = points || [];
+    lighthouses = lhMeshes || [];
+    for (const lh of lighthouses) lh.userData.claimed = false;
+
+    const ramPts = spawnPoints.filter((p) => p.kind === 'ram');
+    const rangedPts = spawnPoints.filter((p) => p.kind === 'ranged');
+    const wrapPts = spawnPoints.filter((p) => p.kind === 'wrap');
+    const plankPts = spawnPoints.filter((p) => p.kind === 'plank');
+
+    let ri = 0, rgi = 0;
+    for (const e of enemies) {
+      const want = e.userData.kind === 'ranged' ? 'ranged' : 'ram';
+      const pool = want === 'ranged' ? rangedPts : ramPts;
+      const fallback = spawnPoints.filter((p) => p.kind === 'ram' || p.kind === 'ranged');
+      const list = pool.length ? pool : fallback;
+      if (!list.length) {
+        e.visible = false;
+        e.userData.anchor = null;
+        continue;
+      }
+      const idx = want === 'ranged' ? (rgi++ % list.length) : (ri++ % list.length);
+      // Skip first few assignments so not all near spawn
+      if (idx < list.length) assignToAnchor(e, list[idx]);
+      // Stagger visibility: only activate if far enough from typical spawn (0,-20)
+      const distSpawn = Math.hypot(e.position.x, e.position.z + 20);
+      e.visible = distSpawn > 25 || Math.random() > 0.4;
+      e.userData.respawnAt = 0;
+    }
+
+    wraps.forEach((w, i) => {
+      const a = wrapPts[i % Math.max(1, wrapPts.length)] || spawnPoints[i % Math.max(1, spawnPoints.length)];
+      if (!a) { w.visible = false; return; }
+      w.userData.anchor = a;
+      w.position.set(a.x, 0, a.z);
+      w.visible = false;
+      w.userData.active = false;
+      w.userData.cd = 3 + i * 2;
+    });
+
+    planks.forEach((p, i) => {
+      const a = plankPts[i % Math.max(1, plankPts.length)] || spawnPoints[(i + 3) % Math.max(1, spawnPoints.length)];
+      if (!a) { p.visible = false; return; }
+      assignToAnchor(p, a);
+      p.position.x += (Math.random() - 0.5) * 8;
+      p.position.z += (Math.random() - 0.5) * 8;
+    });
+  }
+
+  function returnToAnchor(obj) {
+    const a = obj.userData.anchor;
+    if (!a) return;
+    obj.userData.chasing = false;
+    const dx = a.x - obj.position.x;
+    const dz = a.z - obj.position.z;
+    const d = Math.hypot(dx, dz) || 1;
+    if (d > PATROL_R + 4) {
+      obj.position.x += (dx / d) * 8 * 0.016; // will be overwritten in update with dt
+    }
+  }
+
+  function update(dt, time, boatPos, opts = {}) {
+    const { onHit, addPlank, hasSucker, boatJumping, onCheckpoint } = opts;
+
+    // Count current chasers
+    let chasers = enemies.filter((e) => e.visible && e.userData.chasing).length;
+
+    for (const e of enemies) {
+      if (e.userData.respawnIn != null && e.userData.respawnIn > 0) {
+        e.userData.respawnIn -= dt;
+        if (e.userData.respawnIn <= 0) {
+          e.userData.respawnIn = 0;
+          e.visible = true;
+          if (e.userData.anchor) {
+            e.position.x = e.userData.anchor.x;
+            e.position.z = e.userData.anchor.z;
+          }
+        }
+        continue;
+      }
+      if (!e.visible) continue;
+      e.userData.phase = (e.userData.phase || 0) + dt;
+      e.userData.patrolT = (e.userData.patrolT || 0) + dt;
+
+      const ax = e.userData.anchor?.x ?? e.position.x;
+      const az = e.userData.anchor?.z ?? e.position.z;
+      const dBoat = Math.hypot(e.position.x - boatPos.x, e.position.z - boatPos.z);
+      const dHome = Math.hypot(e.position.x - ax, e.position.z - az);
+
+      if (e.userData.chasing) {
+        if (dBoat > DROP_RANGE || dHome > PATROL_R * 2.2) {
+          e.userData.chasing = false;
+          chasers = Math.max(0, chasers - 1);
+        }
+      } else if (dBoat < AGRO_RANGE && chasers < MAX_CHASERS && dHome < PATROL_R + 6) {
+        e.userData.chasing = true;
+        chasers++;
+      }
+
+      if (e.userData.chasing) {
+        const ang = Math.atan2(boatPos.x - e.position.x, boatPos.z - e.position.z);
+        e.position.x += Math.sin(ang) * 7 * dt;
+        e.position.z += Math.cos(ang) * 7 * dt;
+        e.rotation.y = ang;
+      } else {
+        // Patrol around anchor
+        const ang = e.userData.patrolT * 0.7;
+        const tx = ax + Math.cos(ang) * (PATROL_R * 0.55);
+        const tz = az + Math.sin(ang) * (PATROL_R * 0.55);
+        e.position.x += (tx - e.position.x) * 1.2 * dt;
+        e.position.z += (tz - e.position.z) * 1.2 * dt;
+        e.rotation.y = Math.atan2(tx - e.position.x, tz - e.position.z);
+      }
+
+      if (e.userData.kind === 'ram') {
+        e.rotation.x = Math.sin(time * 2.2 + e.userData.bob) * 0.06;
+        e.position.y = 0.15 + Math.sin(time * 3 + e.userData.bob) * 0.2;
+      } else {
+        e.rotation.x = 0;
+        e.position.y = 0.15 + Math.sin(time * 2 + e.userData.bob) * 0.15;
+        const neck = e.userData.neck;
+        if (neck) neck.rotation.x = Math.sin(time * 1.8 + e.userData.bob) * 0.12;
+      }
+
+      const d = dBoat;
+      const hitR = e.userData.kind === 'ram' ? 2.8 : 2.4;
+      if (d < hitR && (!e.userData.hitCd || e.userData.hitCd <= 0)) {
+        e.userData.hitCd = 1.4;
+        onHit?.(10, e.userData.kind === 'ram' ? '巨口鲨撞击' : '海蛇冲撞');
+      }
+      if (e.userData.hitCd > 0) e.userData.hitCd -= dt;
+
+      if (e.userData.kind === 'ranged' && e.userData.shotCd <= 0 && d < RANGED_SHOT && e.userData.chasing) {
+        e.userData.shotCd = 2.8;
+        e.updateMatrixWorld(true);
+        const muzzle = e.userData.muzzle;
+        const from = muzzle
+          ? new THREE.Vector3().setFromMatrixPosition(muzzle.matrixWorld)
+          : e.position.clone().add(new THREE.Vector3(0, 4, 0));
+        fireIce(from, boatPos);
+      }
+      if (e.userData.shotCd > 0) e.userData.shotCd -= dt;
+    }
+
+    for (const w of wraps) {
+      w.userData.cd -= dt;
+      const ax = w.userData.anchor?.x ?? w.position.x;
+      const az = w.userData.anchor?.z ?? w.position.z;
+      if (!w.userData.active) {
+        w.position.x = ax;
+        w.position.z = az;
+      }
+      const d = Math.hypot(w.position.x - boatPos.x, w.position.z - boatPos.z);
+      if (!w.userData.active && w.userData.cd <= 0 && d < 18) {
+        w.userData.active = true;
+        w.visible = true;
+        w.userData.life = 4;
+        w.position.x = boatPos.x;
+        w.position.z = boatPos.z;
+      }
+      if (w.userData.active) {
+        w.position.x = boatPos.x + Math.sin(time * 4) * 1.2;
+        w.position.z = boatPos.z;
+        w.rotation.y = time * 1.5;
+        const arms = w.userData.arms || [];
+        arms.forEach((arm, i) => {
+          arm.rotation.z = Math.sin(time * 3 + i) * 0.25;
+          arm.rotation.x = 0.2 + Math.sin(time * 2.4 + i * 0.7) * 0.15;
+        });
+        w.userData.life -= dt;
+        if (!boatJumping) onHit?.(3 * dt, '章鱼缠绕腐蚀');
+        if (w.userData.life <= 0 || (opts.cutWrap && d < 5)) {
+          if (opts.cutWrap && d < 5) opts.onKill?.();
+          w.userData.active = false;
+          w.visible = false;
+          w.userData.cd = 12;
+          if (w.userData.anchor) {
+            w.position.x = w.userData.anchor.x;
+            w.position.z = w.userData.anchor.z;
+          }
+        }
+      }
+    }
+
+    for (const p of planks) {
+      if (!p.visible) continue;
+      p.position.y = 0.15 + Math.sin(time * 2 + p.userData.bob) * 0.1;
+      let d = Math.hypot(p.position.x - boatPos.x, p.position.z - boatPos.z);
+      if (hasSucker && d < 14) {
+        p.position.x += (boatPos.x - p.position.x) * 4 * dt;
+        p.position.z += (boatPos.z - p.position.z) * 4 * dt;
+        d = Math.hypot(p.position.x - boatPos.x, p.position.z - boatPos.z);
+      }
+      if (d < 3.2) {
+        p.visible = false;
+        addPlank?.(1);
+        const anchor = p.userData.anchor;
+        setTimeout(() => {
+          p.visible = true;
+          if (anchor) {
+            p.position.x = anchor.x + (Math.random() - 0.5) * 10;
+            p.position.z = anchor.z + (Math.random() - 0.5) * 10;
+          }
+        }, 8000);
+      }
+    }
+
+    for (let i = shots.length - 1; i >= 0; i--) {
+      const s = shots[i];
+      s.life -= dt;
+      s.mesh.position.x += s.vx * dt;
+      s.mesh.position.z += s.vz * dt;
+      s.mesh.rotation.x += dt * 4;
+      s.mesh.rotation.y += dt * 3;
+      const d = Math.hypot(s.mesh.position.x - boatPos.x, s.mesh.position.z - boatPos.z);
+      if (d < 2.2) {
+        onHit?.(6, '冰霜弹命中');
+        s.life = 0;
+      }
+      if (s.life <= 0) {
+        root.remove(s.mesh);
+        shots.splice(i, 1);
+      }
+    }
+
+    for (let i = inkShots.length - 1; i >= 0; i--) {
+      const s = inkShots[i];
+      s.life -= dt;
+      s.mesh.position.x += s.vx * dt;
+      s.mesh.position.z += s.vz * dt;
+      for (const e of enemies) {
+        if (!e.visible) continue;
+        if (Math.hypot(s.mesh.position.x - e.position.x, s.mesh.position.z - e.position.z) < 2.2) {
+          e.visible = false;
+          opts.onKill?.();
+          e.userData.respawnIn = 6;
+          e.userData.chasing = false;
+          s.life = 0;
+          break;
+        }
+      }
+      if (s.life <= 0) {
+        root.remove(s.mesh);
+        inkShots.splice(i, 1);
+      }
+    }
+
+    for (const lh of lighthouses) {
+      if (lh.userData.claimed) continue;
+      const d = Math.hypot(lh.position.x - boatPos.x, lh.position.z - boatPos.z);
+      if (d < 24) {
+        lh.userData.claimed = true;
+        onCheckpoint?.(lh.userData.lhId || lh.userData.checkpoint);
+      }
+    }
+  }
+
+  function fireIce(from, to) {
+    const dx = to.x - from.x;
+    const dz = to.z - from.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const bolt = new THREE.Group();
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 0), toonMat(C.ice, gradientMap));
+    bolt.add(core);
+    addOutline(core, 1.12);
+    for (let i = 0; i < 4; i++) {
+      const shard = new THREE.Mesh(new THREE.TetrahedronGeometry(0.18, 0), toonMat(C.iceCore, gradientMap));
+      shard.position.set(-0.35 - i * 0.18, (i % 2) * 0.12, ((i % 3) - 1) * 0.1);
+      bolt.add(shard);
+      addOutline(shard, 1.2);
+    }
+    bolt.position.copy(from);
+    bolt.position.y = Math.max(1.2, from.y);
+    root.add(bolt);
+    shots.push({ mesh: bolt, life: 2.2, vx: (dx / len) * 18, vz: (dz / len) * 18 });
+  }
+
+  function shootInk(from, target, gm) {
+    if (!target) return;
+    const dx = target.position.x - from.x;
+    const dz = target.position.z - from.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.32, 5, 4), toonMat(0x1a0a28, gm));
+    mesh.position.set(from.x, 0.7, from.z);
+    root.add(mesh);
+    addOutline(mesh, 1.15);
+    inkShots.push({ mesh, life: 1.6, vx: (dx / len) * 28, vz: (dz / len) * 28 });
+  }
+
+  function nearestEnemy(pos, max = 40) {
+    let best = null;
+    let bestD = max;
+    for (const e of enemies) {
+      if (!e.visible) continue;
+      const d = Math.hypot(e.position.x - pos.x, e.position.z - pos.z);
+      if (d < bestD) { bestD = d; best = e; }
+    }
+    return best;
+  }
+
+  function ramKill(pos, speed, mul, onKill) {
+    if (speed < 8) return;
+    for (const e of enemies) {
+      if (!e.visible) continue;
+      if (Math.hypot(e.position.x - pos.x, e.position.z - pos.z) < 3.5 * mul) {
+        e.visible = false;
+        e.userData.chasing = false;
+        e.userData.respawnIn = 5;
+        onKill?.();
+      }
+    }
+  }
+
+  function cutNearestWrap(pos) {
+    for (const w of wraps) {
+      if (!w.userData.active) continue;
+      if (Math.hypot(w.position.x - pos.x, w.position.z - pos.z) < 5) {
+        w.userData.active = false;
+        w.visible = false;
+        w.userData.cd = 8;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  return {
+    root, enemies, wraps, planks,
+    get lighthouses() { return lighthouses; },
+    update, shootInk, nearestEnemy, ramKill, cutNearestWrap, setSpawnLayout,
+  };
+}
+
+function addPart(g, mesh, outlineScale = 1.08) {
+  g.add(mesh);
+  addOutline(mesh, outlineScale);
+  return mesh;
+}
+
+function addSplash(g, gm, scale = 1) {
+  const splash = new THREE.Group();
+  for (let i = 0; i < 8; i++) {
+    const shard = new THREE.Mesh(
+      new THREE.ConeGeometry(0.35 * scale, 0.9 * scale, 4),
+      toonMat(i % 2 ? C.splashWhite : C.splash, gm)
+    );
+    const a = (i / 8) * Math.PI * 2;
+    shard.position.set(Math.cos(a) * 1.1 * scale, 0.2, Math.sin(a) * 1.1 * scale);
+    shard.rotation.z = Math.cos(a) * 0.8;
+    shard.rotation.x = Math.sin(a) * 0.8;
+    addPart(splash, shard, 1.15);
+  }
+  g.add(splash);
+  return splash;
+}
+
+function makeWreckShip(gm, scale = 1) {
+  const g = new THREE.Group();
+  const hull = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 1.6), toonMat(0x8a5a30, gm));
+  addPart(g, hull, 1.1);
+  const bow = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.7, 5), toonMat(0x7a4a28, gm));
+  bow.rotation.x = -Math.PI / 2;
+  bow.position.z = -1.0;
+  addPart(g, bow, 1.12);
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.8, 5), toonMat(0x5a3a18, gm));
+  mast.position.y = 1.0;
+  addPart(g, mast, 1.15);
+  const sail = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.2, 3), toonMat(0xf0e8d8, gm));
+  sail.rotation.z = Math.PI / 2;
+  sail.scale.set(0.15, 1, 1);
+  sail.position.set(0.25, 1.1, 0.1);
+  addPart(g, sail, 1.08);
+  g.scale.setScalar(scale);
+  return g;
+}
+
+function makeShark(gm) {
+  const g = new THREE.Group();
+  const bodyRoot = new THREE.Group();
+  g.add(bodyRoot);
+
+  const body = new THREE.Mesh(new THREE.ConeGeometry(1.7, 4.5, 6), toonMat(C.shark, gm));
+  body.rotation.x = -Math.PI / 2;
+  body.position.set(0, 0.2, 0);
+  addPart(bodyRoot, body, 1.05);
+
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(1.1, 2.6, 5), toonMat(C.shark, gm));
+  tail.rotation.x = Math.PI / 2;
+  tail.position.set(0, -0.8, -2.4);
+  addPart(bodyRoot, tail, 1.05);
+
+  const upper = new THREE.Mesh(new THREE.ConeGeometry(1.35, 1.7, 6), toonMat(C.shark, gm));
+  upper.rotation.x = -Math.PI / 2;
+  upper.position.set(0, 0.45, 2.5);
+  addPart(bodyRoot, upper, 1.06);
+
+  const lower = new THREE.Mesh(new THREE.ConeGeometry(1.15, 1.35, 6), toonMat(C.sharkMouth, gm));
+  lower.rotation.x = -Math.PI / 2;
+  lower.position.set(0, -0.55, 2.3);
+  addPart(bodyRoot, lower, 1.06);
+
+  const cavity = new THREE.Mesh(new THREE.SphereGeometry(0.85, 6, 4), toonMat(0x7a2030, gm));
+  cavity.scale.set(1, 0.7, 0.95);
+  cavity.position.set(0, 0, 2.0);
+  addPart(bodyRoot, cavity, 1.08);
+
+  for (let i = 0; i < 14; i++) {
+    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.5, 4), toonMat(0xf8f4ec, gm));
+    const a = (i / 14) * Math.PI * 2;
+    tooth.position.set(Math.cos(a) * 0.95, Math.sin(a) * 0.65, 3.0);
+    tooth.rotation.x = -Math.PI / 2;
+    addPart(bodyRoot, tooth, 1.22);
+  }
+
+  for (let i = 0; i < 5; i++) {
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.05, 4), toonMat(C.sharkFin, gm));
+    fin.position.set(0, 1.25, 0.3 - i * 0.65);
+    addPart(bodyRoot, fin, 1.1);
+  }
+
+  for (const side of [-1, 1]) {
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.38, 1.6, 4), toonMat(C.shark, gm));
+    fin.position.set(side * 1.6, -0.15, 0.3);
+    fin.rotation.z = side * 1.05;
+    addPart(bodyRoot, fin, 1.08);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.2, 5, 4), toonMat(C.sharkEye, gm));
+    eye.position.set(side * 0.9, 0.55, 1.55);
+    addPart(bodyRoot, eye, 1.2);
+  }
+
+  const wreck = makeWreckShip(gm, 0.85);
+  wreck.position.set(0, 0.1, 2.7);
+  wreck.rotation.set(0.4, 0.3, 0.55);
+  bodyRoot.add(wreck);
+
+  for (let i = 0; i < 5; i++) {
+    const chip = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.08, 0.35), toonMat(0xa07040, gm));
+    chip.position.set((i - 2) * 0.35, 1.2 + (i % 2) * 0.4, 2.2);
+    chip.rotation.set(0.2 * i, 0.3 * i, 0.1 * i);
+    addPart(bodyRoot, chip, 1.2);
+  }
+
+  addSplash(g, gm, 1.6);
+  bodyRoot.rotation.x = -0.75;
+  bodyRoot.position.y = 2.6;
+  return g;
+}
+
+function makeSerpent(gm) {
+  const g = new THREE.Group();
+  const neck = new THREE.Group();
+  g.add(neck);
+  g.userData.neck = neck;
+
+  const hump = new THREE.Mesh(new THREE.SphereGeometry(1.35, 6, 5), toonMat(C.serpent, gm));
+  hump.scale.set(1.25, 0.75, 1.5);
+  hump.position.set(0, 0.55, -2.6);
+  addPart(g, hump, 1.05);
+
+  const segs = [
+    [0, 1.1, -0.7, 1.15],
+    [0, 2.5, 0.15, 1.0],
+    [0, 3.9, 0.7, 0.88],
+    [0, 5.1, 1.15, 0.75],
+  ];
+  segs.forEach(([x, y, z, r]) => {
+    const seg = new THREE.Mesh(new THREE.SphereGeometry(r, 6, 5), toonMat(C.serpent, gm));
+    seg.scale.set(1, 1.15, 1.2);
+    seg.position.set(x, y, z);
+    addPart(neck, seg, 1.05);
+    const belly = new THREE.Mesh(new THREE.SphereGeometry(r * 0.72, 5, 4), toonMat(C.serpentBelly, gm));
+    belly.position.set(x, y - r * 0.4, z + 0.2);
+    addPart(neck, belly, 1.1);
+    for (let k = 0; k < 2; k++) {
+      const spine = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 0), toonMat(C.serpentSpine, gm));
+      spine.position.set(x + (k - 0.5) * 0.15, y + r * 0.75, z - 0.25);
+      spine.scale.set(0.6, 1.2, 0.6);
+      addPart(neck, spine, 1.18);
+    }
+  });
+
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.5, 5), toonMat(C.serpent, gm));
+  head.rotation.x = -Math.PI / 2;
+  head.position.set(0, 5.7, 1.7);
+  addPart(neck, head, 1.06);
+
+  for (const side of [-1, 1]) {
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.55, 4), toonMat(C.serpentSpine, gm));
+    horn.position.set(side * 0.4, 6.25, 1.25);
+    horn.rotation.z = side * 0.35;
+    addPart(neck, horn, 1.18);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.18, 5, 4), toonMat(C.serpentEye, gm));
+    eye.position.set(side * 0.38, 5.75, 2.0);
+    addPart(neck, eye, 1.22);
+  }
+
+  const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 0), toonMat(C.ice, gm));
+  orb.position.set(0, 5.7, 2.55);
+  addPart(neck, orb, 1.15);
+
+  const muzzle = new THREE.Object3D();
+  muzzle.position.set(0, 5.7, 2.7);
+  neck.add(muzzle);
+  g.userData.muzzle = muzzle;
+
+  addSplash(g, gm, 1.35);
+  return g;
+}
+
+function makeEnemy(gm, id) {
+  const kind = id % 3 === 2 ? 'ranged' : 'ram';
+  const g = kind === 'ranged' ? makeSerpent(gm) : makeShark(gm);
+  g.userData.id = id;
+  g.userData.kind = kind;
+  g.userData.phase = 0;
+  g.userData.bob = Math.random() * 10;
+  g.userData.shotCd = 0.8 + Math.random();
+  g.userData.hitCd = 0;
+  g.scale.setScalar(kind === 'ram' ? 0.72 : 0.68);
+  return g;
+}
+
+function makeKraken(gm, id) {
+  const g = new THREE.Group();
+  g.userData.id = id;
+  g.userData.arms = [];
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(1.9, 7, 6), toonMat(C.kraken, gm));
+  head.scale.set(1.25, 1.1, 1.2);
+  head.position.y = 2.5;
+  addPart(g, head, 1.05);
+
+  const mantle = new THREE.Mesh(new THREE.SphereGeometry(1.1, 6, 5), toonMat(C.krakenDark, gm));
+  mantle.scale.set(1.15, 0.75, 1);
+  mantle.position.set(0, 3.55, -0.25);
+  addPart(g, mantle, 1.06);
+
+  for (const side of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.48, 6, 5), toonMat(C.krakenEye, gm));
+    eye.position.set(side * 0.7, 2.55, 1.45);
+    addPart(g, eye, 1.12);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.18, 5, 4), toonMat(0x1a1020, gm));
+    pupil.position.set(side * 0.7, 2.55, 1.85);
+    g.add(pupil);
+  }
+
+  const wreck = makeWreckShip(gm, 1.05);
+  wreck.position.set(0.2, 1.4, 0.3);
+  wreck.rotation.set(0.25, 0.6, 0.35);
+  g.add(wreck);
+
+  for (let i = 0; i < 8; i++) {
+    const arm = new THREE.Group();
+    const a = (i / 8) * Math.PI * 2;
+    arm.position.set(Math.cos(a) * 1.0, 1.15, Math.sin(a) * 1.0);
+    arm.rotation.y = a + Math.PI * 0.5;
+    arm.rotation.z = 0.95;
+    let y = 0;
+    for (let s = 0; s < 6; s++) {
+      const r = 0.48 - s * 0.055;
+      const seg = new THREE.Mesh(
+        new THREE.CylinderGeometry(r * 0.7, r, 0.8, 5),
+        toonMat(s % 2 ? C.krakenDark : C.kraken, gm)
+      );
+      const curl = s * 0.32;
+      seg.position.set(Math.sin(curl) * 0.4, y, Math.cos(curl) * 0.25 + s * 0.1);
+      seg.rotation.x = 0.5 + s * 0.16;
+      addPart(arm, seg, 1.07);
+      if (s > 0 && s < 5) {
+        const suck = new THREE.Mesh(new THREE.SphereGeometry(0.1, 4, 3), toonMat(0x8a5ab0, gm));
+        suck.position.set(Math.sin(curl) * 0.4, y - 0.2, Math.cos(curl) * 0.25 + s * 0.1 + 0.25);
+        arm.add(suck);
+      }
+      y += 0.65;
+    }
+    g.add(arm);
+    g.userData.arms.push(arm);
+  }
+
+  addSplash(g, gm, 1.5);
+  g.scale.setScalar(0.72);
+  return g;
+}
+
+function makePlank(gm, id) {
+  const g = new THREE.Group();
+  g.userData.id = id;
+  g.userData.bob = Math.random() * 8;
+  const b = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.1, 0.35), toonMat(0xb07840, gm));
+  b.position.y = 0.15;
+  g.add(b);
+  addOutline(b, 1.12);
+  return g;
+}
+
+function makeLighthouse(gm) {
+  const g = new THREE.Group();
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.2, 10, 6), toonMat(0xe8e0d0, gm));
+  tower.position.y = 5;
+  g.add(tower);
+  addOutline(tower, 1.05);
+  const light = new THREE.Mesh(new THREE.SphereGeometry(0.7, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffe066 }));
+  light.position.y = 10.5;
+  g.add(light);
+  addOutline(light, 1.1);
+  return g;
+}
+
+function placeAhead(obj, zBase, spread = 40) {
+  obj.position.set((Math.random() - 0.5) * spread, 0, zBase + Math.random() * 20);
+}
