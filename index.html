@@ -293,7 +293,7 @@
     window.addEventListener('error', (e) => show((e.error && e.error.stack) || e.message));
     window.addEventListener('unhandledrejection', (e) => show(e.reason && e.reason.stack || e.reason));
     try {
-      await import('./js/main.js?v=16e');
+      await import('./js/main.js?v=17d');
     } catch (err) {
       show(err && err.stack || err);
     }

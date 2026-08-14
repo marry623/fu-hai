@@ -4,7 +4,7 @@ import { addOutline, toonMat } from './stylekit.js';
 const SLOT_KEYS = ['bow', 'stern', 'sideL', 'sideR', 'keel', 'sail'];
 
 /**
- * Low-poly sailboat matched to concept: dark hull, cream sail, red pennant.
+ * Low-poly sailboat matched to concept: dark hull, cream sail.
  */
 export function createBoat(gradientMap) {
   const root = new THREE.Group();
@@ -21,7 +21,6 @@ export function createBoat(gradientMap) {
   });
   const metal = toonMat(0xb8c0c8, gradientMap);
   const rope = toonMat(0x2a1c10, gradientMap);
-  const flag = toonMat(0xd82028, gradientMap);
   const skin = toonMat(0xffb08a, gradientMap);
   const cloth = toonMat(0x3a6ad4, gradientMap);
 
@@ -91,12 +90,6 @@ export function createBoat(gradientMap) {
   root.add(sail);
   root.userData.sailMesh = sail;
 
-  // Red pennant
-  const pennant = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.55, 3), flag);
-  pennant.rotation.z = -Math.PI / 2;
-  pennant.position.set(0.35, 4.85, -0.15);
-  add(root, pennant, 1.2);
-
   // Rigging
   addRig(root, rope, new THREE.Vector3(0, 4.7, -0.15), new THREE.Vector3(0, 0.55, -3.7));
   addRig(root, rope, new THREE.Vector3(0, 4.7, -0.15), new THREE.Vector3(0, 0.55, 2.25));
@@ -152,7 +145,7 @@ export function createBoat(gradientMap) {
   root.add(rightOar);
   root.userData.rightOar = rightOar;
 
-  // Rod
+  // Rod + tip marker for fishing line
   const rodArm = new THREE.Group();
   const pole = new THREE.Mesh(
     new THREE.CylinderGeometry(0.028, 0.04, 2.0, 5),
@@ -161,11 +154,16 @@ export function createBoat(gradientMap) {
   pole.position.y = 1.0;
   rodArm.add(pole);
   addOutline(pole, 1.2);
+  const rodTip = new THREE.Object3D();
+  rodTip.position.set(0, 2.05, 0);
+  rodArm.add(rodTip);
   rodArm.position.set(0.9, 0.5, -0.9);
   rodArm.rotation.z = -0.4;
+  rodArm.userData.restRot = { x: 0, y: 0, z: -0.4 };
   rodArm.visible = false;
   root.add(rodArm);
   root.userData.rodArm = rodArm;
+  root.userData.rodTip = rodTip;
 
   const cargoHold = new THREE.Group();
   cargoHold.position.set(0, 0.65, -0.5);
@@ -277,10 +275,59 @@ export function setOarStroke(boat, side, amount) {
   if (sail) sail.rotation.y = -0.12 + amount * 0.06 * side;
 }
 
+/** Resting waterline height — water waves crest ~1m, keep hull mostly above. */
+export const BOAT_WATERLINE_Y = 0.72;
+
 export function setHullDamageVisual(boat, durability, max = 100) {
   const t = durability / max;
   boat.rotation.z = (1 - t) * 0.12 * Math.sin(performance.now() * 0.002);
-  boat.position.y = t < 0.3 ? -0.35 : t < 0.6 ? -0.12 : 0;
+  const sink = t < 0.3 ? -0.2 : t < 0.6 ? -0.08 : 0;
+  boat.position.y = BOAT_WATERLINE_Y + sink;
+}
+
+/** Cast pose: t 0→1 swing from rear to forward. */
+export function setRodCastPose(boat, t) {
+  const rod = boat.userData.rodArm;
+  const cap = boat.userData.captain;
+  if (!rod) return;
+  rod.visible = true;
+  const u = Math.max(0, Math.min(1, t));
+  // backswing → forward whip
+  rod.rotation.x = -0.55 + u * 1.15;
+  rod.rotation.z = -0.55 + u * 0.25;
+  rod.rotation.y = -0.15 + u * 0.35;
+  if (cap) {
+    cap.rotation.y = -0.35 + u * 0.55;
+    cap.rotation.x = -0.08 + u * 0.12;
+  }
+}
+
+export function setRodWaitPose(boat) {
+  const rod = boat.userData.rodArm;
+  const cap = boat.userData.captain;
+  if (!rod) return;
+  rod.visible = true;
+  rod.rotation.x = 0.35;
+  rod.rotation.y = 0.15;
+  rod.rotation.z = -0.35;
+  if (cap) {
+    cap.rotation.y = 0.2;
+    cap.rotation.x = -0.05;
+  }
+}
+
+export function resetRodPose(boat) {
+  const rod = boat.userData.rodArm;
+  const cap = boat.userData.captain;
+  if (rod) {
+    const r = rod.userData.restRot || { x: 0, y: 0, z: -0.4 };
+    rod.rotation.set(r.x, r.y, r.z);
+    rod.visible = false;
+  }
+  if (cap) {
+    cap.rotation.x = 0;
+    cap.rotation.y = 0;
+  }
 }
 
 export function createWakeSystem(scene) {

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
+import { pointInPoly } from './seaMaps.js';
 
 const C = {
   shark: 0x2a3a5a,
@@ -36,11 +37,36 @@ export function createHazards(gradientMap, scene) {
   /** @type {{x:number,z:number,kind:string}[]} */
   let spawnPoints = [];
 
-  const AGRO_RANGE = 20;
-  const DROP_RANGE = 30;
+  const AGRO_RANGE = 22;
+  const DROP_RANGE = 32;
   const PATROL_R = 14;
-  const MAX_CHASERS = 3;
+  const MAX_CHASERS = 6;
   const RANGED_SHOT = 19;
+  const ACTIVE_DIST = 160;
+
+  function ensureEnemies(n) {
+    while (enemies.length < n) {
+      const e = makeEnemy(gradientMap, enemies.length);
+      e.visible = false;
+      e.userData.anchor = null;
+      e.userData.chasing = false;
+      e.userData.patrolT = Math.random() * 10;
+      root.add(e);
+      enemies.push(e);
+    }
+  }
+
+  function ensureWraps(n) {
+    while (wraps.length < n) {
+      const w = makeKraken(gradientMap, wraps.length);
+      w.visible = false;
+      w.userData.active = false;
+      w.userData.cd = 4;
+      w.userData.anchor = null;
+      root.add(w);
+      wraps.push(w);
+    }
+  }
 
   for (let i = 0; i < 8; i++) {
     const e = makeEnemy(gradientMap, i);
@@ -111,9 +137,7 @@ export function createHazards(gradientMap, scene) {
         continue;
       }
       const idx = want === 'ranged' ? (rgi++ % list.length) : (ri++ % list.length);
-      // Skip first few assignments so not all near spawn
       if (idx < list.length) assignToAnchor(e, list[idx]);
-      // Stagger visibility: only activate if far enough from typical spawn (0,-20)
       const distSpawn = Math.hypot(e.position.x, e.position.z + 20);
       e.visible = distSpawn > 25 || Math.random() > 0.4;
       e.userData.respawnAt = 0;
@@ -138,6 +162,122 @@ export function createHazards(gradientMap, scene) {
     });
   }
 
+  /**
+   * Scatter monsters across the whole navigable sea (not tied to fish schools).
+   * Count ≈ 2× water circles; min spacing so spots only have 1–2, never piles.
+   * Killed monsters stay dead (no respawn).
+   */
+  function spawnScattered(opts = {}) {
+    const {
+      count = 24,
+      map = null,
+      mapPoints = [],
+      lhMeshes = [],
+      spawn = { x: 0, z: 0 },
+    } = opts;
+
+    lighthouses = lhMeshes || [];
+    for (const lh of lighthouses) lh.userData.claimed = false;
+
+    const poly = map?.navigable;
+    const b = map?.bounds;
+    const islands = map?.islands || [];
+    const spawnPt = map?.spawn || spawn;
+    const enemyAnchors = [];
+
+    if (poly && b) {
+      const bw = Math.max(1, b.maxX - b.minX);
+      const bh = Math.max(1, b.maxZ - b.minZ);
+      const area = bw * bh;
+      // Keep local density low: ~1 per 40–50m cell
+      const minSep = Math.max(32, Math.min(52, Math.sqrt(area / Math.max(1, count)) * 0.72));
+      const minSep2 = minSep * minSep;
+      const pairSep2 = (minSep * 0.45) ** 2; // rare close pair still not stacked
+      const maxAttempts = count * 48;
+
+      for (let attempt = 0; attempt < maxAttempts && enemyAnchors.length < count; attempt++) {
+        const x = b.minX + Math.random() * bw;
+        const z = b.minZ + Math.random() * bh;
+        if (!pointInPoly(x, z, poly)) continue;
+        if (Math.hypot(x - spawnPt.x, z - spawnPt.z) < 30) continue;
+        let nearIsland = false;
+        for (const isl of islands) {
+          if (Math.hypot(x - isl.x, z - isl.z) < isl.r + 4) { nearIsland = true; break; }
+        }
+        if (nearIsland) continue;
+
+        let tooClose = false;
+        let nearCount = 0;
+        for (const a of enemyAnchors) {
+          const d2 = (a.x - x) ** 2 + (a.z - z) ** 2;
+          if (d2 < pairSep2) { tooClose = true; break; }
+          if (d2 < minSep2) nearCount++;
+        }
+        // Local cluster at most 2; never stacked on the same spot
+        if (tooClose || nearCount >= 2) continue;
+
+        enemyAnchors.push({
+          x,
+          z,
+          kind: enemyAnchors.length % 4 === 0 ? 'ranged' : 'ram',
+        });
+      }
+    }
+
+    const plankPts = (mapPoints || []).filter((p) => p.kind === 'plank');
+    const mapWraps = (mapPoints || []).filter((p) => p.kind === 'wrap');
+    spawnPoints = [...enemyAnchors, ...mapWraps, ...plankPts];
+
+    ensureEnemies(enemyAnchors.length);
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      if (i >= enemyAnchors.length) {
+        e.visible = false;
+        e.userData.anchor = null;
+        e.userData.chasing = false;
+        e.userData.dead = true;
+        e.userData.respawnIn = 0;
+        continue;
+      }
+      assignToAnchor(e, enemyAnchors[i]);
+      e.userData.dead = false;
+      e.userData.respawnIn = 0;
+      e.userData.chasing = false;
+      e.visible = false; // ACTIVE_DIST
+    }
+
+    ensureWraps(Math.max(4, mapWraps.length));
+    wraps.forEach((w, i) => {
+      const a = mapWraps[i % Math.max(1, mapWraps.length)] || enemyAnchors[(i * 7) % Math.max(1, enemyAnchors.length)];
+      if (!a) { w.visible = false; return; }
+      w.userData.anchor = a;
+      w.position.set(a.x + (Math.random() - 0.5) * 14, 0, a.z + (Math.random() - 0.5) * 14);
+      w.visible = false;
+      w.userData.active = false;
+      w.userData.cd = 2.5 + (i % 5);
+    });
+
+    planks.forEach((p, i) => {
+      const a = plankPts[i % Math.max(1, plankPts.length)] || enemyAnchors[(i * 5) % Math.max(1, enemyAnchors.length)];
+      if (!a) { p.visible = false; return; }
+      assignToAnchor(p, a);
+      p.position.x += (Math.random() - 0.5) * 10;
+      p.position.z += (Math.random() - 0.5) * 10;
+      p.userData.dead = false;
+    });
+  }
+
+  /** @deprecated use spawnScattered */
+  function spawnAroundVortices(vortexList, mapPoints = [], lhMeshes = [], spawn = { x: 0, z: 0 }) {
+    spawnScattered({
+      count: Math.max(8, (vortexList?.length || 12) * 2),
+      map: null,
+      mapPoints,
+      lhMeshes,
+      spawn,
+    });
+  }
+
   function returnToAnchor(obj) {
     const a = obj.userData.anchor;
     if (!a) return;
@@ -157,6 +297,7 @@ export function createHazards(gradientMap, scene) {
     let chasers = enemies.filter((e) => e.visible && e.userData.chasing).length;
 
     for (const e of enemies) {
+      if (e.userData.dead) continue;
       if (e.userData.respawnIn != null && e.userData.respawnIn > 0) {
         e.userData.respawnIn -= dt;
         if (e.userData.respawnIn <= 0) {
@@ -169,7 +310,24 @@ export function createHazards(gradientMap, scene) {
         }
         continue;
       }
+      if (!e.visible && !(e.userData.respawnIn > 0)) {
+        // Far enemies stay anchored but skip AI until player approaches
+        const ax0 = e.userData.anchor?.x;
+        const az0 = e.userData.anchor?.z;
+        if (ax0 != null) {
+          const d0 = Math.hypot(ax0 - boatPos.x, az0 - boatPos.z);
+          if (d0 < ACTIVE_DIST && !(e.userData.respawnIn > 0)) {
+            e.visible = true;
+          }
+        }
+      }
       if (!e.visible) continue;
+      const dBoatQuick = Math.hypot(e.position.x - boatPos.x, e.position.z - boatPos.z);
+      if (dBoatQuick > ACTIVE_DIST) {
+        e.visible = false;
+        e.userData.chasing = false;
+        continue;
+      }
       e.userData.phase = (e.userData.phase || 0) + dt;
       e.userData.patrolT = (e.userData.patrolT || 0) + dt;
 
@@ -323,9 +481,10 @@ export function createHazards(gradientMap, scene) {
         if (!e.visible) continue;
         if (Math.hypot(s.mesh.position.x - e.position.x, s.mesh.position.z - e.position.z) < 2.2) {
           e.visible = false;
-          opts.onKill?.();
-          e.userData.respawnIn = 6;
+          e.userData.dead = true;
+          e.userData.respawnIn = 0;
           e.userData.chasing = false;
+          opts.onKill?.();
           s.life = 0;
           break;
         }
@@ -396,7 +555,8 @@ export function createHazards(gradientMap, scene) {
       if (Math.hypot(e.position.x - pos.x, e.position.z - pos.z) < 3.5 * mul) {
         e.visible = false;
         e.userData.chasing = false;
-        e.userData.respawnIn = 5;
+        e.userData.dead = true;
+        e.userData.respawnIn = 0;
         onKill?.();
       }
     }
@@ -418,7 +578,7 @@ export function createHazards(gradientMap, scene) {
   return {
     root, enemies, wraps, planks,
     get lighthouses() { return lighthouses; },
-    update, shootInk, nearestEnemy, ramKill, cutNearestWrap, setSpawnLayout,
+    update, shootInk, nearestEnemy, ramKill, cutNearestWrap, setSpawnLayout, spawnScattered, spawnAroundVortices,
   };
 }
 

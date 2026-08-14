@@ -207,36 +207,71 @@ export function createSeaWorld() {
     return hit;
   }
 
-  /** Place vortices / flotsam inside navigable water (once per load) */
+  /** Place vortices densely across navigable water */
   function scatterProps(vortexList, flotsamList) {
     if (!current) return;
     const poly = current.navigable;
     const b = current.bounds;
-    const place = (obj, i, salt) => {
-      for (let attempt = 0; attempt < 28; attempt++) {
-        const x = b.minX + Math.random() * (b.maxX - b.minX);
-        const z = b.minZ + Math.random() * (b.maxZ - b.minZ);
+    const bw = Math.max(1, b.maxX - b.minX);
+    const bh = Math.max(1, b.maxZ - b.minZ);
+
+    const placeRandom = (obj, i, salt, minSpawn = 14) => {
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const x = b.minX + Math.random() * bw;
+        const z = b.minZ + Math.random() * bh;
         if (!pointInPoly(x, z, poly)) continue;
         let ok = true;
         for (const isl of current.islands) {
           if (Math.hypot(x - isl.x, z - isl.z) < isl.r + 3) { ok = false; break; }
         }
         if (!ok) continue;
-        // Keep clear of typical spawn
-        if (Math.hypot(x - current.spawn.x, z - current.spawn.z) < 18) continue;
+        if (Math.hypot(x - current.spawn.x, z - current.spawn.z) < minSpawn) continue;
         obj.position.set(x, 0, z);
         obj.visible = true;
         if (obj.userData) obj.userData.collected = false;
-        return;
+        return true;
       }
       obj.position.set(
         current.spawn.x + ((i + salt) % 7 - 3) * 10,
         0,
         current.spawn.z + 35 + (i % 5) * 12
       );
+      obj.visible = true;
+      return false;
     };
-    vortexList?.forEach((v, i) => place(v, i, 3.1));
-    flotsamList?.forEach((f, i) => place(f, i, 7.7));
+
+    // Grid + jitter so schools cover the whole sea
+    if (vortexList?.length) {
+      const n = vortexList.length;
+      const cols = Math.ceil(Math.sqrt(n * (bw / bh)));
+      const rows = Math.ceil(n / cols);
+      let idx = 0;
+      for (let r = 0; r < rows && idx < n; r++) {
+        for (let c = 0; c < cols && idx < n; c++) {
+          const v = vortexList[idx++];
+          let placed = false;
+          for (let attempt = 0; attempt < 24; attempt++) {
+            const jx = (Math.random() - 0.5) * 0.7;
+            const jz = (Math.random() - 0.5) * 0.7;
+            const x = b.minX + ((c + 0.5 + jx) / cols) * bw;
+            const z = b.minZ + ((r + 0.5 + jz) / rows) * bh;
+            if (!pointInPoly(x, z, poly)) continue;
+            let ok = true;
+            for (const isl of current.islands) {
+              if (Math.hypot(x - isl.x, z - isl.z) < isl.r + 4) { ok = false; break; }
+            }
+            if (!ok) continue;
+            if (Math.hypot(x - current.spawn.x, z - current.spawn.z) < 12) continue;
+            v.position.set(x, 0, z);
+            v.visible = true;
+            placed = true;
+            break;
+          }
+          if (!placed) placeRandom(v, idx, 3.1, 12);
+        }
+      }
+    }
+    flotsamList?.forEach((f, i) => placeRandom(f, i, 7.7, 16));
   }
 
   function updateBeacons(time) {

@@ -4,16 +4,16 @@ import {
   createDuskSky, createSun, createClouds, createWater, updateWater,
   createFoamRings,
 } from './world.js';
-import { createBoat, createWakeSystem, setOarStroke } from './boat.js?v=16c';
+import { createBoat, createWakeSystem, setOarStroke, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, resetRodPose } from './boat.js?v=17a';
 import { createPaddleController } from './paddle.js?v=16c';
 import { createHull, updateCorrosion, damageHull, repairHull } from './hull.js?v=16c';
 import {
   createFlotsamField, updateFlotsam, findNearestFlotsam, respawnFlotsam, rollSalvage,
 } from './flotsam.js?v=16c';
 import {
-  createVortexField, updateVortices, findNearestVortex, createFishingController,
-} from './fishing.js?v=16c';
-import { createHazards } from './hazards.js?v=16c';
+  createVortexField, updateVortices, findNearestVortex, createFishingController, CAST_AIM_DIST, tintVortexField, VORTEX_COUNT,
+} from './fishing.js?v=17c';
+import { createHazards } from './hazards.js?v=17d';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot,
@@ -181,9 +181,92 @@ scene.add(foam);
 const boat = createBoat(gradientMap);
 scene.add(boat);
 const wake = createWakeSystem(scene);
+
+/** Aim ring + bobber + fishing line */
+const aimRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.55, 0.85, 24),
+  new THREE.MeshBasicMaterial({
+    color: 0x7ec8d8,
+    transparent: true,
+    opacity: 0.55,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  })
+);
+aimRing.rotation.x = -Math.PI / 2;
+aimRing.position.y = 0.12;
+aimRing.userData.skipOutline = true;
+scene.add(aimRing);
+
+const bobberMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(0.18, 8, 6),
+  new THREE.MeshBasicMaterial({ color: 0xe85d4c })
+);
+bobberMesh.position.y = 0.2;
+bobberMesh.visible = false;
+bobberMesh.userData.skipOutline = true;
+scene.add(bobberMesh);
+
+const fishLinePositions = new Float32Array(6);
+const fishLineGeo = new THREE.BufferGeometry();
+fishLineGeo.setAttribute('position', new THREE.BufferAttribute(fishLinePositions, 3));
+const fishLine = new THREE.Line(
+  fishLineGeo,
+  new THREE.LineBasicMaterial({ color: 0x1a1a1a, transparent: true, opacity: 0.85 })
+);
+fishLine.visible = false;
+fishLine.frustumCulled = false;
+scene.add(fishLine);
+
+const tipWorld = new THREE.Vector3();
+const bobberWorld = new THREE.Vector3();
+
+function aimPointFromBoat() {
+  const yaw = paddle.state.yaw;
+  return {
+    x: paddle.state.x + Math.sin(yaw) * CAST_AIM_DIST,
+    z: paddle.state.z + Math.cos(yaw) * CAST_AIM_DIST,
+  };
+}
+
+function setFishLine(ax, ay, az, bx, by, bz) {
+  fishLinePositions[0] = ax; fishLinePositions[1] = ay; fishLinePositions[2] = az;
+  fishLinePositions[3] = bx; fishLinePositions[4] = by; fishLinePositions[5] = bz;
+  fishLineGeo.attributes.position.needsUpdate = true;
+  fishLine.visible = true;
+}
+
+function hideFishingFx() {
+  bobberMesh.visible = false;
+  fishLine.visible = false;
+  resetRodPose(boat);
+}
+
+function updateAimPreview() {
+  if (phase !== 'play' || hull.sunk) {
+    aimRing.visible = false;
+    return;
+  }
+  const ph = fishing.phase;
+  if (ph === 'idle') {
+    const a = aimPointFromBoat();
+    aimRing.visible = true;
+    aimRing.position.x = a.x;
+    aimRing.position.z = a.z;
+    aimRing.material.opacity = 0.45 + Math.sin(performance.now() * 0.004) * 0.12;
+  } else if (ph === 'cast' || ph === 'wait' || ph === 'qte') {
+    aimRing.visible = true;
+    aimRing.position.x = fishing.bobber.x;
+    aimRing.position.z = fishing.bobber.z;
+    aimRing.material.opacity = ph === 'wait' && fishing.nearVortex ? 0.75 : 0.4;
+  } else {
+    aimRing.visible = false;
+  }
+}
+
 const { root: flotRoot, list: flotsam } = createFlotsamField(gradientMap, 22);
 scene.add(flotRoot);
-const { root: vRoot, list: vortices } = createVortexField(gradientMap, 10);
+const { root: vRoot, list: vortices } = createVortexField(gradientMap, VORTEX_COUNT);
 scene.add(vRoot);
 const hazards = createHazards(gradientMap, scene);
 const seaWorld = createSeaWorld();
@@ -194,7 +277,7 @@ scene.add(coverScene.root);
 const hubIsland = createHubIsland(gradientMap);
 scene.add(hubIsland.root);
 
-const playVisuals = [water, foam, boat, flotRoot, vRoot, hazards.root, seaWorld.root, worldClouds, duskSun];
+const playVisuals = [water, foam, boat, flotRoot, vRoot, hazards.root, seaWorld.root, worldClouds, duskSun, aimRing, bobberMesh, fishLine];
 const duskBits = [];
 scene.traverse((o) => {
   if (o.name === 'duskSky') duskBits.push(o);
@@ -326,7 +409,7 @@ const fishing = createFishingController({
     if (ph === 'qte') {
       ui.qte.classList.remove('hidden');
       ui.btnFishCn.textContent = '收竿';
-    } else if (ph === 'wait') {
+    } else if (ph === 'wait' || ph === 'cast') {
       ui.qte.classList.add('hidden');
       ui.btnFishCn.textContent = '等待';
     } else {
@@ -339,7 +422,40 @@ const fishing = createFishingController({
     ui.qteGreen.style.width = `${w * 100}%`;
     ui.qtePointer.style.left = `${p * 100}%`;
   },
-  onRod(on) { if (boat.userData.rodArm) boat.userData.rodArm.visible = on; },
+  onRod(on) {
+    if (!on) hideFishingFx();
+    else if (boat.userData.rodArm) boat.userData.rodArm.visible = true;
+  },
+  onCastStart(aim) {
+    setRodCastPose(boat, 0);
+    bobberMesh.visible = false;
+    fishLine.visible = true;
+  },
+  onCastProgress(u, aim) {
+    setRodCastPose(boat, u);
+    if (boat.userData.rodTip) boat.userData.rodTip.getWorldPosition(tipWorld);
+    else tipWorld.set(paddle.state.x + 0.9, boat.position.y + 2.2, paddle.state.z - 0.9);
+    const bx = tipWorld.x + (aim.x - tipWorld.x) * u;
+    const bz = tipWorld.z + (aim.z - tipWorld.z) * u;
+    const by = tipWorld.y + (0.25 - tipWorld.y) * u + Math.sin(u * Math.PI) * 2.4;
+    bobberWorld.set(bx, by, bz);
+    setFishLine(tipWorld.x, tipWorld.y, tipWorld.z, bx, by, bz);
+  },
+  onCastLand(bob) {
+    setRodWaitPose(boat);
+    bobberMesh.visible = true;
+    bobberMesh.position.set(bob.x, 0.22, bob.z);
+  },
+  onWaitTick(bob, near) {
+    setRodWaitPose(boat);
+    bobberMesh.visible = true;
+    bobberMesh.position.set(bob.x, 0.18 + Math.sin(performance.now() * 0.008) * 0.06, bob.z);
+    if (boat.userData.rodTip) boat.userData.rodTip.getWorldPosition(tipWorld);
+    setFishLine(tipWorld.x, tipWorld.y, tipWorld.z, bob.x, bobberMesh.position.y, bob.z);
+  },
+  onFishingEnd() {
+    hideFishingFx();
+  },
   onCatch(fish) {
     state.fishHold.push(fish);
     state.selectedFish = state.fishHold.length - 1;
@@ -373,13 +489,12 @@ function showCatchLift(fish) {
 function onSpace() {
   if (hull.sunk) return;
   if (fishing.phase === 'qte') { fishing.onSpace(); return; }
-  if (fishing.phase === 'wait') return;
-  const near = findNearestVortex(vortices, boatPos());
-  if (!near) { showToast('附近没有鱼群漩涡'); return; }
+  if (fishing.phase === 'wait' || fishing.phase === 'cast') return;
   const bait = state.inventory.bait > 0;
   if (bait) { state.inventory.bait--; updateInv(); }
   const greenBonus = meta.unlocks.fishmongerEye ? 1.2 : 1;
-  fishing.tryCast(true, bait, state.runDistance, greenBonus, startZone);
+  const aim = aimPointFromBoat();
+  fishing.tryCast(bait, state.runDistance, greenBonus, startZone, aim.x, aim.z);
   ui.btnFish.classList.add('pressed');
 }
 
@@ -633,7 +748,7 @@ function makePolaroidCell({ kind, index, item, selected, onClick, badge }) {
   btn.style.setProperty('--tilt', `${((index % 5) - 2) * 0.6}deg`);
 
   if (!item) {
-    btn.innerHTML = `<div class="bp-polaroid"><div class="bp-thumb"></div><div class="bp-cell-name">—/div></div>`;
+    btn.innerHTML = `<div class="bp-polaroid"><div class="bp-thumb"></div><div class="bp-cell-name">—</div></div>`;
     return btn;
   }
 
@@ -979,6 +1094,8 @@ function startRun(fromCheckpoint = false) {
   setWorldMode('play');
   phase = 'run';
   camInit = false;
+  fishing.reset();
+  hideFishingFx();
   selectedBoat = meta.loadout?.boatId || selectedBoat;
   const maxHp = hullMaxForBoat(meta.unlocks, selectedBoat);
   hull = createHull(maxHp);
@@ -1019,8 +1136,15 @@ function startRun(fromCheckpoint = false) {
   ui.lighthouseModal?.classList.add('hidden');
 
   const loaded = seaWorld.load(startZone, scene, gradientMap, water);
-  hazards.setSpawnLayout(loaded.spawnPoints, seaWorld.getLighthouses());
   seaWorld.scatterProps(vortices, flotsam);
+  tintVortexField(vortices, loaded.water);
+  hazards.spawnScattered({
+    count: vortices.length * 2,
+    map: loaded,
+    mapPoints: loaded.spawnPoints,
+    lhMeshes: seaWorld.getLighthouses(),
+    spawn: loaded.spawn || { x: 0, z: 0 },
+  });
   applyZoneVisual(getZone(0, startZone));
 
   updateHp();
@@ -1037,6 +1161,7 @@ function applyZoneVisual(z) {
   scene.fog.near = map.feature === 'fog' ? 120 : 220;
   scene.fog.far = map.feature === 'fog' ? 520 : 980;
   setWaterColor(water, map.water);
+  tintVortexField(vortices, map.water);
   ui.zoneName.textContent = z.name;
 }
 
@@ -1109,6 +1234,17 @@ function drawSeaMapOverlay() {
     ctx.stroke();
   }
 
+  ctx.strokeStyle = waterHex;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.85;
+  for (const v of vortices) {
+    if (!v.visible) continue;
+    ctx.beginPath();
+    ctx.arc(tx(v.position.x), tz(v.position.z), 5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
   const bx = tx(paddle.state.x);
   const by = tz(paddle.state.z);
   ctx.fillStyle = '#ff6b4a';
@@ -1132,10 +1268,12 @@ function refreshTitleMeta() {
 
 function updatePrompts() {
   if (fishing.phase === 'qte') return setPrompt(ui.prompt, '空格 — 停在绿色区域');
-  if (fishing.phase === 'wait') return setPrompt(ui.prompt, '等待咬钩…');
-  if (findNearestVortex(vortices, boatPos())) return setPrompt(ui.prompt, '漩涡 · 空格抛竿');
+  if (fishing.phase === 'cast') return setPrompt(ui.prompt, '甩竿…');
+  if (fishing.phase === 'wait') {
+    return setPrompt(ui.prompt, fishing.nearVortex ? '水圈附近…即将咬钩' : '等待咬钩…把浮漂靠近水圈');
+  }
   if (findNearestFlotsam(flotsam, boatPos(), 7)) return setPrompt(ui.prompt, '漂浮物 · E 打捞');
-  setPrompt(ui.prompt, '');
+  setPrompt(ui.prompt, '空格抛竿');
 }
 
 function drawMinimap() {
@@ -1175,8 +1313,10 @@ function drawMinimap() {
     const mx = cx + (v.position.x - paddle.state.x) * scale;
     const my = cy - (v.position.z - paddle.state.z) * scale;
     if (mx > 2 && mx < w - 2 && my > 2 && my < h - 2) {
-      ctx.strokeStyle = '#5dffb0';
-      ctx.beginPath(); ctx.arc(mx, my, 4, 0, Math.PI * 2); ctx.stroke();
+      const waterHex = '#' + ((map.water >>> 0).toString(16).padStart(6, '0'));
+      ctx.strokeStyle = waterHex;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(mx, my, 5, 0, Math.PI * 2); ctx.stroke();
     }
   }
   ctx.fillStyle = '#c48a4a';
@@ -1237,7 +1377,7 @@ function tick() {
     updateHp();
     if (hull.sunk) onSink();
 
-    let y = Math.sin(t * 2 + boat.userData.bobPhase) * 0.1;
+    let y = BOAT_WATERLINE_Y + Math.sin(t * 2 + boat.userData.bobPhase) * 0.08;
     if (now() < state.jumpUntil) y += Math.sin((1 - (state.jumpUntil - now())) * Math.PI) * 2.8;
     boat.position.set(phys.x, y, phys.z);
     boat.rotation.set(0, phys.yaw + Math.PI, (1 - hull.durability / hull.maxDurability) * 0.15);
@@ -1257,7 +1397,19 @@ function tick() {
       wake.spawn(tmp, vel, Math.min(1.2, phys.speed / 14));
     }
 
-    fishing.update(dt);
+    const bobHit = (fishing.phase === 'wait' || fishing.phase === 'cast')
+      ? findNearestVortex(vortices, fishing.bobber, 2)
+      : null;
+    fishing.update(dt, bobHit);
+    updateAimPreview();
+    if (fishing.phase === 'qte') {
+      setRodWaitPose(boat);
+      bobberMesh.visible = true;
+      const bob = fishing.bobber;
+      bobberMesh.position.set(bob.x, 0.18 + Math.sin(performance.now() * 0.012) * 0.1, bob.z);
+      if (boat.userData.rodTip) boat.userData.rodTip.getWorldPosition(tipWorld);
+      setFishLine(tipWorld.x, tipWorld.y, tipWorld.z, bob.x, bobberMesh.position.y, bob.z);
+    }
     const dropped = updateSlotsVitality(state.slots, boat, dt, gradientMap);
     if (dropped.length) showToast(`${dropped.join('、')} 力竭脱落`);
     refreshSlots();
@@ -1312,16 +1464,16 @@ function tick() {
       }
     }
 
-    // camera
-    const back = 16;
+    // camera — slightly less top-down
+    const back = 17.5;
     const desired = tmp.set(
       phys.x - Math.sin(phys.yaw) * back,
-      11,
+      9.4,
       phys.z - Math.cos(phys.yaw) * back
     );
     if (!camInit) { camera.position.copy(desired); camInit = true; }
     else camera.position.lerp(desired, 1 - Math.pow(0.0003, dt));
-    camera.lookAt(phys.x, 1.2, phys.z + Math.cos(phys.yaw) * 3);
+    camera.lookAt(phys.x, 1.6, phys.z + Math.cos(phys.yaw) * 3);
 
     if (state.toastTimer > 0) {
       state.toastTimer -= dt;
