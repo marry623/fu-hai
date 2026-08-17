@@ -97,6 +97,11 @@ export function getFishDef(id) {
   return FISH_CATALOG[id] || FISH_CATALOG.food;
 }
 
+/** All catalog ids in stable order */
+export function listFishIds() {
+  return Object.keys(FISH_CATALOG);
+}
+
 function pickRarityTier(zoneIndex) {
   const w = ZONE_RARITY_WEIGHTS[Math.min(zoneIndex, ZONE_RARITY_WEIGHTS.length - 1)];
   const map = [1, 2, 3, 5];

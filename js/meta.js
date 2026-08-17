@@ -12,11 +12,17 @@ const DEFAULT = {
     raft: true,
     lightBoat: false,
     heavyRaft: false,
+    chargeBoat: false,
     cursedBoat: false,
     fishmongerEye: false,
+    ghostWake: false,
+    weaponHarpoon: true,
+    weaponKnife: false,
+    weaponSling: false,
   },
   bestDistance: 0,
   codex: {},
+  monsterCodex: {},
   warehouse: {
     fish: [
       { defId: 'food', name: '食物鱼', rarity: 1, category: 'food', color: 0x4ecdc4, vitality: 100, slot: null },
@@ -59,6 +65,7 @@ function normalizeMeta(data) {
     ...data,
     unlocks: { ...DEFAULT.unlocks, ...(data.unlocks || {}) },
     codex: { ...(data.codex || {}) },
+    monsterCodex: { ...(data.monsterCodex || {}) },
     warehouse: {
       fish: Array.isArray(data.warehouse?.fish) ? data.warehouse.fish : [],
       supplies: {
@@ -68,7 +75,11 @@ function normalizeMeta(data) {
       },
     },
     loadout: {
-      boatId: data.loadout?.boatId || 'raft',
+      boatId: (() => {
+        const id = data.loadout?.boatId || 'raft';
+        if (id === 'cursedBoat' || id === 'lightBoat') return 'raft';
+        return id;
+      })(),
       slots: { ...EMPTY_SLOTS(), ...(data.loadout?.slots || {}) },
       cargo: Array.isArray(data.loadout?.cargo) ? data.loadout.cargo : [],
       supplies: {
@@ -90,11 +101,29 @@ export function saveMeta(meta) {
 
 /** Discover fish species into codex; returns newly discovered ids */
 export function discoverFish(meta, defIds) {
-  const m = { ...meta, unlocks: { ...meta.unlocks }, codex: { ...meta.codex } };
+  const m = { ...meta, unlocks: { ...meta.unlocks }, codex: { ...meta.codex }, monsterCodex: { ...(meta.monsterCodex || {}) } };
   const neu = [];
   for (const id of defIds) {
     if (!id || m.codex[id]) continue;
     m.codex[id] = true;
+    neu.push(id);
+  }
+  if (neu.length) saveMeta(m);
+  return { meta: m, newIds: neu };
+}
+
+/** Discover monsters into bestiary */
+export function discoverMonster(meta, monsterIds) {
+  const m = {
+    ...meta,
+    unlocks: { ...meta.unlocks },
+    codex: { ...(meta.codex || {}) },
+    monsterCodex: { ...(meta.monsterCodex || {}) },
+  };
+  const neu = [];
+  for (const id of monsterIds) {
+    if (!id || m.monsterCodex[id]) continue;
+    m.monsterCodex[id] = true;
     neu.push(id);
   }
   if (neu.length) saveMeta(m);
@@ -116,6 +145,7 @@ export function settleRun(meta, {
     ...meta,
     unlocks: { ...meta.unlocks },
     codex: { ...meta.codex },
+    monsterCodex: { ...(meta.monsterCodex || {}) },
     warehouse: {
       fish: [...(meta.warehouse?.fish || [])],
       supplies: { ...(meta.warehouse?.supplies || { bait: 0, plank: 0, repair: 0 }) },
@@ -167,11 +197,50 @@ export function settleRun(meta, {
   return { meta: m, gain, success };
 }
 
+export const SHOP_TABS = [
+  { id: 'sell', name: '出售鱼类' },
+  { id: 'hull', name: '船体型号' },
+  { id: 'supply', name: '物资' },
+  { id: 'weapon', name: '武器' },
+  { id: 'talent', name: '局外天赋' },
+];
+
+/** Sell price in fragments by rarity */
+export function fishSellPrice(fish) {
+  if (!fish) return 0;
+  if (fish.defId === 'food' || fish.category === 'food') return 1;
+  const table = { 1: 2, 2: 5, 3: 10, 5: 20 };
+  return table[fish.rarity] ?? 2;
+}
+
+export const SHOP_HULLS = [
+  { id: 'heavyRaft', name: '重筏', cost: 10, tone: '#3a6aaa', desc: '中阶 · 耐久 120 · 推力 −15%' },
+  { id: 'chargeBoat', name: '冲锋船', cost: 14, tone: '#6a2a8a', desc: '高阶 · 耐久 95 · 推力 +40%' },
+];
+
+export const SHOP_SUPPLIES = [
+  { id: 'bait', name: '鱼饵', cost: 2, amount: 3, tone: '#4ecdc4', desc: '购买 ×3，放入仓库' },
+  { id: 'plank', name: '木板', cost: 3, amount: 1, tone: '#c4a06a', desc: '购买 ×1，放入仓库' },
+  { id: 'repair', name: '修补剂', cost: 4, amount: 1, tone: '#6a9ac4', desc: '购买 ×1，放入仓库' },
+];
+
+export const SHOP_WEAPONS = [
+  { id: 'weaponHarpoon', name: '鱼叉', cost: 5, tone: '#5a7a8a', desc: '远程点射，默认可用' },
+  { id: 'weaponKnife', name: '刀', cost: 6, tone: '#9aa4b2', desc: '近身斩断缠绕触手' },
+  { id: 'weaponSling', name: '投石', cost: 6, tone: '#8a6a48', desc: '短距投掷骚扰' },
+];
+
+export const SHOP_TALENTS = [
+  { id: 'fishmongerEye', name: '鱼贩子的眼睛', cost: 12, tone: '#c45c1a', desc: '钓鱼绿区判定 +20%' },
+  { id: 'cursedBoat', name: '怪谈低语', cost: 14, tone: '#6a2a8a', desc: '出港时随机获得一条怪鱼' },
+  { id: 'ghostWake', name: '鬼影航迹', cost: 10, tone: '#3a5a7a', desc: '开局腐蚀抗性略增（预留）' },
+];
+
+/** Flat unlock catalog (hull / weapon / talent) */
 export const SHOP = [
-  { id: 'lightBoat', name: '轻舟', cost: 8, desc: '快，耐久上限 80' },
-  { id: 'heavyRaft', name: '重筏', cost: 10, desc: '慢，耐久上限 120' },
-  { id: 'cursedBoat', name: '怪谈船', cost: 14, desc: '开局随机怪鱼' },
-  { id: 'fishmongerEye', name: '鱼贩子的眼睛', cost: 12, desc: '钓鱼绿区 +20%' },
+  ...SHOP_HULLS,
+  ...SHOP_WEAPONS,
+  ...SHOP_TALENTS,
 ];
 
 export const ZONE_UNLOCK_COST = [
@@ -185,7 +254,7 @@ export const ZONE_UNLOCK_COST = [
 export function tryUnlock(meta, shopId) {
   const item = SHOP.find((s) => s.id === shopId);
   if (!item || meta.unlocks[shopId] || meta.fragments < item.cost) {
-    return { ok: false, meta, msg: '无法购买' };
+    return { ok: false, meta, msg: meta.unlocks[shopId] ? '已拥有' : '碎片不足或无法购买' };
   }
   const m = {
     ...meta,
@@ -194,6 +263,36 @@ export function tryUnlock(meta, shopId) {
   };
   saveMeta(m);
   return { ok: true, meta: m, msg: `解锁 ${item.name}` };
+}
+
+export function buySupply(meta, supplyId) {
+  const item = SHOP_SUPPLIES.find((s) => s.id === supplyId);
+  if (!item) return { ok: false, meta, msg: '无效物资' };
+  if (meta.fragments < item.cost) return { ok: false, meta, msg: '碎片不足' };
+  const supplies = { ...(meta.warehouse?.supplies || { bait: 0, plank: 0, repair: 0 }) };
+  supplies[item.id] = (supplies[item.id] || 0) + item.amount;
+  const m = {
+    ...meta,
+    fragments: meta.fragments - item.cost,
+    warehouse: { ...meta.warehouse, supplies },
+  };
+  saveMeta(m);
+  return { ok: true, meta: m, msg: `购入 ${item.name} ×${item.amount}` };
+}
+
+export function sellWarehouseFish(meta, warehouseIndex) {
+  const list = [...(meta.warehouse?.fish || [])];
+  const fish = list[warehouseIndex];
+  if (!fish) return { ok: false, meta, msg: '无效鱼类' };
+  const price = fishSellPrice(fish);
+  list.splice(warehouseIndex, 1);
+  const m = {
+    ...meta,
+    fragments: (meta.fragments || 0) + price,
+    warehouse: { ...meta.warehouse, fish: list },
+  };
+  saveMeta(m);
+  return { ok: true, meta: m, msg: `售出 ${fish.name} +${price} 碎片`, price };
 }
 
 export function tryUnlockZone(meta, zoneId) {
@@ -216,14 +315,22 @@ export function tryUnlockZone(meta, zoneId) {
 
 export function hullMaxForBoat(unlocks, selected) {
   if (selected === 'heavyRaft' && unlocks.heavyRaft) return 120;
-  if (selected === 'lightBoat' && unlocks.lightBoat) return 80;
+  if (selected === 'chargeBoat' && unlocks.chargeBoat) return 95;
   return 100;
 }
 
 export function thrustMulForBoat(selected, unlocks) {
-  if (selected === 'lightBoat' && unlocks.lightBoat) return 1.2;
   if (selected === 'heavyRaft' && unlocks.heavyRaft) return 0.85;
+  if (selected === 'chargeBoat' && unlocks.chargeBoat) return 1.4;
   return 1;
+}
+
+export function hasWeaponUnlock(meta, weaponIndex) {
+  const ids = ['weaponHarpoon', 'weaponKnife', 'weaponSling'];
+  const id = ids[weaponIndex];
+  if (!id) return false;
+  if (id === 'weaponHarpoon') return meta.unlocks?.weaponHarpoon !== false;
+  return !!meta.unlocks?.[id];
 }
 
 /** Spend fragments to repair "prep hull" marker / grant repair kits into warehouse */

@@ -224,6 +224,82 @@ function buildShipyard(gradientMap) {
   return tagHit(g, 'prep');
 }
 
+/** 仓库 — 木仓堆货 + 箱桶 */
+function buildWarehouse(gradientMap) {
+  const g = new THREE.Group();
+
+  const pad = M(new THREE.BoxGeometry(4.2, 0.28, 3.6), 0xd4b896, gradientMap, 1.04);
+  pad.position.y = 0.2;
+  g.add(pad);
+
+  // main shed body
+  const body = M(new THREE.BoxGeometry(3.4, 2.2, 2.6), 0xe8dcc8, gradientMap);
+  body.position.set(0, 1.35, -0.15);
+  g.add(body);
+  const roof = M(new THREE.BoxGeometry(3.9, 0.22, 3.1), 0xe8c84a, gradientMap, 1.05);
+  roof.position.set(0, 2.6, -0.15);
+  roof.rotation.z = 0.04;
+  g.add(roof);
+  // ridge
+  const ridge = M(new THREE.BoxGeometry(3.95, 0.12, 0.18), 0x8b5a2b, gradientMap, 1.12);
+  ridge.position.set(0, 2.78, -0.15);
+  g.add(ridge);
+
+  // big sliding door
+  const door = M(new THREE.BoxGeometry(1.5, 1.7, 0.1), 0xc48a4a, gradientMap, 1.08);
+  door.position.set(0, 1.1, 1.2);
+  g.add(door);
+  const handle = M(new THREE.BoxGeometry(0.12, 0.35, 0.12), 0xffe066, gradientMap, 1.15);
+  handle.position.set(0.55, 1.05, 1.28);
+  g.add(handle);
+  // door planks
+  for (let i = 0; i < 3; i++) {
+    const plank = M(new THREE.BoxGeometry(1.35, 0.08, 0.06), 0x8b5a2b, gradientMap, 1.12);
+    plank.position.set(0, 0.55 + i * 0.45, 1.26);
+    g.add(plank);
+  }
+
+  // side window
+  const win = M(new THREE.BoxGeometry(0.7, 0.55, 0.08), 0x7dd3fc, gradientMap, 1.12);
+  win.position.set(-1.75, 1.7, 0.2);
+  win.rotation.y = Math.PI / 2;
+  g.add(win);
+
+  // stacked crates outside
+  const stack = [
+    [-1.5, 0.55, 1.35, 1],
+    [-1.5, 1.05, 1.35, 0.9],
+    [1.45, 0.55, 1.2, 1],
+    [1.55, 0.55, 0.55, 0.85],
+    [1.45, 1.0, 0.9, 0.8],
+  ];
+  for (const [x, y, z, s] of stack) {
+    const c = crate(gradientMap);
+    c.position.set(x, y, z);
+    c.scale.setScalar(s);
+    g.add(c);
+  }
+  const b1 = barrel(gradientMap);
+  b1.position.set(-1.55, 0.7, 0.55);
+  g.add(b1);
+  const b2 = barrel(gradientMap);
+  b2.position.set(1.7, 0.7, -0.9);
+  g.add(b2);
+
+  // loading ramp
+  const ramp = M(new THREE.BoxGeometry(1.4, 0.12, 1.6), 0xb8956a, gradientMap, 1.08);
+  ramp.position.set(0, 0.35, 1.9);
+  ramp.rotation.x = -0.35;
+  g.add(ramp);
+
+  // yellow storage banner
+  const banner = M(new THREE.BoxGeometry(1.6, 0.4, 0.08), 0xffd24a, gradientMap, 1.1);
+  banner.position.set(0, 2.35, 1.25);
+  g.add(banner);
+
+  return tagHit(g, 'warehouse');
+}
+
 /** 商店 — 彩色市集棚 + 货摊 */
 function buildShop(gradientMap) {
   const g = new THREE.Group();
@@ -357,6 +433,7 @@ function buildCodex(gradientMap) {
 export const HUB_SPOTS = [
   { id: 'depart', label: '出港', sub: '港口码头', color: '#2ec4b6' },
   { id: 'prep', label: '整备', sub: '船坞工棚', color: '#e8a04a' },
+  { id: 'warehouse', label: '仓库', sub: '物资库房', color: '#ffd24a' },
   { id: 'shop', label: '商店', sub: '海岛市集', color: '#ff6b9d' },
   { id: 'codex', label: '图鉴', sub: '鱼种展馆', color: '#a78bfa' },
 ];
@@ -408,19 +485,6 @@ export function createHubIsland(gradientMap) {
   near.rotation.x = -Math.PI / 2;
   near.position.y = -0.02;
   root.add(near);
-
-  for (let i = 0; i < 5; i++) {
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(7 + i * 4, 7.3 + i * 4, 48),
-      new THREE.MeshBasicMaterial({
-        color: 0xffffff, transparent: true, opacity: 0.14,
-        side: THREE.DoubleSide, depthWrite: false,
-      })
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.01;
-    root.add(ring);
-  }
 
   // Island — sand + grass tiers
   const sand = M(new THREE.CylinderGeometry(13, 14.5, 1.0, 8), 0xf0e0c0, gradientMap, 1.03);
@@ -496,6 +560,11 @@ export function createHubIsland(gradientMap) {
   const codex = buildCodex(gradientMap);
   codex.position.set(0, 1.15, -8.2);
   root.add(codex);
+
+  const warehouse = buildWarehouse(gradientMap);
+  warehouse.position.set(5.6, 1.15, -3.6);
+  warehouse.rotation.y = -0.55;
+  root.add(warehouse);
 
   // Lots of palms
   const palmSpots = [
@@ -598,16 +667,18 @@ export function createHubIsland(gradientMap) {
   const anchors = {
     depart: new THREE.Object3D(),
     prep: new THREE.Object3D(),
+    warehouse: new THREE.Object3D(),
     shop: new THREE.Object3D(),
     codex: new THREE.Object3D(),
   };
   anchors.depart.position.set(0, 4.8, 9.5);
   anchors.prep.position.set(-8.5, 5.2, 1.2);
+  anchors.warehouse.position.set(5.6, 5.0, -3.6);
   anchors.shop.position.set(8.5, 4.8, 1.5);
   anchors.codex.position.set(0, 5.6, -8.2);
   Object.values(anchors).forEach((a) => root.add(a));
 
-  const hits = [port, yard, shop, codex];
+  const hits = [port, yard, warehouse, shop, codex];
 
   function setHighlight(id) {
     hits.forEach((h) => {

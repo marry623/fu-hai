@@ -179,25 +179,6 @@ export function createCoverScene(gradientMap) {
   near.position.y = -0.01;
   root.add(near);
 
-  // Soft ripple rings (flat style)
-  const ripples = [];
-  for (let i = 0; i < 6; i++) {
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(6 + i * 4.5, 6.35 + i * 4.5, 48),
-      new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.18,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      })
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.02;
-    root.add(ring);
-    ripples.push(ring);
-  }
-
   // Wide sand spit — lighthouse left, open beach stretches right
   const sand = M(new THREE.CylinderGeometry(6.5, 7.5, 0.7, 8), 0xf0e0c0, gradientMap, 1.03);
   sand.scale.set(2.15, 1, 0.95);
@@ -309,9 +290,6 @@ export function createCoverScene(gradientMap) {
       b.position.y = 7 + (i % 3) + Math.sin(t * 1.5 + i) * 0.4;
       b.position.x += Math.sin(t * 0.3 + i) * 0.01;
       b.rotation.y = Math.sin(t * 0.5 + i) * 0.3;
-    });
-    ripples.forEach((r, i) => {
-      r.material.opacity = 0.12 + Math.sin(t * 0.8 + i) * 0.06;
     });
   }
 

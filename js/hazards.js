@@ -419,7 +419,7 @@ export function createHazards(gradientMap, scene) {
         w.userData.life -= dt;
         if (!boatJumping) onHit?.(3 * dt, '章鱼缠绕腐蚀');
         if (w.userData.life <= 0 || (opts.cutWrap && d < 5)) {
-          if (opts.cutWrap && d < 5) opts.onKill?.();
+          if (opts.cutWrap && d < 5) opts.onKill?.('wrap');
           w.userData.active = false;
           w.visible = false;
           w.userData.cd = 12;
@@ -484,7 +484,7 @@ export function createHazards(gradientMap, scene) {
           e.userData.dead = true;
           e.userData.respawnIn = 0;
           e.userData.chasing = false;
-          opts.onKill?.();
+          opts.onKill?.(e.userData.kind || 'ram');
           s.life = 0;
           break;
         }
@@ -557,7 +557,7 @@ export function createHazards(gradientMap, scene) {
         e.userData.chasing = false;
         e.userData.dead = true;
         e.userData.respawnIn = 0;
-        onKill?.();
+        onKill?.(e.userData.kind || 'ram');
       }
     }
   }
@@ -569,10 +569,10 @@ export function createHazards(gradientMap, scene) {
         w.userData.active = false;
         w.visible = false;
         w.userData.cd = 8;
-        return true;
+        return { cut: true, kind: 'wrap' };
       }
     }
-    return false;
+    return null;
   }
 
   return {
@@ -768,6 +768,23 @@ function makeEnemy(gm, id) {
   g.userData.shotCd = 0.8 + Math.random();
   g.userData.hitCd = 0;
   g.scale.setScalar(kind === 'ram' ? 0.72 : 0.68);
+  return g;
+}
+
+/** Build a display mesh for bestiary portraits */
+export function createMonsterMesh(monsterId, gm) {
+  if (monsterId === 'serpent') {
+    const g = makeSerpent(gm);
+    g.scale.setScalar(0.55);
+    return g;
+  }
+  if (monsterId === 'kraken') {
+    const g = makeKraken(gm, 0);
+    g.scale.setScalar(0.28);
+    return g;
+  }
+  const g = makeShark(gm);
+  g.scale.setScalar(0.5);
   return g;
 }
 
