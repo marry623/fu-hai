@@ -189,6 +189,17 @@ export function createFishingController(hooks) {
     hooks.onPhase?.('idle');
   }
 
+  function interrupt(reason) {
+    if (st.phase !== 'qte' && st.phase !== 'wait' && st.phase !== 'cast') return false;
+    reset();
+    hooks.onRod?.(false);
+    return true;
+  }
+
+  function shrinkGreen(factor = 0.55) {
+    st.greenWidth = Math.max(0.12, st.greenWidth * factor);
+  }
+
   function tryCast(hasBait, runDistance, greenBonus = 1, startZone = 0, aimX = 0, aimZ = 0) {
     if (st.phase !== 'idle') return false;
     st.depthZone = zDist(runDistance, startZone);
@@ -303,6 +314,12 @@ export function createFishingController(hooks) {
       hooks.onRod?.(false);
       hooks.onFishingEnd?.();
     },
+    interrupt(reason) {
+      const ok = interrupt(reason);
+      if (ok) hooks.onFishingEnd?.();
+      return ok;
+    },
+    shrinkGreen,
     snapToGreen() { st.pointer = st.greenCenter; },
   };
 }

@@ -1,0 +1,387 @@
+/** Low-poly monster meshes for combat + bestiary portraits */
+
+import * as THREE from 'three';
+import { addOutline, toonMat } from './stylekit.js';
+import { resolveMonsterId } from './monsterCatalog.js?v=29c';
+
+function addPart(g, mesh, outlineScale = 1.08) {
+  g.add(mesh);
+  addOutline(mesh, outlineScale);
+  return mesh;
+}
+
+function splash(g, gm, scale = 1) {
+  const splashG = new THREE.Group();
+  for (let i = 0; i < 6; i++) {
+    const shard = new THREE.Mesh(
+      new THREE.ConeGeometry(0.28 * scale, 0.7 * scale, 4),
+      toonMat(i % 2 ? 0xe8f8ff : 0xb8e8f8, gm)
+    );
+    const a = (i / 6) * Math.PI * 2;
+    shard.position.set(Math.cos(a) * 1.0 * scale, 0.15, Math.sin(a) * 1.0 * scale);
+    shard.rotation.z = Math.cos(a) * 0.7;
+    addPart(splashG, shard, 1.15);
+  }
+  g.add(splashG);
+}
+
+export function makeWoodUrchin(gm) {
+  const g = new THREE.Group();
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9, 0), toonMat(0x4a3020, gm));
+  addPart(g, core, 1.06);
+  for (let i = 0; i < 18; i++) {
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.85, 4), toonMat(i % 2 ? 0x6a4030 : 0x3a2060, gm));
+    const phi = Math.acos(2 * (i / 18) - 1);
+    const th = Math.PI * (1 + 5 ** 0.5) * i;
+    spike.position.set(
+      Math.sin(phi) * Math.cos(th) * 0.85,
+      Math.cos(phi) * 0.85,
+      Math.sin(phi) * Math.sin(th) * 0.85
+    );
+    spike.lookAt(0, 0, 0);
+    spike.rotateX(Math.PI);
+    addPart(g, spike, 1.12);
+  }
+  splash(g, gm, 0.9);
+  return g;
+}
+
+export function makeBarnacle(gm, lava = false) {
+  const g = new THREE.Group();
+  const rock = lava ? 0xc45c1a : 0x5a6a58;
+  const tip = lava ? 0xff9040 : 0x7a8a70;
+  for (let i = 0; i < 5; i++) {
+    const vol = new THREE.Mesh(new THREE.ConeGeometry(0.45 - i * 0.04, 0.7, 5), toonMat(rock, gm));
+    const a = (i / 5) * Math.PI * 2;
+    vol.position.set(Math.cos(a) * 0.55, 0.35, Math.sin(a) * 0.55);
+    addPart(g, vol, 1.08);
+    const mouth = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.35, 5), toonMat(tip, gm));
+    mouth.position.copy(vol.position);
+    mouth.position.y += 0.4;
+    addPart(g, mouth, 1.12);
+  }
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.25, 0.35, 6), toonMat(0x3a4038, gm));
+  base.position.y = 0.1;
+  addPart(g, base, 1.05);
+  if (lava) {
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.25, 5, 4), toonMat(0xffe080, gm));
+    glow.position.y = 0.9;
+    addPart(g, glow, 1.2);
+  }
+  return g;
+}
+
+export function makeSawShark(gm) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.7, 2.8, 6), toonMat(0x5a6570, gm));
+  body.rotation.x = -Math.PI / 2;
+  body.position.z = 0.2;
+  addPart(g, body, 1.05);
+  const saw = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.35, 1.8), toonMat(0xc0c8d0, gm));
+  saw.position.set(0, 0.15, 1.7);
+  addPart(g, saw, 1.1);
+  for (let i = 0; i < 8; i++) {
+    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 3), toonMat(0xf0f4f8, gm));
+    tooth.position.set(0, 0.28, 1.1 + i * 0.18);
+    tooth.rotation.x = -Math.PI / 2;
+    addPart(g, tooth, 1.2);
+  }
+  const fin = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.9, 4), toonMat(0x4a5560, gm));
+  fin.position.set(0, 0.7, 0);
+  addPart(g, fin, 1.1);
+  for (const s of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.12, 5, 4), toonMat(0xffe566, gm));
+    eye.position.set(s * 0.35, 0.25, 0.9);
+    addPart(g, eye, 1.2);
+  }
+  splash(g, gm, 1.1);
+  return g;
+}
+
+export function makeBladeCrab(gm) {
+  const g = new THREE.Group();
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(0.7, 6, 4), toonMat(0x3a5a38, gm));
+  shell.scale.set(1.3, 0.7, 1.1);
+  shell.position.y = 0.45;
+  addPart(g, shell, 1.06);
+  for (const s of [-1, 1]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.9), toonMat(0x2a4028, gm));
+    leg.position.set(s * 0.7, 0.2, 0.1);
+    leg.rotation.y = s * 0.4;
+    addPart(g, leg, 1.1);
+  }
+  const claw = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.18, 1.4), toonMat(0xb0b8c0, gm));
+  claw.position.set(0.9, 0.45, 0.6);
+  claw.rotation.y = -0.5;
+  addPart(g, claw, 1.08);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.5, 4), toonMat(0xd0d8e0, gm));
+  tip.rotation.x = Math.PI / 2;
+  tip.position.set(1.35, 0.45, 1.2);
+  addPart(g, tip, 1.15);
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.1, 5, 4), toonMat(0xff9040, gm));
+  eye.position.set(0.2, 0.7, 0.55);
+  addPart(g, eye, 1.2);
+  splash(g, gm, 0.85);
+  return g;
+}
+
+export function makeSporeJelly(gm) {
+  const g = new THREE.Group();
+  const bell = new THREE.Mesh(new THREE.SphereGeometry(0.85, 7, 5), toonMat(0xb890e0, gm));
+  bell.scale.set(1.2, 0.7, 1.2);
+  bell.position.y = 1.2;
+  addPart(g, bell, 1.05);
+  for (let i = 0; i < 8; i++) {
+    const tent = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.02, 1.6, 4), toonMat(0x8a60c0, gm));
+    const a = (i / 8) * Math.PI * 2;
+    tent.position.set(Math.cos(a) * 0.45, 0.35, Math.sin(a) * 0.45);
+    addPart(g, tent, 1.15);
+  }
+  for (let i = 0; i < 6; i++) {
+    const spore = new THREE.Mesh(new THREE.SphereGeometry(0.1, 4, 3), toonMat(0xd8a0ff, gm));
+    spore.position.set((i % 3 - 1) * 0.5, 1.5 + (i % 2) * 0.3, ((i / 3) | 0) * 0.4 - 0.2);
+    addPart(g, spore, 1.2);
+  }
+  return g;
+}
+
+export function makeGhostHook(gm) {
+  const g = new THREE.Group();
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, 2.2, 5), toonMat(0x9ad0e0, gm));
+  arm.position.y = 1.2;
+  arm.rotation.z = 0.35;
+  addPart(g, arm, 1.06);
+  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.35, 5, 4), toonMat(0xb8e0f0, gm));
+  hand.position.set(0.5, 0.35, 0);
+  addPart(g, hand, 1.08);
+  const hook = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.08, 5, 10, Math.PI * 1.3), toonMat(0x2a2a30, gm));
+  hook.rotation.y = Math.PI / 2;
+  hook.position.set(0.7, 0.1, 0.15);
+  addPart(g, hook, 1.12);
+  for (let i = 0; i < 4; i++) {
+    const weed = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.7, 3), toonMat(0x5a8a70, gm));
+    weed.position.set(-0.1 + i * 0.08, 1.8 - i * 0.15, 0.2);
+    weed.rotation.z = 0.5;
+    addPart(g, weed, 1.15);
+  }
+  return g;
+}
+
+export function makeThiefOtter(gm) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 6, 5), toonMat(0x8a6040, gm));
+  body.scale.set(1.1, 0.9, 1.4);
+  body.position.y = 0.55;
+  addPart(g, body, 1.06);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 6, 5), toonMat(0xa07850, gm));
+  head.position.set(0, 0.95, 0.55);
+  addPart(g, head, 1.08);
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.35, 5, 4), toonMat(0xe8d0b0, gm));
+  belly.position.set(0, 0.45, 0.25);
+  addPart(g, belly, 1.1);
+  const fish = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.55, 4), toonMat(0xff90b0, gm));
+  fish.rotation.z = Math.PI / 2;
+  fish.position.set(0.35, 0.7, 0.7);
+  addPart(g, fish, 1.15);
+  for (const s of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.07, 4, 3), toonMat(0x1a1008, gm));
+    eye.position.set(s * 0.15, 1.0, 0.8);
+    addPart(g, eye, 1.2);
+  }
+  splash(g, gm, 0.7);
+  return g;
+}
+
+export function makeInkJelly(gm) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.75, 6, 5), toonMat(0x1a1228, gm));
+  body.position.y = 0.9;
+  addPart(g, body, 1.05);
+  for (const s of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.14, 5, 4), toonMat(0xffffff, gm));
+    eye.position.set(s * 0.28, 1.0, 0.55);
+    addPart(g, eye, 1.2);
+  }
+  for (let i = 0; i < 7; i++) {
+    const drop = new THREE.Mesh(new THREE.SphereGeometry(0.12, 4, 3), toonMat(0x0a0814, gm));
+    drop.position.set((i % 3 - 1) * 0.4, 0.2 + (i % 2) * 0.3, ((i / 3) | 0) * 0.35 - 0.2);
+    addPart(g, drop, 1.15);
+  }
+  return g;
+}
+
+export function makeLightningSnake(gm) {
+  const g = new THREE.Group();
+  const neck = new THREE.Group();
+  g.add(neck);
+  g.userData.neck = neck;
+  const segs = [[0, 0.8, -0.5, 0.7], [0, 1.8, 0.1, 0.6], [0, 2.8, 0.5, 0.5], [0, 3.6, 0.9, 0.42]];
+  segs.forEach(([x, y, z, r], i) => {
+    const seg = new THREE.Mesh(new THREE.SphereGeometry(r, 6, 5), toonMat(0x2a3a6a, gm));
+    seg.position.set(x, y, z);
+    addPart(neck, seg, 1.05);
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.45, 4), toonMat(0xd4a020, gm));
+    spike.position.set(x, y + r * 0.8, z);
+    addPart(neck, spike, 1.15);
+    if (i === segs.length - 1) {
+      const muzzle = new THREE.Object3D();
+      muzzle.position.set(0, y, z + 0.6);
+      neck.add(muzzle);
+      g.userData.muzzle = muzzle;
+    }
+  });
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.9, 5), toonMat(0x2a3a6a, gm));
+  head.rotation.x = -Math.PI / 2;
+  head.position.set(0, 3.9, 1.3);
+  addPart(neck, head, 1.06);
+  for (let i = 0; i < 4; i++) {
+    const spark = new THREE.Mesh(new THREE.OctahedronGeometry(0.12, 0), toonMat(0xffe566, gm));
+    spark.position.set((i % 2 - 0.5) * 0.4, 2.5 + i * 0.3, 0.3);
+    addPart(g, spark, 1.2);
+  }
+  splash(g, gm, 1.0);
+  return g;
+}
+
+export function makeVoidOctopus(gm) {
+  const g = new THREE.Group();
+  g.userData.arms = [];
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.9, 7, 6), toonMat(0x5a2a7a, gm));
+  head.position.y = 1.2;
+  addPart(g, head, 1.05);
+  const hat = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.7, 5), toonMat(0xc02030, gm));
+  hat.position.y = 2.0;
+  addPart(g, hat, 1.1);
+  const patch = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.12, 0.05), toonMat(0x1a1008, gm));
+  patch.position.set(-0.28, 1.3, 0.75);
+  addPart(g, patch, 1.2);
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.14, 5, 4), toonMat(0xffe566, gm));
+  eye.position.set(0.28, 1.3, 0.75);
+  addPart(g, eye, 1.2);
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.15, 0.9), toonMat(0xc0c8d0, gm));
+  blade.position.set(0.9, 0.8, 0.4);
+  addPart(g, blade, 1.12);
+  for (let i = 0; i < 6; i++) {
+    const arm = new THREE.Group();
+    const a = (i / 6) * Math.PI * 2;
+    arm.position.set(Math.cos(a) * 0.6, 0.6, Math.sin(a) * 0.6);
+    for (let s = 0; s < 4; s++) {
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.12 - s * 0.02, 0.1 - s * 0.02, 0.45, 5), toonMat(0x3a1860, gm));
+      seg.position.y = -s * 0.4;
+      addPart(arm, seg, 1.1);
+    }
+    g.add(arm);
+    g.userData.arms.push(arm);
+  }
+  splash(g, gm, 1.0);
+  return g;
+}
+
+export function makeWaveWhale(gm) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(1.2, 7, 5), toonMat(0x3a5a8a, gm));
+  body.scale.set(1.6, 1.0, 2.4);
+  body.position.y = 0.7;
+  addPart(g, body, 1.04);
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.4, 5), toonMat(0x2a4a7a, gm));
+  tail.rotation.x = Math.PI / 2;
+  tail.position.set(0, 0.5, -2.2);
+  addPart(g, tail, 1.06);
+  for (let i = 0; i < 5; i++) {
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.2, 0), toonMat(0x6a7078, gm));
+    rock.position.set((i - 2) * 0.35, 1.3, -0.2 + i * 0.15);
+    addPart(g, rock, 1.12);
+  }
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.15, 5, 4), toonMat(0xffe566, gm));
+  eye.position.set(0.7, 0.85, 1.5);
+  addPart(g, eye, 1.2);
+  splash(g, gm, 1.4);
+  return g;
+}
+
+export function makeTrenchWorm(gm) {
+  const g = new THREE.Group();
+  for (let i = 0; i < 5; i++) {
+    const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.7 - i * 0.05, 0.75 - i * 0.05, 0.7, 7), toonMat(0x4a2060, gm));
+    seg.position.set(0, 0.5 + i * 0.55, -i * 0.15);
+    addPart(g, seg, 1.05);
+  }
+  const maw = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.18, 6, 12), toonMat(0x2a1030, gm));
+  maw.rotation.x = Math.PI / 2;
+  maw.position.set(0, 3.2, 0.2);
+  addPart(g, maw, 1.08);
+  for (let i = 0; i < 10; i++) {
+    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.35, 3), toonMat(0xf0e8e0, gm));
+    const a = (i / 10) * Math.PI * 2;
+    tooth.position.set(Math.cos(a) * 0.45, 3.2, 0.2 + Math.sin(a) * 0.45);
+    tooth.rotation.x = Math.PI;
+    addPart(g, tooth, 1.18);
+  }
+  const rubble = new THREE.Mesh(new THREE.DodecahedronGeometry(0.8, 0), toonMat(0x5a5048, gm));
+  rubble.position.y = 0.2;
+  addPart(g, rubble, 1.05);
+  return g;
+}
+
+const BUILDERS = {
+  woodUrchin: makeWoodUrchin,
+  barnacle: (gm) => makeBarnacle(gm, false),
+  lavaBarnacle: (gm) => makeBarnacle(gm, true),
+  sawShark: makeSawShark,
+  bladeCrab: makeBladeCrab,
+  sporeJelly: makeSporeJelly,
+  ghostHook: makeGhostHook,
+  thiefOtter: makeThiefOtter,
+  inkJelly: makeInkJelly,
+  lightningSnake: makeLightningSnake,
+  voidOctopus: makeVoidOctopus,
+  waveWhale: makeWaveWhale,
+  trenchWorm: makeTrenchWorm,
+  shark: makeSawShark,
+  serpent: makeLightningSnake,
+  kraken: makeVoidOctopus,
+};
+
+export function createMonsterMesh(monsterId, gm) {
+  const id = resolveMonsterId(monsterId);
+  const build = BUILDERS[id] || makeSawShark;
+  const g = build(gm);
+  g.userData.catalogId = id;
+  const scale = {
+    waveWhale: 0.55,
+    trenchWorm: 0.5,
+    lightningSnake: 0.55,
+    voidOctopus: 0.65,
+    sawShark: 0.7,
+    woodUrchin: 0.75,
+  }[id] || 0.7;
+  g.scale.setScalar(scale);
+  return g;
+}
+
+export function createCombatMonster(monsterId, gm, index = 0) {
+  const id = resolveMonsterId(monsterId);
+  const g = createMonsterMesh(id, gm);
+  g.userData.id = index;
+  g.userData.catalogId = id;
+  g.userData.kind = ({
+    woodUrchin: 'static',
+    barnacle: 'wrap',
+    lavaBarnacle: 'wrap',
+    sawShark: 'ram',
+    bladeCrab: 'ram',
+    sporeJelly: 'ranged',
+    ghostHook: 'wrap',
+    thiefOtter: 'ram',
+    inkJelly: 'ranged',
+    lightningSnake: 'ranged',
+    voidOctopus: 'wrap',
+    waveWhale: 'ram',
+    trenchWorm: 'suction',
+  })[id] || 'ram';
+  g.userData.phase = 0;
+  g.userData.bob = Math.random() * 10;
+  g.userData.shotCd = 0.8 + Math.random();
+  g.userData.hitCd = 0;
+  return g;
+}

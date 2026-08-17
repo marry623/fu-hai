@@ -2220,7 +2220,7 @@ html, body {
 .hub-item-face,
 .codex-entry-face {
   width: 100%;
-  aspect-ratio: 1.1;
+  aspect-ratio: 1 / 1;
   display: grid;
   place-items: center;
   border-radius: 2px;
@@ -2625,58 +2625,6 @@ html, body {
   font-size: 9px;
 }
 
-.hub-drawer .codex-grid {
-  flex: 1;
-  min-height: 0;
-  max-height: none;
-  overflow: auto;
-  align-content: start;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: auto;
-  gap: 10px;
-  padding: 2px 6px 8px 2px;
-  scrollbar-gutter: stable;
-}
-.hub-drawer .codex-entry {
-  height: auto;
-  min-height: 136px;
-  padding: 6px 6px 14px;
-  gap: 4px;
-  overflow: visible;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-.hub-drawer .codex-entry-face {
-  width: 100%;
-  height: auto;
-  aspect-ratio: 1 / 1;
-  max-height: 88px;
-  font-size: 22px;
-  flex-shrink: 0;
-}
-.hub-drawer .codex-entry-face img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-}
-.hub-drawer .codex-entry-name {
-  width: 100%;
-  text-align: center;
-  border-top: 2px solid rgba(0,0,0,0.08);
-  padding-top: 4px;
-  padding-bottom: 2px;
-  margin-top: 2px;
-  font-size: 11px;
-  font-weight: 900;
-  line-height: 1.35;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: unset;
-  word-break: keep-all;
-  flex-shrink: 0;
-}
 .hub-wh-cell {
   position: relative;
 }
@@ -2697,12 +2645,48 @@ html, body {
   overflow: hidden;
   padding: 12px 12px 12px 14px;
 }
+/* Catalog right rail only — do NOT touch center portrait */
+.hub-drawer-card.is-catalog .bp-clip-metal {
+  display: none;
+}
+.hub-drawer-card.is-catalog .bp-clip-body {
+  padding: 8px 8px 10px;
+}
+.hub-drawer-card.is-catalog .codex-list {
+  gap: 6px;
+}
+.hub-drawer-card.is-catalog .codex-progress {
+  position: static;
+  margin: 0 0 4px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.2;
+  color: #1a1008;
+  text-shadow: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  pointer-events: auto;
+}
+.hub-drawer-card.is-catalog .codex-grid {
+  padding: 0 2px 4px 0;
+  gap: 8px;
+  align-content: start;
+  align-items: start;
+}
 .hub-drawer .hub-clip-panel {
   flex: 1;
   min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+.hub-drawer #hub-fs-left-depart {
+  overflow: hidden;
+}
+.hub-drawer #hub-fs-left-depart .hub-fs-stats,
+.hub-drawer #hub-fs-left-depart .hub-clip-h {
+  flex-shrink: 0;
 }
 .hub-drawer #hub-fs-left-codex {
   overflow: hidden;
@@ -2720,8 +2704,80 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  gap: 4px;
 }
 .hub-drawer .codex-progress {
+  flex-shrink: 0;
+  margin: 0 0 2px;
+  color: #1a1008;
+  text-shadow: none;
+  font-size: 12px;
+}
+.hub-drawer .codex-grid {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  align-content: start;
+  align-items: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: max-content;
+  gap: 8px;
+  padding: 0 4px 6px 0;
+  scrollbar-gutter: auto;
+}
+.hub-drawer .codex-entry {
+  height: auto;
+  min-height: 0;
+  padding: 5px 5px 8px;
+  gap: 3px;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: start;
+  width: 100%;
+  box-sizing: border-box;
+}
+.hub-drawer .codex-entry.selected {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--teal), 2px 2px 0 var(--wood-edge);
+}
+.hub-drawer .codex-entry-face {
+  /* Same face ratio as prep backpack .hub-bp-card-face (fig2) */
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  max-height: none;
+  border: 2px solid #1a1008;
+  border-radius: 2px;
+  background: #3a3e42;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.hub-drawer .codex-entry-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.hub-drawer .codex-entry-name {
+  width: 100%;
+  text-align: center;
+  border-top: 2px solid rgba(0,0,0,0.08);
+  padding-top: 3px;
+  padding-bottom: 1px;
+  margin-top: 1px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.3;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  word-break: keep-all;
   flex-shrink: 0;
 }
 .hub-backpack-list {
@@ -2991,10 +3047,12 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-height: 0;
-  max-height: none;
-  overflow: visible;
+  max-height: min(240px, 36vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
 }
 .hub-zone {
   text-align: left;
@@ -3017,6 +3075,21 @@ html, body {
   display: inline-block; width: 10px; height: 10px; border-radius: 2px;
   border: 1px solid #1a1008; margin-right: 4px; vertical-align: -1px;
 }
+.slot-chip.sealed {
+  outline: 2px solid #c45c1a;
+  opacity: 0.7;
+}
+#ink-blind-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 40% 45%, rgba(8, 4, 16, 0.15) 0%, rgba(8, 4, 16, 0.72) 55%, #050208 100%),
+    repeating-radial-gradient(circle at 30% 40%, rgba(20, 8, 30, 0.4) 0 18px, transparent 18px 42px);
+  mix-blend-mode: multiply;
+}
+#ink-blind-overlay.hidden { display: none; }
 .hub-boats { display: flex; flex-wrap: wrap; gap: 6px; }
 .hub-prep-boats { margin: 0 0 10px; flex-shrink: 0; }
 .hub-chip {
@@ -3033,8 +3106,8 @@ html, body {
   background: #fff8ee; font-size: 12px; font-weight: 800;
 }
 .hub-empty { color: #6a5a48; font-size: 12px; font-weight: 700; }
-.hub-cargo { display: grid; gap: 6px; margin-bottom: 4px; }
-.hub-depart-btn { width: 100%; margin-top: 10px; flex-shrink: 0; }
+.hub-cargo { display: grid; gap: 6px; margin-bottom: 4px; max-height: 88px; overflow-y: auto; }
+.hub-depart-btn { width: 100%; margin-top: auto; flex-shrink: 0; position: sticky; bottom: 0; }
 .hub-codex-tabs {
   display: flex;
   flex-direction: column;
@@ -3066,7 +3139,7 @@ html, body {
 .codex-entry.locked { opacity: 0.7; }
 .codex-entry-face {
   width: 100%;
-  aspect-ratio: 1.1;
+  aspect-ratio: 1 / 1;
   display: grid;
   place-items: center;
   background: #3a3e42;

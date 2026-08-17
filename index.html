@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>浮骸 · 海上肉鸽</title>
-  <link rel="stylesheet" href="css/style.css?v=28m" />
+  <link rel="stylesheet" href="css/style.css?v=29d" />
 </head>
 <body>
   <div id="game-root">
@@ -348,7 +348,7 @@
     window.addEventListener('error', (e) => show((e.error && e.error.stack) || e.message));
     window.addEventListener('unhandledrejection', (e) => show(e.reason && e.reason.stack || e.reason));
     try {
-      await import('./js/main.js?v=28m');
+      await import('./js/main.js?v=29e');
     } catch (err) {
       show(err && err.stack || err);
     }

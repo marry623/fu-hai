@@ -5,8 +5,8 @@ import { SLOT_ORDER, SLOT_LABELS } from './slots.js';
 import { getFishDef, FISH_CATALOG, RARITY } from './fishCatalog.js?v=23a';
 import { getFishPortrait } from './fishPortrait.js?v=23a';
 import { getItemPortrait } from './itemPortrait.js?v=28h';
-import { listMonsterIds, getMonsterDef } from './monsterCatalog.js?v=23a';
-import { getMonsterPortrait } from './monsterPortrait.js?v=23a';
+import { listMonsterIds, getMonsterDef } from './monsterCatalog.js?v=29c';
+import { getMonsterPortrait } from './monsterPortrait.js?v=29a';
 import {
   SHOP_TABS,
   SHOP_HULLS,
@@ -940,7 +940,7 @@ export function createHub(deps) {
           const sel = selectedMonsterId === id ? ' selected' : '';
           return `<button type="button" class="codex-entry polaroid${sel}${open ? '' : ' locked'}" data-monster="${id}">
             <span class="codex-entry-face">${open ? '' : '?'}</span>
-            <span class="codex-entry-name">${d.name}</span>
+            <span class="codex-entry-name">${open ? d.name : '？？？'}</span>
           </button>`;
         }).join('')}
       </div>`;
@@ -1005,7 +1005,9 @@ export function createHub(deps) {
       els.codexTag.textContent = unlocked ? `${def.tag} · 威胁${'★'.repeat(Math.min(5, def.rarity || 1))}` : '尚未遭遇';
     }
     if (els.codexDesc) {
-      els.codexDesc.textContent = unlocked ? def.desc : '击沉或斩断对应海怪后，才会记入怪物图鉴。';
+      els.codexDesc.textContent = unlocked
+        ? `${def.skillLabel}。${def.desc}`
+        : '击沉或斩断对应海怪后，才会记入怪物图鉴。';
     }
     if (els.codexPortrait) {
       els.codexPortrait.classList.toggle('locked', !unlocked);

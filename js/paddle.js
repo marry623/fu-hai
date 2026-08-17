@@ -32,9 +32,27 @@ export function createPaddleController() {
   const RHYTHM_MIN = 0.18;
   const RHYTHM_MAX = 0.55;
 
+  /** When true, A/D (and arrows) are swapped — spore scramble */
+  let scramble = false;
+  /** 'left' | 'right' | null — blade crab locks one oar */
+  let lockedOar = null;
+
+  function setScramble(on) { scramble = !!on; }
+  function setLockedOar(side) {
+    lockedOar = side === 'left' || side === 'right' ? side : null;
+  }
+
   function setKey(code, down) {
-    if (code === 'KeyA' || code === 'ArrowLeft') st.leftDown = down;
-    if (code === 'KeyD' || code === 'ArrowRight') st.rightDown = down;
+    let left = code === 'KeyA' || code === 'ArrowLeft';
+    let right = code === 'KeyD' || code === 'ArrowRight';
+    if (!left && !right) return;
+    if (scramble) {
+      const t = left;
+      left = right;
+      right = t;
+    }
+    if (left) st.leftDown = lockedOar === 'left' ? false : down;
+    if (right) st.rightDown = lockedOar === 'right' ? false : down;
   }
 
   function onStroke(side, now) {
@@ -57,6 +75,9 @@ export function createPaddleController() {
     const thrustMul = opts.thrustMul ?? 1;
     const turnMul = opts.turnMul ?? 1;
     const autoThrust = opts.autoThrust ?? 0;
+
+    if (lockedOar === 'left') st.leftDown = false;
+    if (lockedOar === 'right') st.rightDown = false;
 
     if (st.leftDown && !prevL) onStroke(-1, now);
     if (st.rightDown && !prevR) onStroke(1, now);
@@ -126,5 +147,14 @@ export function createPaddleController() {
     st.combo = 0;
   }
 
-  return { setKey, update, reset, get state() { return st; } };
+  return {
+    setKey,
+    setScramble,
+    setLockedOar,
+    update,
+    reset,
+    get state() { return st; },
+    get scramble() { return scramble; },
+    get lockedOar() { return lockedOar; },
+  };
 }

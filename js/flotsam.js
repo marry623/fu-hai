@@ -41,10 +41,10 @@ function createFlotsam(gradientMap, id, type) {
     g.scale.setScalar(2.85);
   } else if (type === 'barrel') {
     buildBarrel(g, gradientMap);
-    g.scale.setScalar(2.75);
+    g.scale.setScalar(1.375);
   } else {
     buildDriftBottle(g, gradientMap);
-    g.scale.setScalar(2.6);
+    g.scale.setScalar(1.3);
   }
 
   return g;

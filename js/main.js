@@ -5,15 +5,15 @@ import {
   createFoamRings,
 } from './world.js';
 import { createBoat, createWakeSystem, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, resetRodPose } from './boat.js?v=28l';
-import { createPaddleController } from './paddle.js?v=16c';
+import { createPaddleController } from './paddle.js?v=29a';
 import { createHull, updateCorrosion, damageHull, repairHull } from './hull.js?v=16c';
 import {
   createFlotsamField, updateFlotsam, findNearestFlotsam, respawnFlotsam, rollSalvage,
-} from './flotsam.js?v=27a';
+} from './flotsam.js?v=29e';
 import {
   createVortexField, updateVortices, findNearestVortex, createFishingController, CAST_AIM_DIST, tintVortexField, VORTEX_COUNT,
-} from './fishing.js?v=17c';
-import { createHazards } from './hazards.js?v=17d';
+} from './fishing.js?v=29a';
+import { createHazards } from './hazards.js?v=29c';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot,
@@ -25,16 +25,16 @@ import { getItemPortrait } from './itemPortrait.js?v=28e';
 import { getZone } from './zones.js?v=16c';
 import {
   loadMeta, settleRun, hullMaxForBoat, thrustMulForBoat, hasWeaponUnlock,
-  discoverFish, syncLoadoutSuppliesFromWarehouse, consumeLoadoutOnDepart,
+  discoverFish, discoverMonster, syncLoadoutSuppliesFromWarehouse, consumeLoadoutOnDepart,
 } from './meta.js?v=28c';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=16c';
-import { createHub } from './hub.js?v=28k';
+import { createHub } from './hub.js?v=29d';
 import { createCoverScene } from './coverScene.js?v=28m';
 import { createHubIsland } from './hubIsland.js?v=28k';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=28l';
 import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=16c';
 import { getSeaMap } from './seaMaps.js?v=16c';
-
+import { getMonsterDef, resolveMonsterId, monstersForZone } from './monsterCatalog.js?v=29c';
 const canvas = document.getElementById('c');
 const minimapCtx = document.getElementById('minimap').getContext('2d');
 
@@ -149,6 +149,260 @@ const state = {
   zone: 0,
   captainLocal: new THREE.Vector3(0, 0.45, 0.6),
 };
+
+/** Runtime monster status effects */
+const monsterFx = {
+  scrambleUntil: 0,
+  lockOarUntil: 0,
+  lockSide: null,
+  inkUntil: 0,
+  engineDisableUntil: 0,
+  tiltUntil: 0,
+  tiltAmt: 0,
+  shakeUntil: 0,
+  sealedSlot: null,
+  heatSeal: false,
+  stolen: null, // { bait, plank } recoverable
+  hookPending: false,
+};
+
+let inkOverlayEl = null;
+function ensureInkOverlay() {
+  if (inkOverlayEl) return inkOverlayEl;
+  inkOverlayEl = document.createElement('div');
+  inkOverlayEl.id = 'ink-blind-overlay';
+  inkOverlayEl.className = 'hidden';
+  document.body.appendChild(inkOverlayEl);
+  return inkOverlayEl;
+}
+
+function registerMonster(id) {
+  const rid = resolveMonsterId(id);
+  if (!rid) return;
+  const disc = discoverMonster(meta, [rid]);
+  meta = disc.meta;
+  if (disc.newIds?.length) showToast(`图鉴收录：${getMonsterDef(rid).name}`);
+}
+
+function stealRandomSlotFish(label) {
+  const filled = SLOT_ORDER.filter((s) => state.slots[s] && !monsterFx.sealedSlot);
+  if (!filled.length) {
+    showToast(`${label}：船上无鱼装可偷`);
+    return null;
+  }
+  const slot = filled[(Math.random() * filled.length) | 0];
+  const fish = state.slots[slot];
+  state.slots[slot] = null;
+  refreshSlots();
+  showToast(`${label}偷走了${SLOT_LABELS[slot]}的${fish.name}`);
+  return fish;
+}
+
+function sealASlot(heat = false) {
+  if (monsterFx.sealedSlot) return;
+  const filled = SLOT_ORDER.filter((s) => state.slots[s]);
+  const pool = filled.length ? filled : SLOT_ORDER.slice();
+  const slot = pool[(Math.random() * pool.length) | 0];
+  monsterFx.sealedSlot = slot;
+  monsterFx.heatSeal = heat;
+  showToast(heat ? `熔岩藤壶高温锁死「${SLOT_LABELS[slot]}」` : `藤壶封印了「${SLOT_LABELS[slot]}」槽`);
+}
+
+function applyMonsterSkill(catalogId, skill, ctx = {}) {
+  const def = getMonsterDef(catalogId);
+  const t = now();
+
+  switch (skill) {
+    case 'accelDrain': {
+      const rate = (ctx.dt || 0.016) * 9;
+      applyDamage(rate, '碎木海胆加速磨损', true);
+      break;
+    }
+    case 'sealSlot':
+      if (ctx.latch || !ctx.continuous) sealASlot(false);
+      break;
+    case 'heatSeal':
+      if (ctx.latch || !ctx.continuous) sealASlot(true);
+      break;
+    case 'tiltPush': {
+      monsterFx.tiltUntil = t + 2.2;
+      monsterFx.tiltAmt = (Math.random() > 0.5 ? 1 : -1) * 0.35;
+      // Push loose supplies overboard chance
+      if (state.inventory.bait > 0 && Math.random() < 0.35) {
+        state.inventory.bait--;
+        showToast('锯齿鲨撞倾 · 饵料落水');
+        updateInv();
+      } else if (state.inventory.plank > 0 && Math.random() < 0.25) {
+        state.inventory.plank--;
+        showToast('锯齿鲨撞倾 · 木板落水');
+        updateInv();
+      } else {
+        showToast('锯齿鲨撞倾船身');
+      }
+      break;
+    }
+    case 'lockOar': {
+      monsterFx.lockOarUntil = t + 4.5;
+      monsterFx.lockSide = Math.random() > 0.5 ? 'left' : 'right';
+      paddle.setLockedOar(monsterFx.lockSide);
+      showToast(monsterFx.lockSide === 'left' ? '拖刀蟹锁死左桨！' : '拖刀蟹锁死右桨！');
+      break;
+    }
+    case 'scrambleKeys': {
+      monsterFx.scrambleUntil = t + 5;
+      paddle.setScramble(true);
+      showToast('孢子混乱：WASD / 划桨键对调 5 秒');
+      break;
+    }
+    case 'hookGear': {
+      if (monsterFx.hookPending) break;
+      monsterFx.hookPending = true;
+      const fish = stealRandomSlotFish('幽灵钩爪');
+      if (!fish) { monsterFx.hookPending = false; break; }
+      state.pendingEvent = {
+        title: '钩爪抢夺',
+        desc: `幽灵钩爪拽走了「${fish.name}」！快速反应抢回？`,
+        a: {
+          label: '抢回',
+          key: 'hook_reclaim',
+          fish,
+        },
+        b: { label: '放弃', key: 'hook_lose' },
+      };
+      ui.eventTitle.textContent = state.pendingEvent.title;
+      ui.eventDesc.textContent = state.pendingEvent.desc;
+      ui.eventA.textContent = state.pendingEvent.a.label;
+      ui.eventB.textContent = state.pendingEvent.b.label;
+      ui.eventModal.classList.remove('hidden');
+      break;
+    }
+    case 'stealSupply': {
+      const take = { bait: 0, plank: 0 };
+      if (state.inventory.bait > 0) {
+        take.bait = Math.min(2, state.inventory.bait);
+        state.inventory.bait -= take.bait;
+      }
+      if (state.inventory.plank > 0 && Math.random() < 0.5) {
+        take.plank = 1;
+        state.inventory.plank--;
+      }
+      if (take.bait || take.plank) {
+        monsterFx.stolen = take;
+        updateInv();
+        showToast(`偷吃獭爬船偷走物资（击杀可追回）`);
+      } else {
+        showToast('偷吃獭扑空了');
+      }
+      break;
+    }
+    case 'inkBlind': {
+      monsterFx.inkUntil = t + 4.5;
+      ensureInkOverlay().classList.remove('hidden');
+      fishing.shrinkGreen?.(0.55);
+      showToast('墨雾遮目 · QTE 绿区缩小');
+      break;
+    }
+    case 'disableEngine': {
+      monsterFx.engineDisableUntil = t + 5;
+      showToast('避雷针海蛇引雷 · 引擎鱼瘫痪');
+      break;
+    }
+    case 'blinkSteal': {
+      stealRandomSlotFish('虚空盗贼章鱼');
+      break;
+    }
+    case 'shakeBoat': {
+      monsterFx.shakeUntil = t + 2.8;
+      monsterFx.tiltUntil = t + 2.8;
+      monsterFx.tiltAmt = 0.55;
+      if (fishing.interrupt?.()) {
+        hideFishingFx();
+        showToast('撼浪鲸打断钓鱼！');
+      }
+      if (state.inventory.bait > 0 && Math.random() < 0.45) {
+        state.inventory.bait = Math.max(0, state.inventory.bait - 1);
+        showToast('物资被掀飞');
+        updateInv();
+      } else {
+        showToast('深海撼浪鲸掀船！');
+      }
+      break;
+    }
+    case 'suctionKill': {
+      const spd = ctx.boatSpeed || 0;
+      if (spd < 12) {
+        applyDamage(999, '吞噬海沟虫一口吞没');
+      } else {
+        applyDamage(8, '海沟虫吸力擦伤');
+        showToast('全速挣脱强吸！');
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+function openPendingEvent() {
+  const ev = state.pendingEvent;
+  if (!ev || !ui.eventModal) return;
+  ui.eventTitle.textContent = ev.title;
+  ui.eventDesc.textContent = ev.desc || '';
+  ui.eventA.textContent = ev.a?.label || '确定';
+  ui.eventB.textContent = ev.b?.label || '取消';
+  ui.eventModal.classList.remove('hidden');
+}
+
+function tickMonsterFx(dt) {
+  const t = now();
+  if (monsterFx.scrambleUntil && t >= monsterFx.scrambleUntil) {
+    monsterFx.scrambleUntil = 0;
+    paddle.setScramble(false);
+    showToast('孢子效果结束');
+  }
+  if (monsterFx.lockOarUntil && t >= monsterFx.lockOarUntil) {
+    monsterFx.lockOarUntil = 0;
+    monsterFx.lockSide = null;
+    paddle.setLockedOar(null);
+    showToast('船桨挣脱');
+  }
+  if (monsterFx.inkUntil && t >= monsterFx.inkUntil) {
+    monsterFx.inkUntil = 0;
+    ensureInkOverlay().classList.add('hidden');
+  }
+  if (monsterFx.heatSeal) {
+    const icy = SLOT_ORDER.some((s) => {
+      const f = state.slots[s];
+      return f && getFishDef(f.defId)?.effect?.freeze;
+    });
+    if (icy) {
+      monsterFx.sealedSlot = null;
+      monsterFx.heatSeal = false;
+      showToast('冰冻震开熔岩藤壶');
+    }
+  }
+  if (!(monsterFx.tiltUntil && t < monsterFx.tiltUntil)) {
+    monsterFx.tiltAmt = 0;
+  }
+}
+
+function resetMonsterFx() {
+  monsterFx.scrambleUntil = 0;
+  monsterFx.lockOarUntil = 0;
+  monsterFx.lockSide = null;
+  monsterFx.inkUntil = 0;
+  monsterFx.engineDisableUntil = 0;
+  monsterFx.tiltUntil = 0;
+  monsterFx.tiltAmt = 0;
+  monsterFx.shakeUntil = 0;
+  monsterFx.sealedSlot = null;
+  monsterFx.heatSeal = false;
+  monsterFx.stolen = null;
+  monsterFx.hookPending = false;
+  paddle.setScramble(false);
+  paddle.setLockedOar(null);
+  ensureInkOverlay().classList.add('hidden');
+}
 
 const paddle = createPaddleController();
 let hull = createHull(100);
@@ -380,20 +634,28 @@ function setPrompt(el, msg) {
   el.classList.remove('hidden');
 }
 
-function bonuses() { return computeBonuses(state.slots); }
+function bonuses() {
+  const b = computeBonuses(state.slots);
+  if (monsterFx.sealedSlot && state.slots[monsterFx.sealedSlot]) {
+    // Sealed slot contributes no bonus
+    const sealed = { ...state.slots, [monsterFx.sealedSlot]: null };
+    return computeBonuses(sealed);
+  }
+  return b;
+}
 
-function applyDamage(amount, reason) {
+function applyDamage(amount, reason, quiet = false) {
   if (now() < state.invulnUntil || hull.sunk) return;
   const b = bonuses();
   if (b.block > 0 || state.shellBlocks > 0) {
     state.shellBlocks = Math.max(0, (state.shellBlocks || b.block) - 1);
     if (state.slots.sideR?.defId === 'shell') state.slots.sideR = null;
-    showToast('贝壳挡下攻击！');
+    if (!quiet) showToast('贝壳挡下攻击！');
     refreshSlots();
     return;
   }
   damageHull(hull, amount);
-  showToast(`${reason} −${amount | 0}`);
+  if (!quiet && amount >= 2) showToast(`${reason} −${amount | 0}`);
   updateHp();
   if (hull.sunk) onSink();
 }
@@ -536,10 +798,23 @@ function resolveEvent(which) {
   state.pendingEvent = null;
   ui.eventModal.classList.add('hidden');
   if (!ev) return;
-  const key = which === 'a' ? ev.a.key : ev.b.key;
+  const choice = which === 'a' ? ev.a : ev.b;
+  const key = choice?.key;
+  if (key === 'hook_reclaim' && choice.fish) {
+    state.fishHold.push(choice.fish);
+    renderFishList();
+    showToast('QTE 成功：鱼装抢回！');
+    monsterFx.hookPending = false;
+    return;
+  }
+  if (key === 'hook_lose') {
+    showToast('鱼装被钩入雾中…');
+    monsterFx.hookPending = false;
+    return;
+  }
   if (key === 'repair') state.inventory.repair++;
   if (key === 'bait') state.inventory.bait += 2;
-  showToast(which === 'a' ? ev.a.label : ev.b.label);
+  showToast(choice?.label || (which === 'a' ? '选择 A' : '选择 B'));
   updateInv();
 }
 
@@ -1009,6 +1284,7 @@ function doEquip() {
   if (!f) return showToast('先选鱼');
   const def = getFishDef(f.defId);
   if (!def.slot) return showToast('此鱼不能绑槽');
+  if (monsterFx.sealedSlot === def.slot) return showToast('该槽被藤壶封印，无法改装');
   state.selectedSlot = def.slot;
   refreshSlots();
   const res = equipFish(boat, state.slots, f, def.slot, gradientMap);
@@ -1039,6 +1315,7 @@ function refreshSlots() {
     const s = el.dataset.slot;
     el.classList.toggle('active', s === state.selectedSlot);
     el.classList.toggle('filled', !!state.slots[s]);
+    el.classList.toggle('sealed', monsterFx.sealedSlot === s);
     const v = state.slots[s];
     el.title = v ? `${SLOT_LABELS[s]}：${v.name} 活性${Math.floor(v.vitality)}` : SLOT_LABELS[s];
   });
@@ -1142,6 +1419,7 @@ function startRun(fromCheckpoint = false) {
   camInit = false;
   fishing.reset();
   hideFishingFx();
+  resetMonsterFx();
   selectedBoat = meta.loadout?.boatId || selectedBoat;
   setBoatVariant(boat, selectedBoat);
   const maxHp = hullMaxForBoat(meta.unlocks, selectedBoat);
@@ -1186,7 +1464,7 @@ function startRun(fromCheckpoint = false) {
   seaWorld.scatterProps(vortices, flotsam);
   tintVortexField(vortices, loaded.water);
   hazards.spawnScattered({
-    count: vortices.length * 2,
+    count: vortices.length * 4,
     map: loaded,
     mapPoints: loaded.spawnPoints,
     lhMeshes: seaWorld.getLighthouses(),
@@ -1294,9 +1572,10 @@ function drawSeaMapOnto(canvas, map, opts = {}) {
   ctx.fillStyle = '#e8f4f4';
   ctx.font = '600 18px Fredoka, sans-serif';
   ctx.fillText(map.name, 20, 32);
-  ctx.font = '14px Noto Sans SC, sans-serif';
+  ctx.font = '13px Noto Sans SC, sans-serif';
   ctx.fillStyle = '#9ab';
-  ctx.fillText(opts.hint || '灯塔 ×3', 20, 54);
+  const mobs = monstersForZone(map.id).map((id) => getMonsterDef(id).name).join(' · ');
+  ctx.fillText(opts.hint || (mobs ? `出没：${mobs}` : '灯塔 ×3'), 20, 54);
 }
 
 function drawSeaMapOverlay() {
@@ -1306,7 +1585,10 @@ function drawSeaMapOverlay() {
     showBoat: true,
     boatX: paddle.state.x,
     boatZ: paddle.state.z,
-    hint: '灯塔 ×3 · M 关闭',
+    hint: (() => {
+      const mobs = monstersForZone(map.id).map((id) => getMonsterDef(id).name).join(' · ');
+      return `出没：${mobs} · M 关闭`;
+    })(),
   });
   if (canvas && map) {
     const ctx = canvas.getContext('2d');
@@ -1349,7 +1631,7 @@ function drawHubMap(canvas) {
     pad: Math.floor(side * 0.08),
     fit: 0.97,
     bg: '#3a3e42',
-    hint: '当前出航海域 · 右侧可选海域',
+    hint: `出没：${monstersForZone(map.id).map((id) => getMonsterDef(id).name).join(' · ')}`,
   });
 }
 
@@ -1426,10 +1708,11 @@ function tick() {
   if (state.started && !hull.sunk && !state.fishPanelOpen && !state.lighthouseOpen && !state.seaMapOpen) {
     const thrustBoat = thrustMulForBoat(selectedBoat, meta.unlocks);
     const buff = now() < state.speedBuffUntil ? 1.3 : 1;
+    const engineOk = now() >= (monsterFx.engineDisableUntil || 0);
     const phys = paddle.update(dt, now(), {
       thrustMul: b.thrustMul * b.speedMul * b.accelMul * thrustBoat * buff,
       turnMul: b.turnMul,
-      autoThrust: b.autoThrust,
+      autoThrust: engineOk ? b.autoThrust : 0,
     });
 
     if (seaWorld.constrainBoat(paddle.state)) {
@@ -1471,7 +1754,13 @@ function tick() {
     let y = BOAT_WATERLINE_Y + Math.sin(t * 2 + boat.userData.bobPhase) * 0.08;
     if (now() < state.jumpUntil) y += Math.sin((1 - (state.jumpUntil - now())) * Math.PI) * 2.8;
     boat.position.set(phys.x, y, phys.z);
-    boat.rotation.set(0, phys.yaw + Math.PI, (1 - hull.durability / hull.maxDurability) * 0.15);
+    boat.rotation.set(
+      0,
+      phys.yaw + Math.PI,
+      (1 - hull.durability / hull.maxDurability) * 0.15
+        + (monsterFx.tiltAmt || 0) * Math.sin((monsterFx.tiltUntil - now()) * 6)
+        + (now() < monsterFx.shakeUntil ? Math.sin(t * 22) * 0.18 : 0)
+    );
 
     // captain mouse follow on deck (simple)
     boat.userData.captain.position.x = clamp(state.captainLocal.x, -0.7, 0.7);
@@ -1505,12 +1794,37 @@ function tick() {
     if (dropped.length) showToast(`${dropped.join('、')} 力竭脱落`);
     refreshSlots();
 
+    tickMonsterFx(dt);
+
     hazards.update(dt, t, boatPos(), {
       onHit: (a, r) => applyDamage(a, r),
+      onMonsterHit: (id, skill, ctx) => applyMonsterSkill(id, skill, ctx),
+      onEncounter: () => {},
+      onSuctionPull: (dx, dz) => {
+        paddle.state.x += dx;
+        paddle.state.z += dz;
+      },
       addPlank: (n) => { state.inventory.plank += n; showToast('获得木板'); updateInv(); },
       hasSucker: state.slots.sideL?.defId === 'sucker' || state.slots.sideR?.defId === 'sucker',
       boatJumping: now() < state.jumpUntil,
-      onKill: () => { state.kills++; },
+      boatSpeed: phys.speed,
+      boatYaw: phys.yaw,
+      onKill: (id) => {
+        state.kills++;
+        registerMonster(id);
+        if (id === 'thiefOtter' && monsterFx.stolen) {
+          state.inventory.bait += monsterFx.stolen.bait || 0;
+          state.inventory.plank += monsterFx.stolen.plank || 0;
+          monsterFx.stolen = null;
+          updateInv();
+          showToast('击杀偷吃獭，物资追回！');
+        }
+        if (monsterFx.sealedSlot && (id === 'barnacle' || id === 'lavaBarnacle')) {
+          showToast(`刮除藤壶，「${SLOT_LABELS[monsterFx.sealedSlot]}」解封`);
+          monsterFx.sealedSlot = null;
+          monsterFx.heatSeal = false;
+        }
+      },
       onCheckpoint: (cp) => {
         pendingCheckpoint = cp;
         state.checkpoint = typeof cp === 'number' ? cp : Math.floor(state.runDistance);
@@ -1539,7 +1853,16 @@ function tick() {
     if (state.inkCd > 0) state.inkCd -= dt;
 
     if (b.hasPuffer) {
-      hazards.ramKill(boatPos(), phys.speed, b.ramMul, () => { state.kills++; showToast('撞角击沉！'); });
+      hazards.ramKill(boatPos(), phys.speed, b.ramMul, (id) => {
+        state.kills++;
+        registerMonster(id);
+        showToast('撞角击沉！');
+        if (monsterFx.heatSeal) {
+          monsterFx.sealedSlot = null;
+          monsterFx.heatSeal = false;
+          showToast('撞击震飞熔岩藤壶');
+        }
+      });
     }
 
     // Keep flotsam / vortices from drifting too far —soft pull back into map
@@ -1676,9 +1999,16 @@ canvas.addEventListener('pointermove', (e) => {
 });
 canvas.addEventListener('pointerdown', (e) => {
   if (!state.started || state.fishPanelOpen || e.button !== 0) return;
-  if (state.weapon === 1 && hazards.cutNearestWrap(boatPos())) {
+  const wrapCut = state.weapon === 1 ? hazards.cutNearestWrap(boatPos()) : null;
+  if (wrapCut) {
     state.kills++;
     showToast('斩断触手！');
+    if (wrapCut.catalogId) registerMonster(wrapCut.catalogId);
+    if (monsterFx.sealedSlot) {
+      showToast(`刮除藤壶，「${SLOT_LABELS[monsterFx.sealedSlot]}」解封`);
+      monsterFx.sealedSlot = null;
+      monsterFx.heatSeal = false;
+    }
   } else {
     const tgen = hazards.nearestEnemy(boatPos(), 12);
     if (tgen) {

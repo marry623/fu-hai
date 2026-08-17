@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
 import { pointInPoly } from './seaMaps.js';
+import { pickMonsterForZone, getMonsterDef, monstersForZone } from './monsterCatalog.js?v=29c';
+import { createCombatMonster, createMonsterMesh } from './monsterMeshes.js?v=29a';
+
+export { createMonsterMesh };
 
 const C = {
   shark: 0x2a3a5a,
@@ -44,9 +48,10 @@ export function createHazards(gradientMap, scene) {
   const RANGED_SHOT = 19;
   const ACTIVE_DIST = 160;
 
-  function ensureEnemies(n) {
+  function ensureEnemies(n, zoneId = 0) {
     while (enemies.length < n) {
-      const e = makeEnemy(gradientMap, enemies.length);
+      const catalogId = pickMonsterForZone(zoneId, enemies.length);
+      const e = createCombatMonster(catalogId, gradientMap, enemies.length);
       e.visible = false;
       e.userData.anchor = null;
       e.userData.chasing = false;
@@ -56,20 +61,25 @@ export function createHazards(gradientMap, scene) {
     }
   }
 
-  function ensureWraps(n) {
+  function ensureWraps(n, zoneId = 0) {
+    const wrapPool = monstersForZone(zoneId).filter((id) => getMonsterDef(id).kind === 'wrap');
+    const fallback = wrapPool.length ? wrapPool : ['barnacle', 'voidOctopus', 'ghostHook'];
     while (wraps.length < n) {
-      const w = makeKraken(gradientMap, wraps.length);
+      const catalogId = fallback[wraps.length % fallback.length];
+      const w = createCombatMonster(catalogId, gradientMap, wraps.length);
       w.visible = false;
       w.userData.active = false;
       w.userData.cd = 4;
       w.userData.anchor = null;
+      w.userData.kind = 'wrap';
       root.add(w);
       wraps.push(w);
     }
   }
 
   for (let i = 0; i < 8; i++) {
-    const e = makeEnemy(gradientMap, i);
+    const catalogId = pickMonsterForZone(0, i);
+    const e = createCombatMonster(catalogId, gradientMap, i);
     e.visible = false;
     e.userData.anchor = null;
     e.userData.chasing = false;
@@ -78,11 +88,12 @@ export function createHazards(gradientMap, scene) {
     enemies.push(e);
   }
   for (let i = 0; i < 4; i++) {
-    const w = makeKraken(gradientMap, i);
+    const w = createCombatMonster(['barnacle', 'voidOctopus', 'ghostHook', 'lavaBarnacle'][i], gradientMap, i);
     w.visible = false;
     w.userData.active = false;
     w.userData.cd = 4;
     w.userData.anchor = null;
+    w.userData.kind = 'wrap';
     root.add(w);
     wraps.push(w);
   }
@@ -107,8 +118,8 @@ export function createHazards(gradientMap, scene) {
     let best = null;
     let bestD = Infinity;
     for (const sp of spawnPoints) {
-      if (kind && sp.kind !== kind && !(kind === 'enemy' && (sp.kind === 'ram' || sp.kind === 'ranged'))) continue;
-      if (kind === 'enemy' && sp.kind !== 'ram' && sp.kind !== 'ranged') continue;
+      if (kind && sp.kind !== kind && !(kind === 'enemy' && (sp.kind === 'ram' || sp.kind === 'ranged' || sp.kind === 'static' || sp.kind === 'suction'))) continue;
+      if (kind === 'enemy' && sp.kind !== 'ram' && sp.kind !== 'ranged' && sp.kind !== 'static' && sp.kind !== 'suction') continue;
       const d = Math.hypot(sp.x - from.x, sp.z - from.z);
       if (d < bestD) { bestD = d; best = sp; }
     }
@@ -174,6 +185,7 @@ export function createHazards(gradientMap, scene) {
       mapPoints = [],
       lhMeshes = [],
       spawn = { x: 0, z: 0 },
+      zoneId = 0,
     } = opts;
 
     lighthouses = lhMeshes || [];
@@ -183,16 +195,19 @@ export function createHazards(gradientMap, scene) {
     const b = map?.bounds;
     const islands = map?.islands || [];
     const spawnPt = map?.spawn || spawn;
+    const zid = map?.id != null ? map.id : zoneId;
+    const poolAll = monstersForZone(zid);
+    const combatPool = poolAll.filter((id) => getMonsterDef(id).kind !== 'wrap');
+    const pool = combatPool.length ? combatPool : poolAll;
     const enemyAnchors = [];
 
     if (poly && b) {
       const bw = Math.max(1, b.maxX - b.minX);
       const bh = Math.max(1, b.maxZ - b.minZ);
       const area = bw * bh;
-      // Keep local density low: ~1 per 40–50m cell
       const minSep = Math.max(32, Math.min(52, Math.sqrt(area / Math.max(1, count)) * 0.72));
       const minSep2 = minSep * minSep;
-      const pairSep2 = (minSep * 0.45) ** 2; // rare close pair still not stacked
+      const pairSep2 = (minSep * 0.45) ** 2;
       const maxAttempts = count * 48;
 
       for (let attempt = 0; attempt < maxAttempts && enemyAnchors.length < count; attempt++) {
@@ -213,13 +228,15 @@ export function createHazards(gradientMap, scene) {
           if (d2 < pairSep2) { tooClose = true; break; }
           if (d2 < minSep2) nearCount++;
         }
-        // Local cluster at most 2; never stacked on the same spot
         if (tooClose || nearCount >= 2) continue;
 
+        const catalogId = pool[enemyAnchors.length % pool.length];
+        const def = getMonsterDef(catalogId);
         enemyAnchors.push({
           x,
           z,
-          kind: enemyAnchors.length % 4 === 0 ? 'ranged' : 'ram',
+          kind: def.kind === 'ranged' ? 'ranged' : def.kind === 'suction' ? 'suction' : def.kind === 'static' ? 'static' : 'ram',
+          catalogId,
         });
       }
     }
@@ -228,7 +245,10 @@ export function createHazards(gradientMap, scene) {
     const mapWraps = (mapPoints || []).filter((p) => p.kind === 'wrap');
     spawnPoints = [...enemyAnchors, ...mapWraps, ...plankPts];
 
-    ensureEnemies(enemyAnchors.length);
+    // Rebuild enemy pool for this zone so meshes match catalog
+    for (const e of enemies) root.remove(e);
+    enemies.length = 0;
+    ensureEnemies(Math.max(enemyAnchors.length, 8), zid);
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       if (i >= enemyAnchors.length) {
@@ -239,23 +259,46 @@ export function createHazards(gradientMap, scene) {
         e.userData.respawnIn = 0;
         continue;
       }
-      assignToAnchor(e, enemyAnchors[i]);
-      e.userData.dead = false;
-      e.userData.respawnIn = 0;
-      e.userData.chasing = false;
-      e.visible = false; // ACTIVE_DIST
+      const a = enemyAnchors[i];
+      // Swap mesh if catalog mismatch
+      if (e.userData.catalogId !== a.catalogId) {
+        root.remove(e);
+        const neu = createCombatMonster(a.catalogId, gradientMap, i);
+        neu.userData.anchor = null;
+        neu.userData.chasing = false;
+        neu.userData.patrolT = Math.random() * 10;
+        root.add(neu);
+        enemies[i] = neu;
+      }
+      assignToAnchor(enemies[i], a);
+      enemies[i].userData.catalogId = a.catalogId;
+      enemies[i].userData.kind = a.kind;
+      enemies[i].userData.dead = false;
+      enemies[i].userData.respawnIn = 0;
+      enemies[i].userData.chasing = false;
+      enemies[i].visible = false;
     }
 
-    ensureWraps(Math.max(4, mapWraps.length));
-    wraps.forEach((w, i) => {
-      const a = mapWraps[i % Math.max(1, mapWraps.length)] || enemyAnchors[(i * 7) % Math.max(1, enemyAnchors.length)];
-      if (!a) { w.visible = false; return; }
-      w.userData.anchor = a;
-      w.position.set(a.x + (Math.random() - 0.5) * 14, 0, a.z + (Math.random() - 0.5) * 14);
+    for (const w of wraps) root.remove(w);
+    wraps.length = 0;
+    const wrapIds = monstersForZone(zid).filter((id) => getMonsterDef(id).kind === 'wrap');
+    const wrapN = Math.max(8, mapWraps.length * 2, wrapIds.length * 4);
+    for (let i = 0; i < wrapN; i++) {
+      const catalogId = wrapIds.length ? wrapIds[i % wrapIds.length] : 'barnacle';
+      const w = createCombatMonster(catalogId, gradientMap, i);
       w.visible = false;
       w.userData.active = false;
       w.userData.cd = 2.5 + (i % 5);
-    });
+      w.userData.kind = 'wrap';
+      w.userData.catalogId = catalogId;
+      const a = mapWraps[i % Math.max(1, mapWraps.length)] || enemyAnchors[(i * 7) % Math.max(1, enemyAnchors.length)];
+      if (a) {
+        w.userData.anchor = a;
+        w.position.set(a.x + (Math.random() - 0.5) * 14, 0, a.z + (Math.random() - 0.5) * 14);
+      }
+      root.add(w);
+      wraps.push(w);
+    }
 
     planks.forEach((p, i) => {
       const a = plankPts[i % Math.max(1, plankPts.length)] || enemyAnchors[(i * 5) % Math.max(1, enemyAnchors.length)];
@@ -291,7 +334,16 @@ export function createHazards(gradientMap, scene) {
   }
 
   function update(dt, time, boatPos, opts = {}) {
-    const { onHit, addPlank, hasSucker, boatJumping, onCheckpoint } = opts;
+    const {
+      onHit,
+      onMonsterHit,
+      addPlank,
+      hasSucker,
+      boatJumping,
+      onCheckpoint,
+      boatSpeed = 0,
+      boatYaw = 0,
+    } = opts;
 
     // Count current chasers
     let chasers = enemies.filter((e) => e.visible && e.userData.chasing).length;
@@ -311,13 +363,13 @@ export function createHazards(gradientMap, scene) {
         continue;
       }
       if (!e.visible && !(e.userData.respawnIn > 0)) {
-        // Far enemies stay anchored but skip AI until player approaches
         const ax0 = e.userData.anchor?.x;
         const az0 = e.userData.anchor?.z;
         if (ax0 != null) {
           const d0 = Math.hypot(ax0 - boatPos.x, az0 - boatPos.z);
           if (d0 < ACTIVE_DIST && !(e.userData.respawnIn > 0)) {
             e.visible = true;
+            opts.onEncounter?.(e.userData.catalogId);
           }
         }
       }
@@ -335,6 +387,42 @@ export function createHazards(gradientMap, scene) {
       const az = e.userData.anchor?.z ?? e.position.z;
       const dBoat = Math.hypot(e.position.x - boatPos.x, e.position.z - boatPos.z);
       const dHome = Math.hypot(e.position.x - ax, e.position.z - az);
+      const kind = e.userData.kind || 'ram';
+      const catalogId = e.userData.catalogId || 'sawShark';
+      const def = getMonsterDef(catalogId);
+
+      // Static urchin: no chase, proximity skill
+      if (kind === 'static') {
+        e.position.x = ax;
+        e.position.z = az;
+        e.rotation.y = time * 0.4;
+        e.position.y = 0.2 + Math.sin(time * 2 + e.userData.bob) * 0.08;
+        if (dBoat < 5.5) {
+          onMonsterHit?.(catalogId, def.skill || 'accelDrain', { dt, continuous: true });
+        }
+        if (e.userData.hitCd > 0) e.userData.hitCd -= dt;
+        continue;
+      }
+
+      // Suction worm: pull boat if in forward cone; kill if too slow
+      if (kind === 'suction') {
+        e.position.y = 0.4 + Math.sin(time * 1.5 + e.userData.bob) * 0.15;
+        const toBoatX = boatPos.x - e.position.x;
+        const toBoatZ = boatPos.z - e.position.z;
+        const facing = Math.atan2(toBoatX, toBoatZ);
+        e.rotation.y = facing;
+        if (dBoat < 28 && dBoat > 2.5) {
+          const pull = Math.max(0, 1 - dBoat / 28) * 14 * dt;
+          opts.onSuctionPull?.(Math.sin(facing) * pull, Math.cos(facing) * pull);
+        }
+        if (dBoat < 6.5 && (!e.userData.hitCd || e.userData.hitCd <= 0)) {
+          e.userData.hitCd = 1.8;
+          onMonsterHit?.(catalogId, 'suctionKill', { boatSpeed });
+          opts.onEncounter?.(catalogId);
+        }
+        if (e.userData.hitCd > 0) e.userData.hitCd -= dt;
+        continue;
+      }
 
       if (e.userData.chasing) {
         if (dBoat > DROP_RANGE || dHome > PATROL_R * 2.2) {
@@ -344,15 +432,16 @@ export function createHazards(gradientMap, scene) {
       } else if (dBoat < AGRO_RANGE && chasers < MAX_CHASERS && dHome < PATROL_R + 6) {
         e.userData.chasing = true;
         chasers++;
+        opts.onEncounter?.(catalogId);
       }
 
       if (e.userData.chasing) {
         const ang = Math.atan2(boatPos.x - e.position.x, boatPos.z - e.position.z);
-        e.position.x += Math.sin(ang) * 7 * dt;
-        e.position.z += Math.cos(ang) * 7 * dt;
+        const spd = catalogId === 'waveWhale' ? 5.2 : catalogId === 'thiefOtter' ? 8.5 : 7;
+        e.position.x += Math.sin(ang) * spd * dt;
+        e.position.z += Math.cos(ang) * spd * dt;
         e.rotation.y = ang;
       } else {
-        // Patrol around anchor
         const ang = e.userData.patrolT * 0.7;
         const tx = ax + Math.cos(ang) * (PATROL_R * 0.55);
         const tz = az + Math.sin(ang) * (PATROL_R * 0.55);
@@ -361,7 +450,7 @@ export function createHazards(gradientMap, scene) {
         e.rotation.y = Math.atan2(tx - e.position.x, tz - e.position.z);
       }
 
-      if (e.userData.kind === 'ram') {
+      if (kind === 'ram') {
         e.rotation.x = Math.sin(time * 2.2 + e.userData.bob) * 0.06;
         e.position.y = 0.15 + Math.sin(time * 3 + e.userData.bob) * 0.2;
       } else {
@@ -372,21 +461,27 @@ export function createHazards(gradientMap, scene) {
       }
 
       const d = dBoat;
-      const hitR = e.userData.kind === 'ram' ? 2.8 : 2.4;
+      const hitR = kind === 'ram' ? (catalogId === 'waveWhale' ? 4.2 : 2.8) : 2.4;
       if (d < hitR && (!e.userData.hitCd || e.userData.hitCd <= 0)) {
-        e.userData.hitCd = 1.4;
-        onHit?.(10, e.userData.kind === 'ram' ? '巨口鲨撞击' : '海蛇冲撞');
+        e.userData.hitCd = catalogId === 'waveWhale' ? 2.2 : 1.4;
+        const skill = def.skill || 'tiltPush';
+        const dmg = catalogId === 'waveWhale' ? 14 : kind === 'ram' ? 10 : 8;
+        onHit?.(dmg, def.name + (skill === 'tiltPush' ? '撞击' : '冲击'));
+        onMonsterHit?.(catalogId, skill, { boatYaw, boatSpeed });
+        opts.onEncounter?.(catalogId);
       }
       if (e.userData.hitCd > 0) e.userData.hitCd -= dt;
 
-      if (e.userData.kind === 'ranged' && e.userData.shotCd <= 0 && d < RANGED_SHOT && e.userData.chasing) {
-        e.userData.shotCd = 2.8;
+      if (kind === 'ranged' && e.userData.shotCd <= 0 && d < RANGED_SHOT && e.userData.chasing) {
+        e.userData.shotCd = catalogId === 'inkJelly' ? 2.2 : 2.8;
         e.updateMatrixWorld(true);
         const muzzle = e.userData.muzzle;
         const from = muzzle
           ? new THREE.Vector3().setFromMatrixPosition(muzzle.matrixWorld)
-          : e.position.clone().add(new THREE.Vector3(0, 4, 0));
-        fireIce(from, boatPos);
+          : e.position.clone().add(new THREE.Vector3(0, 2.2, 0));
+        if (catalogId === 'inkJelly') fireInkBolt(from, boatPos, catalogId);
+        else fireIce(from, boatPos, catalogId);
+        opts.onEncounter?.(catalogId);
       }
       if (e.userData.shotCd > 0) e.userData.shotCd -= dt;
     }
@@ -400,12 +495,19 @@ export function createHazards(gradientMap, scene) {
         w.position.z = az;
       }
       const d = Math.hypot(w.position.x - boatPos.x, w.position.z - boatPos.z);
+      const wId = w.userData.catalogId || 'voidOctopus';
+      const wDef = getMonsterDef(wId);
       if (!w.userData.active && w.userData.cd <= 0 && d < 18) {
         w.userData.active = true;
         w.visible = true;
-        w.userData.life = 4;
+        w.userData.life = wId === 'ghostHook' ? 5 : 4;
         w.position.x = boatPos.x;
         w.position.z = boatPos.z;
+        opts.onEncounter?.(wId);
+        // Instant skill proc on latch
+        if (wId === 'ghostHook' || wId === 'voidOctopus' || wId === 'barnacle' || wId === 'lavaBarnacle') {
+          onMonsterHit?.(wId, wDef.skill, { latch: true });
+        }
       }
       if (w.userData.active) {
         w.position.x = boatPos.x + Math.sin(time * 4) * 1.2;
@@ -417,9 +519,14 @@ export function createHazards(gradientMap, scene) {
           arm.rotation.x = 0.2 + Math.sin(time * 2.4 + i * 0.7) * 0.15;
         });
         w.userData.life -= dt;
-        if (!boatJumping) onHit?.(3 * dt, '章鱼缠绕腐蚀');
+        if (!boatJumping) {
+          onHit?.(2.2 * dt, wDef.name + '缠绕');
+          if (wId === 'barnacle' || wId === 'lavaBarnacle') {
+            onMonsterHit?.(wId, wDef.skill, { continuous: true, dt });
+          }
+        }
         if (w.userData.life <= 0 || (opts.cutWrap && d < 5)) {
-          if (opts.cutWrap && d < 5) opts.onKill?.('wrap');
+          if (opts.cutWrap && d < 5) opts.onKill?.(wId, 'wrap');
           w.userData.active = false;
           w.visible = false;
           w.userData.cd = 12;
@@ -463,7 +570,10 @@ export function createHazards(gradientMap, scene) {
       s.mesh.rotation.y += dt * 3;
       const d = Math.hypot(s.mesh.position.x - boatPos.x, s.mesh.position.z - boatPos.z);
       if (d < 2.2) {
-        onHit?.(6, '冰霜弹命中');
+        const sid = s.catalogId || 'lightningSnake';
+        const sDef = getMonsterDef(sid);
+        onHit?.(6, sDef.name + '命中');
+        onMonsterHit?.(sid, sDef.skill || 'disableEngine', {});
         s.life = 0;
       }
       if (s.life <= 0) {
@@ -477,16 +587,24 @@ export function createHazards(gradientMap, scene) {
       s.life -= dt;
       s.mesh.position.x += s.vx * dt;
       s.mesh.position.z += s.vz * dt;
-      for (const e of enemies) {
-        if (!e.visible) continue;
-        if (Math.hypot(s.mesh.position.x - e.position.x, s.mesh.position.z - e.position.z) < 2.2) {
-          e.visible = false;
-          e.userData.dead = true;
-          e.userData.respawnIn = 0;
-          e.userData.chasing = false;
-          opts.onKill?.(e.userData.kind || 'ram');
+      if (s.fromMonster) {
+        const d = Math.hypot(s.mesh.position.x - boatPos.x, s.mesh.position.z - boatPos.z);
+        if (d < 2.4) {
+          onMonsterHit?.(s.catalogId || 'inkJelly', 'inkBlind', {});
           s.life = 0;
-          break;
+        }
+      } else {
+        for (const e of enemies) {
+          if (!e.visible) continue;
+          if (Math.hypot(s.mesh.position.x - e.position.x, s.mesh.position.z - e.position.z) < 2.2) {
+            e.visible = false;
+            e.userData.dead = true;
+            e.userData.respawnIn = 0;
+            e.userData.chasing = false;
+            opts.onKill?.(e.userData.catalogId || e.userData.kind || 'ram');
+            s.life = 0;
+            break;
+          }
         }
       }
       if (s.life <= 0) {
@@ -505,7 +623,7 @@ export function createHazards(gradientMap, scene) {
     }
   }
 
-  function fireIce(from, to) {
+  function fireIce(from, to, catalogId = 'lightningSnake') {
     const dx = to.x - from.x;
     const dz = to.z - from.z;
     const len = Math.hypot(dx, dz) || 1;
@@ -522,7 +640,25 @@ export function createHazards(gradientMap, scene) {
     bolt.position.copy(from);
     bolt.position.y = Math.max(1.2, from.y);
     root.add(bolt);
-    shots.push({ mesh: bolt, life: 2.2, vx: (dx / len) * 18, vz: (dz / len) * 18 });
+    shots.push({ mesh: bolt, life: 2.2, vx: (dx / len) * 18, vz: (dz / len) * 18, catalogId });
+  }
+
+  function fireInkBolt(from, to, catalogId = 'inkJelly') {
+    const dx = to.x - from.x;
+    const dz = to.z - from.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.4, 5, 4), toonMat(0x1a0a28, gradientMap));
+    mesh.position.set(from.x, Math.max(0.8, from.y), from.z);
+    root.add(mesh);
+    addOutline(mesh, 1.15);
+    inkShots.push({
+      mesh,
+      life: 2.0,
+      vx: (dx / len) * 16,
+      vz: (dz / len) * 16,
+      fromMonster: true,
+      catalogId,
+    });
   }
 
   function shootInk(from, target, gm) {
@@ -557,7 +693,7 @@ export function createHazards(gradientMap, scene) {
         e.userData.chasing = false;
         e.userData.dead = true;
         e.userData.respawnIn = 0;
-        onKill?.(e.userData.kind || 'ram');
+        onKill?.(e.userData.catalogId || e.userData.kind || 'ram');
       }
     }
   }
@@ -569,7 +705,7 @@ export function createHazards(gradientMap, scene) {
         w.userData.active = false;
         w.visible = false;
         w.userData.cd = 8;
-        return { cut: true, kind: 'wrap' };
+        return { cut: true, kind: 'wrap', catalogId: w.userData.catalogId || 'voidOctopus' };
       }
     }
     return null;
@@ -768,23 +904,6 @@ function makeEnemy(gm, id) {
   g.userData.shotCd = 0.8 + Math.random();
   g.userData.hitCd = 0;
   g.scale.setScalar(kind === 'ram' ? 0.72 : 0.68);
-  return g;
-}
-
-/** Build a display mesh for bestiary portraits */
-export function createMonsterMesh(monsterId, gm) {
-  if (monsterId === 'serpent') {
-    const g = makeSerpent(gm);
-    g.scale.setScalar(0.55);
-    return g;
-  }
-  if (monsterId === 'kraken') {
-    const g = makeKraken(gm, 0);
-    g.scale.setScalar(0.28);
-    return g;
-  }
-  const g = makeShark(gm);
-  g.scale.setScalar(0.5);
   return g;
 }
 
