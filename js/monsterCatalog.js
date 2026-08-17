@@ -157,64 +157,62 @@ export const MONSTER_CATALOG = {
     desc: '熔岩质藤壶高温锁死槽位。用冰霜类效果或强力撞击震飞。',
     zones: [4],
   },
-  // legacy aliases kept for old saves / portraits
+  /** Classic trio — kept as distinct roster entries */
   shark: {
     id: 'shark',
-    name: '锯齿鲨',
+    name: '巨口鲨',
     kind: 'ram',
     rarity: 3,
-    color: 0x5a6570,
+    color: 0x2a3a5a,
     tag: '冲撞',
     skill: 'tiltPush',
-    skillLabel: '撞倾船身 · 推移物资',
-    desc: '旧称巨口鲨，现统一为锯齿鲨。',
+    skillLabel: '撞击船体',
+    desc: '巨口鲨会撞击船体。保持距离，用喷墨或冲撞解决。',
     zones: [0, 1, 2, 3, 4],
-    aliasOf: 'sawShark',
   },
   serpent: {
     id: 'serpent',
-    name: '避雷针海蛇',
+    name: '冰霜海蛇',
     kind: 'ranged',
-    rarity: 4,
-    color: 0x2a3a6a,
-    tag: '引雷',
-    skill: 'disableEngine',
-    skillLabel: '爬帆引雷 · 瘫痪引擎鱼',
-    desc: '旧称冰霜海蛇，现统一为避雷针海蛇。',
+    rarity: 3,
+    color: 0x4a6a7a,
+    tag: '远程',
+    skill: 'frostBolt',
+    skillLabel: '吐出冰霜弹',
+    desc: '冰霜海蛇，会向船只吐出冰霜弹。保持距离，用喷墨或斩裂解决。',
     zones: [0, 1, 2, 3, 4],
-    aliasOf: 'lightningSnake',
   },
   kraken: {
     id: 'kraken',
-    name: '虚空盗贼章鱼',
+    name: '触手海怪',
     kind: 'wrap',
     rarity: 4,
-    color: 0x5a2a7a,
-    tag: '闪窃',
-    skill: 'blinkSteal',
-    skillLabel: '闪现偷鱼装 · 极速下潜',
-    desc: '旧称触手海怪，现统一为虚空盗贼章鱼。',
+    color: 0x5a2a8a,
+    tag: '缠绕',
+    skill: 'wrapCorrode',
+    skillLabel: '触手缠绕腐蚀',
+    desc: '触手海怪会缠绕船只腐蚀船体。近战斩断或跳跃摆脱。',
     zones: [0, 1, 2, 3, 4],
-    aliasOf: 'voidOctopus',
   },
 };
 
-/** Primary roster shown in codex (no legacy aliases) */
+/** Primary roster shown in codex */
 export const CODEX_MONSTER_IDS = [
+  'shark', 'serpent', 'kraken',
   'woodUrchin', 'barnacle', 'sawShark', 'bladeCrab', 'sporeJelly', 'ghostHook',
   'thiefOtter', 'inkJelly', 'lightningSnake', 'voidOctopus', 'waveWhale',
   'trenchWorm', 'lavaBarnacle',
 ];
 
-/** Core trio — present on every sea map */
-export const CORE_MONSTERS = ['sawShark', 'lightningSnake', 'voidOctopus'];
+/** Classic trio — present on every sea map */
+export const CORE_MONSTERS = ['shark', 'serpent', 'kraken'];
 
-/** zoneId → spawn weight list (zone uniques + core trio) */
+/** zoneId → spawn weight list (zone uniques + classic trio) */
 export const ZONE_MONSTER_POOLS = {
-  0: ['woodUrchin', 'barnacle', ...CORE_MONSTERS],
+  0: ['woodUrchin', 'barnacle', 'sawShark', ...CORE_MONSTERS],
   1: ['bladeCrab', 'sporeJelly', 'barnacle', ...CORE_MONSTERS],
-  2: ['ghostHook', 'thiefOtter', 'inkJelly', ...CORE_MONSTERS],
-  3: ['waveWhale', ...CORE_MONSTERS],
+  2: ['ghostHook', 'thiefOtter', 'inkJelly', 'sawShark', ...CORE_MONSTERS],
+  3: ['lightningSnake', 'voidOctopus', 'waveWhale', ...CORE_MONSTERS],
   4: ['trenchWorm', 'lavaBarnacle', 'sporeJelly', 'waveWhale', ...CORE_MONSTERS],
 };
 
@@ -237,11 +235,11 @@ export function resolveMonsterId(id) {
 
 /** Map hazard runtime kind → catalog id (legacy) */
 export function monsterIdFromKind(kind) {
-  if (kind === 'ranged') return 'lightningSnake';
-  if (kind === 'wrap') return 'voidOctopus';
+  if (kind === 'ranged') return 'serpent';
+  if (kind === 'wrap') return 'kraken';
   if (kind === 'suction') return 'trenchWorm';
   if (kind === 'static') return 'woodUrchin';
-  return 'sawShark';
+  return 'shark';
 }
 
 export function pickMonsterForZone(zoneId, index = 0) {

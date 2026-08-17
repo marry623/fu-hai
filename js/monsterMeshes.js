@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
-import { resolveMonsterId } from './monsterCatalog.js?v=29c';
+import { resolveMonsterId } from './monsterCatalog.js?v=29f';
 
 function addPart(g, mesh, outlineScale = 1.08) {
   g.add(mesh);
@@ -323,6 +323,191 @@ export function makeTrenchWorm(gm) {
   return g;
 }
 
+/** Classic 巨口鲨 */
+export function makeClassicShark(gm) {
+  const g = new THREE.Group();
+  const bodyRoot = new THREE.Group();
+  g.add(bodyRoot);
+  const col = 0x2a3a5a;
+  const finC = 0x6a2030;
+  const mouthC = 0x5a2030;
+  const eyeC = 0xffe566;
+
+  const body = new THREE.Mesh(new THREE.ConeGeometry(1.7, 4.5, 6), toonMat(col, gm));
+  body.rotation.x = -Math.PI / 2;
+  body.position.set(0, 0.2, 0);
+  addPart(bodyRoot, body, 1.05);
+
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(1.1, 2.6, 5), toonMat(col, gm));
+  tail.rotation.x = Math.PI / 2;
+  tail.position.set(0, -0.8, -2.4);
+  addPart(bodyRoot, tail, 1.05);
+
+  const upper = new THREE.Mesh(new THREE.ConeGeometry(1.35, 1.7, 6), toonMat(col, gm));
+  upper.rotation.x = -Math.PI / 2;
+  upper.position.set(0, 0.45, 2.5);
+  addPart(bodyRoot, upper, 1.06);
+
+  const lower = new THREE.Mesh(new THREE.ConeGeometry(1.15, 1.35, 6), toonMat(mouthC, gm));
+  lower.rotation.x = -Math.PI / 2;
+  lower.position.set(0, -0.55, 2.3);
+  addPart(bodyRoot, lower, 1.06);
+
+  const cavity = new THREE.Mesh(new THREE.SphereGeometry(0.85, 6, 4), toonMat(0x7a2030, gm));
+  cavity.scale.set(1, 0.7, 0.95);
+  cavity.position.set(0, 0, 2.0);
+  addPart(bodyRoot, cavity, 1.08);
+
+  for (let i = 0; i < 14; i++) {
+    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.5, 4), toonMat(0xf8f4ec, gm));
+    const a = (i / 14) * Math.PI * 2;
+    tooth.position.set(Math.cos(a) * 0.95, Math.sin(a) * 0.65, 3.0);
+    tooth.rotation.x = -Math.PI / 2;
+    addPart(bodyRoot, tooth, 1.22);
+  }
+
+  for (let i = 0; i < 5; i++) {
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.05, 4), toonMat(finC, gm));
+    fin.position.set(0, 1.25, 0.3 - i * 0.65);
+    addPart(bodyRoot, fin, 1.1);
+  }
+
+  for (const side of [-1, 1]) {
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.38, 1.6, 4), toonMat(col, gm));
+    fin.position.set(side * 1.6, -0.15, 0.3);
+    fin.rotation.z = side * 1.05;
+    addPart(bodyRoot, fin, 1.08);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.2, 5, 4), toonMat(eyeC, gm));
+    eye.position.set(side * 0.9, 0.55, 1.55);
+    addPart(bodyRoot, eye, 1.2);
+  }
+
+  splash(g, gm, 1.6);
+  bodyRoot.rotation.x = -0.75;
+  bodyRoot.position.y = 2.6;
+  return g;
+}
+
+/** Classic 冰霜海蛇 */
+export function makeClassicSerpent(gm) {
+  const g = new THREE.Group();
+  const neck = new THREE.Group();
+  g.add(neck);
+  g.userData.neck = neck;
+  const col = 0x4a6a7a;
+  const belly = 0x8aa0a8;
+  const spine = 0x7a3aa8;
+  const eyeC = 0xffe566;
+
+  const hump = new THREE.Mesh(new THREE.SphereGeometry(1.35, 6, 5), toonMat(col, gm));
+  hump.scale.set(1.25, 0.75, 1.5);
+  hump.position.set(0, 0.55, -2.6);
+  addPart(g, hump, 1.05);
+
+  const segs = [
+    [0, 1.1, -0.7, 1.15],
+    [0, 2.5, 0.15, 1.0],
+    [0, 3.9, 0.7, 0.88],
+    [0, 5.1, 1.15, 0.75],
+  ];
+  segs.forEach(([x, y, z, r]) => {
+    const seg = new THREE.Mesh(new THREE.SphereGeometry(r, 6, 5), toonMat(col, gm));
+    seg.scale.set(1, 1.15, 1.2);
+    seg.position.set(x, y, z);
+    addPart(neck, seg, 1.05);
+    const bel = new THREE.Mesh(new THREE.SphereGeometry(r * 0.72, 5, 4), toonMat(belly, gm));
+    bel.position.set(x, y - r * 0.4, z + 0.2);
+    addPart(neck, bel, 1.1);
+    for (let k = 0; k < 2; k++) {
+      const sp = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 0), toonMat(spine, gm));
+      sp.position.set(x + (k - 0.5) * 0.15, y + r * 0.75, z - 0.25);
+      sp.scale.set(0.6, 1.2, 0.6);
+      addPart(neck, sp, 1.18);
+    }
+  });
+
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.5, 5), toonMat(col, gm));
+  head.rotation.x = -Math.PI / 2;
+  head.position.set(0, 5.7, 1.7);
+  addPart(neck, head, 1.06);
+
+  for (const side of [-1, 1]) {
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.55, 4), toonMat(spine, gm));
+    horn.position.set(side * 0.4, 6.25, 1.25);
+    horn.rotation.z = side * 0.35;
+    addPart(neck, horn, 1.18);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.18, 5, 4), toonMat(eyeC, gm));
+    eye.position.set(side * 0.38, 5.75, 2.0);
+    addPart(neck, eye, 1.22);
+  }
+
+  const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 0), toonMat(0x9ad8ff, gm));
+  orb.position.set(0, 5.7, 2.55);
+  addPart(neck, orb, 1.15);
+
+  const muzzle = new THREE.Object3D();
+  muzzle.position.set(0, 5.7, 2.7);
+  neck.add(muzzle);
+  g.userData.muzzle = muzzle;
+
+  splash(g, gm, 1.35);
+  return g;
+}
+
+/** Classic 触手海怪 */
+export function makeClassicKraken(gm) {
+  const g = new THREE.Group();
+  g.userData.arms = [];
+  const col = 0x5a2a8a;
+  const dark = 0x3a1860;
+  const eyeC = 0xffe566;
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(1.9, 7, 6), toonMat(col, gm));
+  head.scale.set(1.25, 1.1, 1.2);
+  head.position.y = 2.5;
+  addPart(g, head, 1.05);
+
+  const mantle = new THREE.Mesh(new THREE.SphereGeometry(1.1, 6, 5), toonMat(dark, gm));
+  mantle.scale.set(1.15, 0.75, 1);
+  mantle.position.set(0, 3.55, -0.25);
+  addPart(g, mantle, 1.06);
+
+  for (const side of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.48, 6, 5), toonMat(eyeC, gm));
+    eye.position.set(side * 0.7, 2.55, 1.45);
+    addPart(g, eye, 1.12);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.18, 5, 4), toonMat(0x1a1020, gm));
+    pupil.position.set(side * 0.7, 2.55, 1.85);
+    g.add(pupil);
+  }
+
+  for (let i = 0; i < 8; i++) {
+    const arm = new THREE.Group();
+    const a = (i / 8) * Math.PI * 2;
+    arm.position.set(Math.cos(a) * 1.0, 1.15, Math.sin(a) * 1.0);
+    arm.rotation.y = a + Math.PI * 0.5;
+    arm.rotation.z = 0.95;
+    let y = 0;
+    for (let s = 0; s < 6; s++) {
+      const r = 0.48 - s * 0.055;
+      const seg = new THREE.Mesh(
+        new THREE.CylinderGeometry(r * 0.7, r, 0.8, 5),
+        toonMat(s % 2 ? dark : col, gm)
+      );
+      const curl = s * 0.32;
+      seg.position.set(Math.sin(curl) * 0.4, y, Math.cos(curl) * 0.25 + s * 0.1);
+      seg.rotation.x = 0.5 + s * 0.16;
+      addPart(arm, seg, 1.07);
+      y += 0.65;
+    }
+    g.add(arm);
+    g.userData.arms.push(arm);
+  }
+
+  splash(g, gm, 1.5);
+  return g;
+}
+
 const BUILDERS = {
   woodUrchin: makeWoodUrchin,
   barnacle: (gm) => makeBarnacle(gm, false),
@@ -337,9 +522,29 @@ const BUILDERS = {
   voidOctopus: makeVoidOctopus,
   waveWhale: makeWaveWhale,
   trenchWorm: makeTrenchWorm,
-  shark: makeSawShark,
-  serpent: makeLightningSnake,
-  kraken: makeVoidOctopus,
+  shark: makeClassicShark,
+  serpent: makeClassicSerpent,
+  kraken: makeClassicKraken,
+};
+
+/** Base display scales — bumped ~30% for readability */
+const MESH_SCALE = {
+  waveWhale: 0.72,
+  trenchWorm: 0.65,
+  lightningSnake: 0.72,
+  voidOctopus: 0.85,
+  sawShark: 0.9,
+  woodUrchin: 0.95,
+  shark: 0.72,
+  serpent: 0.68,
+  kraken: 0.55,
+  bladeCrab: 0.9,
+  sporeJelly: 0.9,
+  ghostHook: 0.9,
+  thiefOtter: 0.9,
+  inkJelly: 0.9,
+  barnacle: 0.9,
+  lavaBarnacle: 0.9,
 };
 
 export function createMonsterMesh(monsterId, gm) {
@@ -347,15 +552,7 @@ export function createMonsterMesh(monsterId, gm) {
   const build = BUILDERS[id] || makeSawShark;
   const g = build(gm);
   g.userData.catalogId = id;
-  const scale = {
-    waveWhale: 0.55,
-    trenchWorm: 0.5,
-    lightningSnake: 0.55,
-    voidOctopus: 0.65,
-    sawShark: 0.7,
-    woodUrchin: 0.75,
-  }[id] || 0.7;
-  g.scale.setScalar(scale);
+  g.scale.setScalar(MESH_SCALE[id] || 0.9);
   return g;
 }
 
@@ -378,6 +575,9 @@ export function createCombatMonster(monsterId, gm, index = 0) {
     voidOctopus: 'wrap',
     waveWhale: 'ram',
     trenchWorm: 'suction',
+    shark: 'ram',
+    serpent: 'ranged',
+    kraken: 'wrap',
   })[id] || 'ram';
   g.userData.phase = 0;
   g.userData.bob = Math.random() * 10;

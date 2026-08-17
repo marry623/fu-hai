@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
 import { pointInPoly } from './seaMaps.js';
-import { pickMonsterForZone, getMonsterDef, monstersForZone } from './monsterCatalog.js?v=29c';
-import { createCombatMonster, createMonsterMesh } from './monsterMeshes.js?v=29a';
+import { pickMonsterForZone, getMonsterDef, monstersForZone } from './monsterCatalog.js?v=29f';
+import { createCombatMonster, createMonsterMesh } from './monsterMeshes.js?v=29f';
 
 export { createMonsterMesh };
 

@@ -13,7 +13,7 @@ import {
 import {
   createVortexField, updateVortices, findNearestVortex, createFishingController, CAST_AIM_DIST, tintVortexField, VORTEX_COUNT,
 } from './fishing.js?v=29a';
-import { createHazards } from './hazards.js?v=29c';
+import { createHazards } from './hazards.js?v=29f';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot,
@@ -28,13 +28,13 @@ import {
   discoverFish, discoverMonster, syncLoadoutSuppliesFromWarehouse, consumeLoadoutOnDepart,
 } from './meta.js?v=28c';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=16c';
-import { createHub } from './hub.js?v=29d';
+import { createHub } from './hub.js?v=29f';
 import { createCoverScene } from './coverScene.js?v=28m';
 import { createHubIsland } from './hubIsland.js?v=28k';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=28l';
 import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=16c';
 import { getSeaMap } from './seaMaps.js?v=16c';
-import { getMonsterDef, resolveMonsterId, monstersForZone } from './monsterCatalog.js?v=29c';
+import { getMonsterDef, resolveMonsterId, monstersForZone } from './monsterCatalog.js?v=29f';
 const canvas = document.getElementById('c');
 const minimapCtx = document.getElementById('minimap').getContext('2d');
 
