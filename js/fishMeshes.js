@@ -34,6 +34,16 @@ const C = {
   stormBolt: 0xe8f0ff,
   chrono: 0xd4a020,
   chronoBlue: 0x3a6a9a,
+  thunderCore: 0x7ad8ff,
+  magAnchor: 0x3a6a9a,
+  voltSpine: 0xc8f060,
+  ionVeil: 0xa8fff0,
+  flashSail: 0xe8d060,
+  magmaMaw: 0xff6030,
+  heatPump: 0xe04820,
+  tarWhip: 0x3a2418,
+  obsidianHeart: 0x2a1028,
+  abyssShell: 0x3a2060,
   food: 0x4ecdc4,
   glue: 0xffe066,
 };
@@ -454,6 +464,144 @@ const BUILDERS = {
     eyePair(g, gm, 0.3, 0.08, 0.2, 0.05);
   },
 
+  thunderCore(g, gm) {
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.38, 0), mat(C.thunderCore, gm));
+    add(g, core, 1.1);
+    g.userData.spinPart = core;
+    for (let i = 0; i < 5; i++) {
+      const bolt = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.55, 0.06), mat(0xfff4a0, gm));
+      const a = (i / 5) * Math.PI * 2;
+      bolt.position.set(Math.cos(a) * 0.42, Math.sin(a) * 0.12, Math.sin(a) * 0.28);
+      bolt.rotation.z = a + 0.4;
+      add(g, bolt, 1.2);
+    }
+    eyePair(g, gm, 0.22, 0.08, 0.22, 0.06);
+  },
+
+  magAnchor(g, gm) {
+    fishBody(g, gm, C.magAnchor, { len: 1.15, h: 0.28, w: 0.24, nose: 0.2 });
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.55, 5), mat(0xb8c8d8, gm));
+    shaft.rotation.z = Math.PI / 2;
+    shaft.position.x = -0.55;
+    add(g, shaft, 1.15);
+    for (const side of [-1, 1]) {
+      const fluke = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.28, 4), mat(0x8aa0b8, gm));
+      fluke.position.set(-0.78, side * 0.12, 0);
+      fluke.rotation.z = side * 0.9;
+      add(g, fluke, 1.2);
+    }
+    eyePair(g, gm, 0.32, 0.04, 0.14, 0.045);
+  },
+
+  voltSpine(g, gm) {
+    fishBody(g, gm, C.voltSpine, { len: 1.05, h: 0.22, w: 0.2, nose: 0.55 });
+    for (let i = 0; i < 6; i++) {
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.28, 4), mat(0xffffa0, gm));
+      sp.position.set(-0.15 + i * 0.12, 0.22, (i % 2 ? 0.08 : -0.08));
+      add(g, sp, 1.25);
+    }
+    eyePair(g, gm, 0.28, 0.04, 0.12, 0.04);
+  },
+
+  ionVeil(g, gm) {
+    const disc = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.08, 6, 12), mat(C.ionVeil, gm));
+    disc.rotation.x = Math.PI / 2;
+    add(g, disc, 1.08);
+    const film = new THREE.Mesh(new THREE.CircleGeometry(0.34, 10), mat(0xd8fff8, gm));
+    film.rotation.x = -Math.PI / 2;
+    film.position.y = 0.02;
+    add(g, film, 1.12);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 5), mat(0x70e0d0, gm));
+    cap.position.y = 0.12;
+    add(g, cap, 1.1);
+    eyePair(g, gm, 0.08, 0.14, 0.12, 0.04);
+  },
+
+  flashSail(g, gm) {
+    fishBody(g, gm, C.flashSail, { len: 1.0, h: 0.32, w: 0.22, nose: 0.4 });
+    const sail = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.7, 4), mat(0xfff0a8, gm));
+    sail.position.set(-0.05, 0.42, 0);
+    add(g, sail, 1.12);
+    const ghost = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.5, 4), mat(0xc0d8ff, gm));
+    ghost.position.set(-0.22, 0.28, 0.12);
+    ghost.rotation.z = 0.35;
+    add(g, ghost, 1.15);
+    g.userData.spinPart = ghost;
+    eyePair(g, gm, 0.32, 0.06, 0.12, 0.045);
+  },
+
+  magmaMaw(g, gm) {
+    const jaw = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.85, 6), mat(C.magmaMaw, gm));
+    jaw.rotation.z = -Math.PI / 2;
+    jaw.position.x = 0.15;
+    add(g, jaw, 1.08);
+    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.4, 5), mat(0xffe080, gm));
+    inner.rotation.z = -Math.PI / 2;
+    inner.position.x = 0.35;
+    add(g, inner, 1.15);
+    g.userData.spinPart = inner;
+    for (let i = 0; i < 4; i++) {
+      const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.18, 4), mat(0xfff4d0, gm));
+      tooth.position.set(0.48, (i % 2 ? 0.12 : -0.12), (i < 2 ? 0.1 : -0.1));
+      tooth.rotation.z = -Math.PI / 2;
+      add(g, tooth, 1.25);
+    }
+    eyePair(g, gm, 0.05, 0.16, 0.22, 0.055);
+  },
+
+  heatPump(g, gm) {
+    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.7, 6), mat(C.heatPump, gm));
+    cyl.rotation.z = Math.PI / 2;
+    add(g, cyl, 1.08);
+    const piston = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.35, 6), mat(0xffc070, gm));
+    piston.rotation.z = Math.PI / 2;
+    piston.position.x = 0.42;
+    add(g, piston, 1.15);
+    g.userData.spinPart = piston;
+    const vent = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.04, 5, 8), mat(0xff8040, gm));
+    vent.rotation.y = Math.PI / 2;
+    vent.position.x = -0.32;
+    add(g, vent, 1.2);
+    eyePair(g, gm, 0.12, 0.12, 0.22, 0.05);
+  },
+
+  tarWhip(g, gm) {
+    fishBody(g, gm, C.tarWhip, { len: 1.2, h: 0.2, w: 0.18, nose: 0.15, tail: false });
+    for (let i = 0; i < 5; i++) {
+      const seg = new THREE.Mesh(new THREE.SphereGeometry(0.09 - i * 0.01, 5, 4), mat(i % 2 ? 0x1a1008 : C.tarWhip, gm));
+      seg.position.set(-0.28 - i * 0.16, Math.sin(i) * 0.06, 0);
+      add(g, seg, 1.18);
+    }
+    const drip = new THREE.Mesh(new THREE.SphereGeometry(0.07, 4, 4), mat(0x0a0804, gm));
+    drip.position.set(0.1, -0.22, 0);
+    add(g, drip, 1.2);
+    eyePair(g, gm, 0.28, 0.04, 0.1, 0.04);
+  },
+
+  obsidianHeart(g, gm) {
+    const heart = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), mat(C.obsidianHeart, gm));
+    heart.rotation.z = 0.4;
+    add(g, heart, 1.08);
+    const glow = new THREE.Mesh(new THREE.OctahedronGeometry(0.18, 0), mat(0xff4060, gm));
+    add(g, glow, 1.2);
+    g.userData.spinPart = glow;
+    eyePair(g, gm, 0.12, 0.1, 0.2, 0.045);
+  },
+
+  abyssShell(g, gm) {
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.48, 6, 5, 0, Math.PI * 2, 0, Math.PI / 2), mat(C.abyssShell, gm));
+    dome.rotation.x = Math.PI;
+    dome.position.y = 0.05;
+    add(g, dome, 1.08);
+    const keel = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.12, 0.35), mat(0x1a1028, gm));
+    keel.position.y = -0.12;
+    add(g, keel, 1.12);
+    const ridge = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.4, 4), mat(0x6a40a0, gm));
+    ridge.position.set(0, 0.28, 0);
+    add(g, ridge, 1.15);
+    eyePair(g, gm, 0.22, 0.08, 0.22, 0.05);
+  },
+
   food(g, gm) {
     fishBody(g, gm, C.food, { len: 0.8, h: 0.38, w: 0.35 });
     dorsal(g, gm, 0x3aad9a, 0, 0.32, 0.25);
@@ -477,8 +625,9 @@ export function createFishMesh(fishId, gradientMap, scale = 1) {
   g.userData.fishId = fishId;
   const builder = BUILDERS[fishId] || BUILDERS.food;
   builder(g, gradientMap);
-  g.scale.setScalar(scale);
-  g.userData.baseScale = scale;
+  const world = scale * 1.32;
+  g.scale.setScalar(world);
+  g.userData.baseScale = world;
   // Face +X as "forward" for mounting helpers
   return g;
 }

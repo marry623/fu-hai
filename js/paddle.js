@@ -1,10 +1,10 @@
 /**
  * Dual-oar canoe steering (力矩转向):
  *
- * | 按键    | 船桨     | 船头转向 | 原理           |
- * | A       | 左桨划水 | 向右转   | 左侧受力，船头右甩 |
- * | D       | 右桨划水 | 向左转   | 右侧受力，船头左甩 |
- * | A+D 同时 | 双桨     | 直线前进 | 两侧力矩抵消     |
+ * | 按键    | 船桨     | 船头转向 |
+ * | A       | 左桨划水 | 向左转   |
+ * | D       | 右桨划水 | 向右转   |
+ * | A+D 同时 | 双桨     | 直线前进 |
  *
  * Alternating strokes within a timing window = rhythm boost.
  */
@@ -18,6 +18,8 @@ export function createPaddleController() {
     combo: 0,
     leftPhase: 0,
     rightPhase: 0,
+    leftCycle: 0,
+    rightCycle: 0,
     speed: 0,
     yaw: 0,
     x: 0,
@@ -31,6 +33,8 @@ export function createPaddleController() {
   const TURN_RATE = 1.85;
   const RHYTHM_MIN = 0.18;
   const RHYTHM_MAX = 0.55;
+  /** Held-oar stroke loops per second (fore–aft, not freeze at end) */
+  const STROKE_HZ = 1.35;
 
   /** When true, A/D (and arrows) are swapped — spore scramble */
   let scramble = false;
@@ -84,12 +88,24 @@ export function createPaddleController() {
     prevL = st.leftDown;
     prevR = st.rightDown;
 
-    st.leftPhase = st.leftDown ? Math.min(1, st.leftPhase + dt * 4) : Math.max(0, st.leftPhase - dt * 3);
-    st.rightPhase = st.rightDown ? Math.min(1, st.rightPhase + dt * 4) : Math.max(0, st.rightPhase - dt * 3);
+    if (st.leftDown) {
+      st.leftCycle += dt * STROKE_HZ;
+      st.leftPhase = 0.5 - 0.5 * Math.cos(st.leftCycle * Math.PI * 2);
+    } else {
+      st.leftCycle = 0;
+      st.leftPhase = Math.max(0, st.leftPhase - dt * 3);
+    }
+    if (st.rightDown) {
+      st.rightCycle += dt * STROKE_HZ;
+      st.rightPhase = 0.5 - 0.5 * Math.cos(st.rightCycle * Math.PI * 2);
+    } else {
+      st.rightCycle = 0;
+      st.rightPhase = Math.max(0, st.rightPhase - dt * 3);
+    }
 
     const both = st.leftDown && st.rightDown;
-    const leftOnly = st.leftDown && !st.rightDown;   // A：左桨
-    const rightOnly = st.rightDown && !st.leftDown;  // D：右桨
+    const leftOnly = st.leftDown && !st.rightDown;   // A：左桨 → 左转
+    const rightOnly = st.rightDown && !st.leftDown;  // D：右桨 → 右转
     const none = !st.leftDown && !st.rightDown;
 
     const rhythmBoost = 1 + st.combo * 0.08;
@@ -116,12 +132,9 @@ export function createPaddleController() {
     const maxSp = 22 * thrustMul;
     if (st.speed > maxSp) st.speed = maxSp;
 
-    // 力矩转向（与表一致）
-    // A 左桨 → 船头向右转 → +yaw
-    // D 右桨 → 船头向左转 → -yaw
-    // A+D → 力矩抵消，不改 yaw
-    if (leftOnly) st.yaw += TURN_RATE * turnMul * dt;
-    if (rightOnly) st.yaw -= TURN_RATE * turnMul * dt;
+    // A 左桨 → 左转；D 右桨 → 右转；A+D 不改 yaw
+    if (leftOnly) st.yaw -= TURN_RATE * turnMul * dt;
+    if (rightOnly) st.yaw += TURN_RATE * turnMul * dt;
 
     st.x += Math.sin(st.yaw) * st.speed * dt;
     st.z += Math.cos(st.yaw) * st.speed * dt;
@@ -145,6 +158,10 @@ export function createPaddleController() {
     st.yaw = 0;
     st.speed = 0;
     st.combo = 0;
+    st.leftPhase = 0;
+    st.rightPhase = 0;
+    st.leftCycle = 0;
+    st.rightCycle = 0;
   }
 
   return {

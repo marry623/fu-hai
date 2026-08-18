@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
-import { getSeaMap, constrainToPoly, pointInPoly } from './seaMaps.js';
+import { getSeaMap, constrainToPoly, pointInPoly, EVAC_RADIUS } from './seaMaps.js?v=29j';
 
 function M(geo, color, gradientMap, outline = 1.05) {
   const m = new THREE.Mesh(geo, toonMat(color, gradientMap));
@@ -76,6 +76,26 @@ function makeLighthouse(gm) {
 
   g.userData.beacon = { core: lightCore, halo: lightHalo, beam, point };
   g.userData.beaconY = beaconY;
+
+  // Evacuate ring on water (all maps)
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0x7dffc0,
+    transparent: true,
+    opacity: 0.28,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(EVAC_RADIUS * 0.92, EVAC_RADIUS, 48),
+    ringMat
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.08;
+  ring.userData.skipOutline = true;
+  g.add(ring);
+  g.userData.evacRing = ring;
+  g.userData.evacRingMat = ringMat;
+
   return g;
 }
 
@@ -169,6 +189,7 @@ export function createSeaWorld() {
       mesh.userData.lhId = lh.id;
       mesh.userData.claimed = false;
       mesh.userData.isLighthouse = true;
+      mesh.userData.evacDwell = 0;
       root.add(mesh);
       lighthouses.push(mesh);
     }
@@ -207,13 +228,14 @@ export function createSeaWorld() {
     return hit;
   }
 
-  /** Place vortices densely across navigable water */
+  /** Place vortices / flotsam across navigable water */
   function scatterProps(vortexList, flotsamList) {
     if (!current) return;
     const poly = current.navigable;
     const b = current.bounds;
     const bw = Math.max(1, b.maxX - b.minX);
     const bh = Math.max(1, b.maxZ - b.minZ);
+    const tutorial = current.feature === 'tutorial' || current.id === -1;
 
     const placeRandom = (obj, i, salt, minSpawn = 14) => {
       for (let attempt = 0; attempt < 40; attempt++) {
@@ -239,6 +261,37 @@ export function createSeaWorld() {
       obj.visible = true;
       return false;
     };
+
+    if (tutorial) {
+      // One school near spawn + barrel / package / drift bottle for teaching
+      vortexList?.forEach((v, i) => {
+        if (i === 0) {
+          v.position.set(current.spawn.x + 12, 0, current.spawn.z + 22);
+          v.visible = true;
+        } else {
+          v.visible = false;
+        }
+      });
+      const pickByType = (type) => flotsamList?.find((f) => f.userData?.type === type);
+      const picks = [
+        pickByType('barrel'),
+        pickByType('package'),
+        pickByType('bottle'),
+      ].filter(Boolean);
+      // Fallback if a type is missing from the field
+      while (picks.length < 3 && flotsamList?.length) {
+        const next = flotsamList.find((f) => !picks.includes(f));
+        if (!next) break;
+        picks.push(next);
+      }
+      flotsamList?.forEach((f) => { f.visible = false; });
+      picks.forEach((f, i) => {
+        f.position.set(current.spawn.x - 8 - i * 7, 0, current.spawn.z + 16 + i * 5);
+        f.visible = true;
+        if (f.userData) f.userData.collected = false;
+      });
+      return;
+    }
 
     // Grid + jitter so schools cover the whole sea
     if (vortexList?.length) {
@@ -289,6 +342,13 @@ export function createSeaWorld() {
     }
   }
 
+  function setEvacRingActive(lh, active) {
+    const mat = lh?.userData?.evacRingMat;
+    if (!mat) return;
+    mat.opacity = active ? 0.55 : 0.28;
+    mat.color.setHex(active ? 0xffe066 : 0x7dffc0);
+  }
+
   return {
     root,
     load,
@@ -296,6 +356,7 @@ export function createSeaWorld() {
     constrainBoat,
     scatterProps,
     updateBeacons,
+    setEvacRingActive,
     getMap: () => current,
     getLighthouses: () => lighthouses,
   };

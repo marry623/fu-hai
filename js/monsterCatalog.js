@@ -125,7 +125,7 @@ export const MONSTER_CATALOG = {
     id: 'waveWhale',
     name: '深海撼浪鲸',
     kind: 'ram',
-    rarity: 5,
+    rarity: 4,
     color: 0x3a5a8a,
     tag: '掀浪',
     skill: 'shakeBoat',
@@ -137,7 +137,7 @@ export const MONSTER_CATALOG = {
     id: 'trenchWorm',
     name: '吞噬海沟虫',
     kind: 'suction',
-    rarity: 5,
+    rarity: 4,
     color: 0x4a2060,
     tag: '强吸',
     skill: 'suctionKill',
@@ -209,6 +209,7 @@ export const CORE_MONSTERS = ['shark', 'serpent', 'kraken'];
 
 /** zoneId → spawn weight list (zone uniques + classic trio) */
 export const ZONE_MONSTER_POOLS = {
+  [-1]: ['woodUrchin'],
   0: ['woodUrchin', 'barnacle', 'sawShark', ...CORE_MONSTERS],
   1: ['bladeCrab', 'sporeJelly', 'barnacle', ...CORE_MONSTERS],
   2: ['ghostHook', 'thiefOtter', 'inkJelly', 'sawShark', ...CORE_MONSTERS],
@@ -243,10 +244,11 @@ export function monsterIdFromKind(kind) {
 }
 
 export function pickMonsterForZone(zoneId, index = 0) {
-  const pool = ZONE_MONSTER_POOLS[zoneId] || ZONE_MONSTER_POOLS[0];
+  const pool = ZONE_MONSTER_POOLS[zoneId] ?? ZONE_MONSTER_POOLS[0];
+  if (!pool.length) return null;
   return pool[index % pool.length];
 }
 
 export function monstersForZone(zoneId) {
-  return (ZONE_MONSTER_POOLS[zoneId] || ZONE_MONSTER_POOLS[0]).slice();
+  return (ZONE_MONSTER_POOLS[zoneId] ?? ZONE_MONSTER_POOLS[0]).slice();
 }

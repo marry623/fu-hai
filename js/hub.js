@@ -1,12 +1,12 @@
 /** Hub UI — backpack desk; 整备=3D船, 出港=海域地图, 仓库=格子 */
 
-import { ZONES } from './zones.js';
+import { ZONES } from './zones.js?v=29l';
 import { SLOT_ORDER, SLOT_LABELS } from './slots.js';
-import { getFishDef, FISH_CATALOG, RARITY } from './fishCatalog.js?v=23a';
-import { getFishPortrait } from './fishPortrait.js?v=23a';
-import { getItemPortrait } from './itemPortrait.js?v=28h';
-import { listMonsterIds, getMonsterDef } from './monsterCatalog.js?v=29f';
-import { getMonsterPortrait } from './monsterPortrait.js?v=29f';
+import { getFishDef, FISH_CATALOG, RARITY } from './fishCatalog.js?v=29q';
+import { getFishPortrait } from './fishPortrait.js?v=29q';
+import { getItemPortrait } from './itemPortrait.js?v=29r';
+import { listMonsterIds, getMonsterDef } from './monsterCatalog.js?v=29q';
+import { getMonsterPortrait } from './monsterPortrait.js?v=29p';
 import {
   SHOP_TABS,
   SHOP_HULLS,
@@ -25,7 +25,7 @@ import {
   moveWarehouseToLoadoutCargo,
   returnCargoToWarehouse,
   saveLoadout,
-} from './meta.js?v=28h';
+} from './meta.js?v=29r';
 import { HUB_SPOTS } from './hubIsland.js?v=23h';
 
 const TAB_TITLES = {
@@ -44,6 +44,7 @@ const FEATURE_LABELS = {
   fog: '浓雾迷航',
   lightning: '雷暴裂隙',
   heat: '熔岩热流',
+  tutorial: '安全教学',
 };
 
 /** Left 1–3 / Right 4–6 — avoids crossing leader lines */
@@ -506,11 +507,11 @@ export function createHub(deps) {
     if (!els.zones) return;
     const start = deps.getStartZone();
     els.zones.innerHTML = ZONES.map((z) => {
-      const unlocked = (meta.unlockedZones || [0]).includes(z.id);
+      const unlocked = z.id === -1 || (meta.unlockedZones || [0]).includes(z.id);
       const selected = start === z.id;
       const cost = ZONE_UNLOCK_COST[z.id];
       let action = '';
-      if (!unlocked && cost != null) {
+      if (!unlocked && cost != null && z.id !== -1) {
         action = `<button type="button" class="bp-btn dim" data-unlock-zone="${z.id}">解锁 ${cost}</button>`;
       }
       return `<div class="hub-zone ${selected ? 'selected' : ''} ${unlocked ? '' : 'locked'}">
@@ -528,7 +529,7 @@ export function createHub(deps) {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const id = Number(btn.dataset.pickZone);
-        if (!(meta.unlockedZones || []).includes(id)) return;
+        if (id !== -1 && !(meta.unlockedZones || []).includes(id)) return;
         deps.setStartZone(id);
         render();
         deps.drawHubMap?.(els.mapCanvas);
@@ -686,7 +687,7 @@ export function createHub(deps) {
       sell: '点击仓库鱼获卡片出售，换取海图碎片。',
       hull: '解锁船体后可在出港页选用。',
       supply: '物资购入后进入仓库，出港时自动携带部分。',
-      weapon: '解锁后局内可用对应武器键。',
+      weapon: '每局可带三张。1 霜矛冻结，2 雷矛穿刺，3 陨石砸落解缠。',
       talent: '怪谈系局外天赋，影响整备与出航。',
     }[shopTab] || '';
     let detail = `<h3 class="hub-clip-h">${tabMeta?.name || '商店'}</h3>
@@ -750,20 +751,15 @@ export function createHub(deps) {
         disabled: meta.fragments < item.cost,
       })).join('');
     } else if (shopTab === 'weapon') {
-      cards = SHOP_WEAPONS.map((item) => {
-        const owned = item.id === 'weaponHarpoon'
-          ? meta.unlocks.weaponHarpoon !== false
-          : !!meta.unlocks[item.id];
-        return shopCardHtml({
-          key: `buy:${item.id}`,
-          title: item.name,
-          sub: owned ? '已拥有' : `${item.cost} 碎片`,
-          tone: item.tone,
-          itemId: item.id,
-          owned,
-          disabled: owned || meta.fragments < item.cost,
-        });
-      }).join('');
+      cards = SHOP_WEAPONS.map((item) => shopCardHtml({
+        key: `buy:${item.id}`,
+        title: item.name,
+        sub: '出航携带',
+        tone: item.tone,
+        itemId: item.id,
+        owned: true,
+        disabled: true,
+      })).join('');
     } else if (shopTab === 'talent') {
       cards = SHOP_TALENTS.map((item) => {
         const owned = !!meta.unlocks[item.id];
@@ -838,13 +834,13 @@ export function createHub(deps) {
             ? {
               title: item.name,
               desc: item.desc,
-              priceLine: meta.unlocks[id] || (id === 'weaponHarpoon' && meta.unlocks.weaponHarpoon !== false)
-                ? '已拥有'
+              priceLine: SHOP_WEAPONS.some((w) => w.id === id) || meta.unlocks[id]
+                ? '出航携带'
                 : `${item.cost} 碎片`,
             }
             : null;
           renderShopDetail(meta);
-          if (item && (meta.unlocks[id] || (id === 'weaponHarpoon' && meta.unlocks.weaponHarpoon !== false))) return;
+          if (item && (SHOP_WEAPONS.some((w) => w.id === id) || meta.unlocks[id])) return;
           const r = tryUnlock(deps.getMeta(), id);
           deps.toast(r.msg);
           if (r.ok) { deps.setMeta(r.meta); render(); }

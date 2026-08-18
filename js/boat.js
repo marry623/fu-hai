@@ -577,9 +577,18 @@ export { SLOT_KEYS };
 export function setOarStroke(boat, side, amount) {
   const oar = side < 0 ? boat.userData.leftOar : boat.userData.rightOar;
   if (!oar) return;
-  oar.rotation.x = -amount * 0.7;
+  if (oar.userData.restZ == null) {
+    oar.userData.restZ = oar.position.z;
+    oar.userData.restY = oar.position.y;
+  }
+  const a = Math.max(0, Math.min(1, amount));
+  // 0→1→0 cycle = recover (aft) then pull (fore). Do not park at the end.
+  oar.rotation.x = -a * 0.9;
+  oar.rotation.z = side * a * 0.14;
+  oar.position.z = oar.userData.restZ - 0.28 + a * 0.72;
+  oar.position.y = oar.userData.restY - a * 0.1;
   const sail = boat.userData.sailMesh;
-  if (sail) sail.rotation.y = -0.12 + amount * 0.06 * side;
+  if (sail) sail.rotation.y = -0.12 + a * 0.06 * side;
 }
 
 /** Resting waterline height — water waves crest ~1m, keep hull mostly above. */

@@ -1,0 +1,25 @@
+---
+description: Never corrupt Chinese in index.html; UTF-8 only via Python
+alwaysApply: true
+---
+
+# Chinese / UTF-8 (index.html)
+
+Cursor `StrReplace` / `Write` on Windows has repeatedly turned CJK in `index.html` into `?`. This is a known project failure mode.
+
+## Forbidden
+
+- Do not use `StrReplace`, `Write`, or editor search-replace on `index.html` if the file contains Chinese (it always does).
+- Do not run greedy regex like `main.js?v=[^"]+` against `index.html` (it can eat the file tail).
+- Do not re-encode the file through PowerShell `Out-File`.
+
+## Required
+
+- Restore UI Chinese with `python scripts/restore_index_from_git.py` (rebuilds from `HEAD` + HUD extras).
+- Cache-bump with `python scripts/bump_cache.py 29v` (ASCII query only, UTF-8 round-trip).
+- After any `index.html` change, run `python scripts/assert_cjk.py` and fix before continuing.
+- Other JS files with Chinese: prefer Python UTF-8 `Path.write_text(..., encoding="utf-8")` over `StrReplace` when the hunk includes CJK.
+
+## Check
+
+`index.html` must have hundreds of CJK code points and a Chinese `<title>` (浮骸). If the title is `??`, restore immediately — do not keep editing.

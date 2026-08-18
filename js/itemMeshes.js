@@ -360,13 +360,68 @@ function meshGhostWake(gm) {
   return g;
 }
 
+function meshSkillFrost(gm) {
+  const g = new THREE.Group();
+  const ice = mat(0xb8e8ff, gm);
+  const core = mat(0x7ad8ff, gm);
+  const spike = new THREE.Mesh(new THREE.ConeGeometry(0.18, 1.15, 5), ice);
+  spike.rotation.z = -Math.PI / 2;
+  spike.position.x = 0.15;
+  add(g, spike, 1.1);
+  for (let i = 0; i < 5; i++) {
+    const s = new THREE.Mesh(new THREE.OctahedronGeometry(0.12, 0), core);
+    s.position.set(-0.15 + i * 0.12, (i % 2) * 0.22 - 0.08, 0.08);
+    add(g, s, 1.18);
+  }
+  g.rotation.set(0.2, 0.45, 0.1);
+  return g;
+}
+
+function meshSkillStorm(gm) {
+  const g = new THREE.Group();
+  const bolt = mat(0xa8e8ff, gm);
+  const glow = mat(0x4aa8ff, gm);
+  const core = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.08), bolt);
+  add(g, core, 1.12);
+  for (let i = 0; i < 4; i++) {
+    const zig = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.06, 0.06), glow);
+    zig.position.set(-0.4 + i * 0.28, (i % 2 ? 0.16 : -0.16), 0);
+    zig.rotation.z = i % 2 ? 0.7 : -0.7;
+    add(g, zig, 1.2);
+  }
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 5), bolt);
+  ball.position.x = 0.62;
+  add(g, ball, 1.15);
+  g.rotation.set(0.25, -0.4, 0.2);
+  return g;
+}
+
+function meshSkillMeteor(gm) {
+  const g = new THREE.Group();
+  const lava = mat(0xff6030, gm);
+  const crack = mat(0xffc060, gm);
+  const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 0), lava);
+  add(g, rock);
+  const seam = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), crack);
+  add(g, seam, 1.15);
+  const trail = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.7, 5), mat(0xff8040, gm));
+  trail.rotation.z = Math.PI / 2;
+  trail.position.x = -0.55;
+  add(g, trail, 1.12);
+  g.rotation.set(0.35, 0.5, -0.15);
+  return g;
+}
+
 const BUILDERS = {
   bait: meshBait,
   plank: meshPlank,
   repair: meshRepair,
-  weaponHarpoon: meshHarpoon,
-  weaponKnife: meshKnife,
-  weaponSling: meshSling,
+  skillFrost: meshSkillFrost,
+  skillStorm: meshSkillStorm,
+  skillMeteor: meshSkillMeteor,
+  weaponHarpoon: meshSkillFrost,
+  weaponKnife: meshSkillStorm,
+  weaponSling: meshSkillMeteor,
   raft: meshRaft,
   heavyRaft: meshHeavyRaft,
   chargeBoat: meshChargeBoat,

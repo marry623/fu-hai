@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
-import { pointInPoly } from './seaMaps.js';
-import { pickMonsterForZone, getMonsterDef, monstersForZone } from './monsterCatalog.js?v=29f';
-import { createCombatMonster, createMonsterMesh } from './monsterMeshes.js?v=29f';
+import { pointInPoly, EVAC_RADIUS, EVAC_HOLD } from './seaMaps.js?v=29l';
+import { pickMonsterForZone, getMonsterDef, monstersForZone } from './monsterCatalog.js?v=29q';
+import { createCombatMonster, createMonsterMesh } from './monsterMeshes.js?v=29p';
 
-export { createMonsterMesh };
+export { createMonsterMesh, EVAC_RADIUS, EVAC_HOLD };
 
 const C = {
   shark: 0x2a3a5a,
@@ -36,10 +36,16 @@ export function createHazards(gradientMap, scene) {
   const planks = [];
   const shots = [];
   const inkShots = [];
+  /** @type {any[]} */
+  let spawnPoints = [];
   /** @type {THREE.Object3D[]} */
   let lighthouses = [];
-  /** @type {{x:number,z:number,kind:string}[]} */
-  let spawnPoints = [];
+  /** @type {{ active:boolean, remain:number, dwell:number, lhId:string|null, x:number, z:number }} */
+  let evacStatus = { active: false, remain: EVAC_HOLD, dwell: 0, lhId: null, x: 0, z: 0 };
+
+  function getEvacStatus() {
+    return evacStatus;
+  }
 
   const AGRO_RANGE = 22;
   const DROP_RANGE = 32;
@@ -49,8 +55,10 @@ export function createHazards(gradientMap, scene) {
   const ACTIVE_DIST = 160;
 
   function ensureEnemies(n, zoneId = 0) {
+    const pool = monstersForZone(zoneId);
+    if (!pool.length) return;
     while (enemies.length < n) {
-      const catalogId = pickMonsterForZone(zoneId, enemies.length);
+      const catalogId = pickMonsterForZone(zoneId, enemies.length) || pool[0];
       const e = createCombatMonster(catalogId, gradientMap, enemies.length);
       e.visible = false;
       e.userData.anchor = null;
@@ -63,9 +71,9 @@ export function createHazards(gradientMap, scene) {
 
   function ensureWraps(n, zoneId = 0) {
     const wrapPool = monstersForZone(zoneId).filter((id) => getMonsterDef(id).kind === 'wrap');
-    const fallback = wrapPool.length ? wrapPool : ['barnacle', 'voidOctopus', 'ghostHook'];
+    if (!wrapPool.length || n <= 0) return;
     while (wraps.length < n) {
-      const catalogId = fallback[wraps.length % fallback.length];
+      const catalogId = wrapPool[wraps.length % wrapPool.length];
       const w = createCombatMonster(catalogId, gradientMap, wraps.length);
       w.visible = false;
       w.userData.active = false;
@@ -201,7 +209,17 @@ export function createHazards(gradientMap, scene) {
     const pool = combatPool.length ? combatPool : poolAll;
     const enemyAnchors = [];
 
-    if (poly && b) {
+    // Practice bay: one fixed basic monster near spawn
+    if (zid === -1 && count > 0 && pool.length) {
+      const catalogId = pool[0];
+      const def = getMonsterDef(catalogId);
+      enemyAnchors.push({
+        x: spawnPt.x + 16,
+        z: spawnPt.z + 32,
+        kind: def.kind === 'ranged' ? 'ranged' : def.kind === 'suction' ? 'suction' : def.kind === 'static' ? 'static' : 'ram',
+        catalogId,
+      });
+    } else if (poly && b) {
       const bw = Math.max(1, b.maxX - b.minX);
       const bh = Math.max(1, b.maxZ - b.minZ);
       const area = bw * bh;
@@ -229,6 +247,7 @@ export function createHazards(gradientMap, scene) {
           if (d2 < minSep2) nearCount++;
         }
         if (tooClose || nearCount >= 2) continue;
+        if (!pool.length) break;
 
         const catalogId = pool[enemyAnchors.length % pool.length];
         const def = getMonsterDef(catalogId);
@@ -248,7 +267,10 @@ export function createHazards(gradientMap, scene) {
     // Rebuild enemy pool for this zone so meshes match catalog
     for (const e of enemies) root.remove(e);
     enemies.length = 0;
-    ensureEnemies(Math.max(enemyAnchors.length, 8), zid);
+    const wantEnemies = enemyAnchors.length > 0
+      ? Math.max(enemyAnchors.length, Math.min(8, count || enemyAnchors.length))
+      : 0;
+    ensureEnemies(wantEnemies, zid);
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       if (i >= enemyAnchors.length) {
@@ -276,13 +298,16 @@ export function createHazards(gradientMap, scene) {
       enemies[i].userData.dead = false;
       enemies[i].userData.respawnIn = 0;
       enemies[i].userData.chasing = false;
-      enemies[i].visible = false;
+      // Practice bay: keep the teaching monster visible from the start
+      enemies[i].visible = zid === -1;
     }
 
     for (const w of wraps) root.remove(w);
     wraps.length = 0;
     const wrapIds = monstersForZone(zid).filter((id) => getMonsterDef(id).kind === 'wrap');
-    const wrapN = Math.max(8, mapWraps.length * 2, wrapIds.length * 4);
+    const wrapN = (!wrapIds.length && !mapWraps.length)
+      ? 0
+      : Math.max(mapWraps.length * 2, wrapIds.length * 4, wrapIds.length ? 8 : 0);
     for (let i = 0; i < wrapN; i++) {
       const catalogId = wrapIds.length ? wrapIds[i % wrapIds.length] : 'barnacle';
       const w = createCombatMonster(catalogId, gradientMap, i);
@@ -341,6 +366,7 @@ export function createHazards(gradientMap, scene) {
       hasSucker,
       boatJumping,
       onCheckpoint,
+      onEvacuate,
       boatSpeed = 0,
       boatYaw = 0,
     } = opts;
@@ -378,6 +404,14 @@ export function createHazards(gradientMap, scene) {
       if (dBoatQuick > ACTIVE_DIST) {
         e.visible = false;
         e.userData.chasing = false;
+        continue;
+      }
+      if ((e.userData.stunUntil || 0) > time || (e.userData.rootUntil || 0) > time) {
+        e.userData.chasing = false;
+        e.position.y = 0.2 + Math.sin(time * 8) * 0.05;
+        if ((e.userData.stunUntil || 0) > time) e.rotation.z = Math.sin(time * 20) * 0.25;
+        else e.rotation.z = 0;
+        if (e.userData.hitCd > 0) e.userData.hitCd -= dt;
         continue;
       }
       e.userData.phase = (e.userData.phase || 0) + dt;
@@ -437,7 +471,8 @@ export function createHazards(gradientMap, scene) {
 
       if (e.userData.chasing) {
         const ang = Math.atan2(boatPos.x - e.position.x, boatPos.z - e.position.z);
-        const spd = catalogId === 'waveWhale' ? 5.2 : catalogId === 'thiefOtter' ? 8.5 : 7;
+        const spd = (catalogId === 'waveWhale' ? 5.2 : catalogId === 'thiefOtter' ? 8.5 : 7)
+          * ((e.userData.slowUntil || 0) > time ? 0.32 : 1);
         e.position.x += Math.sin(ang) * spd * dt;
         e.position.z += Math.cos(ang) * spd * dt;
         e.rotation.y = ang;
@@ -613,13 +648,44 @@ export function createHazards(gradientMap, scene) {
       }
     }
 
+    // Lighthouse evacuate: stay in ring for EVAC_HOLD seconds
+    let bestIn = null;
+    let bestD = Infinity;
     for (const lh of lighthouses) {
-      if (lh.userData.claimed) continue;
-      const d = Math.hypot(lh.position.x - boatPos.x, lh.position.z - boatPos.z);
-      if (d < 24) {
-        lh.userData.claimed = true;
-        onCheckpoint?.(lh.userData.lhId || lh.userData.checkpoint);
+      if (lh.userData.claimed) {
+        if (lh.userData.evacDwell) lh.userData.evacDwell = 0;
+        continue;
       }
+      const d = Math.hypot(lh.position.x - boatPos.x, lh.position.z - boatPos.z);
+      if (d < EVAC_RADIUS) {
+        if (d < bestD) {
+          bestD = d;
+          bestIn = lh;
+        }
+      } else {
+        lh.userData.evacDwell = 0;
+      }
+    }
+
+    if (bestIn) {
+      bestIn.userData.evacDwell = (bestIn.userData.evacDwell || 0) + dt;
+      const dwell = bestIn.userData.evacDwell;
+      evacStatus = {
+        active: true,
+        dwell,
+        remain: Math.max(0, EVAC_HOLD - dwell),
+        lhId: bestIn.userData.lhId || bestIn.userData.checkpoint || null,
+        x: bestIn.position.x,
+        z: bestIn.position.z,
+      };
+      if (dwell >= EVAC_HOLD) {
+        bestIn.userData.claimed = true;
+        bestIn.userData.evacDwell = 0;
+        evacStatus = { active: false, remain: EVAC_HOLD, dwell: 0, lhId: null, x: 0, z: 0 };
+        onEvacuate?.(bestIn.userData.lhId || bestIn.userData.checkpoint);
+      }
+    } else {
+      evacStatus = { active: false, remain: EVAC_HOLD, dwell: 0, lhId: null, x: 0, z: 0 };
     }
   }
 
@@ -689,13 +755,161 @@ export function createHazards(gradientMap, scene) {
     for (const e of enemies) {
       if (!e.visible) continue;
       if (Math.hypot(e.position.x - pos.x, e.position.z - pos.z) < 3.5 * mul) {
-        e.visible = false;
-        e.userData.chasing = false;
-        e.userData.dead = true;
-        e.userData.respawnIn = 0;
-        onKill?.(e.userData.catalogId || e.userData.kind || 'ram');
+        killEnemy(e, onKill);
       }
     }
+  }
+
+  function killEnemy(e, onKill) {
+    if (!e || !e.visible) return false;
+    e.visible = false;
+    e.userData.chasing = false;
+    e.userData.dead = true;
+    e.userData.respawnIn = 0;
+    onKill?.(e.userData.catalogId || e.userData.kind || 'kill');
+    return true;
+  }
+
+  function stunEnemy(e, untilTime) {
+    if (!e || !e.visible) return;
+    e.userData.stunUntil = untilTime;
+    e.userData.chasing = false;
+  }
+
+  function rootNearest(pos, duration, clockTime, max = 16) {
+    const e = nearestEnemy(pos, max);
+    if (!e) return null;
+    e.userData.rootUntil = clockTime + duration;
+    e.userData.chasing = false;
+    return e;
+  }
+
+  function pierceLine(origin, yaw, maxDist, maxHits, onKill) {
+    const dirX = Math.sin(yaw);
+    const dirZ = Math.cos(yaw);
+    const scored = [];
+    for (const e of enemies) {
+      if (!e.visible) continue;
+      const dx = e.position.x - origin.x;
+      const dz = e.position.z - origin.z;
+      const proj = dx * dirX + dz * dirZ;
+      if (proj < 0.4 || proj > maxDist) continue;
+      const perp = Math.abs(dx * dirZ - dz * dirX);
+      if (perp < 2.5) scored.push({ e, proj });
+    }
+    scored.sort((a, b) => a.proj - b.proj);
+    const hits = [];
+    for (const s of scored.slice(0, maxHits)) {
+      if (killEnemy(s.e, onKill)) hits.push(s.e);
+    }
+    return hits;
+  }
+
+  function blastRadius(pos, r, onKill) {
+    let n = 0;
+    for (const e of enemies) {
+      if (!e.visible) continue;
+      if (Math.hypot(e.position.x - pos.x, e.position.z - pos.z) < r) {
+        if (killEnemy(e, onKill)) n++;
+      }
+    }
+    return n;
+  }
+
+  function shoveWraps(boatPos, dist = 12) {
+    let n = 0;
+    for (const w of wraps) {
+      if (!w.userData.active) continue;
+      const d = Math.hypot(w.position.x - boatPos.x, w.position.z - boatPos.z);
+      if (d < dist) {
+        w.userData.active = false;
+        w.visible = false;
+        w.userData.cd = 7;
+        n++;
+      }
+    }
+    return n;
+  }
+
+  function disperseNearPoints(points, radius, clockTime) {
+    let n = 0;
+    for (const e of enemies) {
+      if (!e.visible || !e.userData.chasing) continue;
+      for (const p of points) {
+        if (Math.hypot(e.position.x - p.x, e.position.z - p.z) < radius) {
+          e.userData.chasing = false;
+          e.userData.slowUntil = clockTime + 1.8;
+          n++;
+          break;
+        }
+      }
+    }
+    return n;
+  }
+
+  function affectAlongLine(origin, yaw, maxDist, width, fn) {
+    const dirX = Math.sin(yaw);
+    const dirZ = Math.cos(yaw);
+    let n = 0;
+    for (const e of enemies) {
+      if (!e.visible || e.userData.dead) continue;
+      const dx = e.position.x - origin.x;
+      const dz = e.position.z - origin.z;
+      const proj = dx * dirX + dz * dirZ;
+      if (proj < 0.2 || proj > maxDist) continue;
+      const perp = Math.abs(dx * dirZ - dz * dirX);
+      if (perp < width) {
+        fn(e);
+        n++;
+      }
+    }
+    return n;
+  }
+
+  function stunAlongLine(origin, yaw, maxDist, duration, clockTime, width = 3.2) {
+    return affectAlongLine(origin, yaw, maxDist, width, (e) => {
+      e.userData.stunUntil = clockTime + duration;
+      e.userData.chasing = false;
+    });
+  }
+
+  function cutWrapsAlongLine(origin, yaw, maxDist, width = 4) {
+    const dirX = Math.sin(yaw);
+    const dirZ = Math.cos(yaw);
+    let n = 0;
+    const ids = [];
+    for (const w of wraps) {
+      if (!w.userData.active) continue;
+      const dx = w.position.x - origin.x;
+      const dz = w.position.z - origin.z;
+      const proj = dx * dirX + dz * dirZ;
+      if (proj < -1 || proj > maxDist) continue;
+      const perp = Math.abs(dx * dirZ - dz * dirX);
+      if (perp < width) {
+        w.userData.active = false;
+        w.visible = false;
+        w.userData.cd = 8;
+        n++;
+        ids.push(w.userData.catalogId || 'voidOctopus');
+      }
+    }
+    return { n, ids };
+  }
+
+  function cutWrapsInRadius(pos, dist = 8) {
+    let n = 0;
+    const ids = [];
+    for (const w of wraps) {
+      if (!w.userData.active) continue;
+      if (Math.hypot(w.position.x - pos.x, w.position.z - pos.z) < dist) {
+        w.userData.active = false;
+        w.visible = false;
+        w.userData.cd = 8;
+        n++;
+        ids.push(w.userData.catalogId || 'voidOctopus');
+      }
+    }
+    return { n, ids };
   }
 
   function cutNearestWrap(pos) {
@@ -715,6 +929,9 @@ export function createHazards(gradientMap, scene) {
     root, enemies, wraps, planks,
     get lighthouses() { return lighthouses; },
     update, shootInk, nearestEnemy, ramKill, cutNearestWrap, setSpawnLayout, spawnScattered, spawnAroundVortices,
+    stunEnemy, rootNearest, pierceLine, blastRadius, shoveWraps, disperseNearPoints,
+    stunAlongLine, cutWrapsAlongLine, cutWrapsInRadius,
+    getEvacStatus,
   };
 }
 

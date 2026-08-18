@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>浮骸 · 海上肉鸽</title>
-  <link rel="stylesheet" href="css/style.css?v=29d" />
+  <link rel="stylesheet" href="css/style.css?v=29r" />
 </head>
 <body>
   <div id="game-root">
@@ -15,6 +15,8 @@
           <div class="player-row"><div class="avatar"></div><span class="player-name">浮骸船长</span></div>
           <div class="speed-box"><span id="speed-value">000</span><span class="speed-unit">节</span></div>
           <div class="stat-row"><span class="stat-label hp">耐久</span><div class="stat-bar"><div id="hp-fill"></div></div><span id="hp-text">100</span></div>
+          <div class="inv-text" id="inv-text"></div>
+          <div class="inv-text" id="combo-text"></div>
         </div>
         <div class="map-panel">
           <canvas id="minimap" width="140" height="140"></canvas>
@@ -27,10 +29,18 @@
 
       <div class="distance-hero"><span id="run-dist">0</span><small>米</small></div>
 
+      <div id="evac-countdown" class="evac-countdown hidden"></div>
+
       <div class="hud-center">
         <div id="toast" class="toast hidden"></div>
         <div id="prompt" class="prompt hidden"></div>
         <div id="combo-hint" class="prompt hidden"></div>
+        <div id="tut-guide" class="tut-guide hidden">
+          <div id="tut-guide-step" class="tut-guide-step"></div>
+          <h3 id="tut-guide-title" class="tut-guide-title"></h3>
+          <p id="tut-guide-body" class="tut-guide-body"></p>
+          <button type="button" id="tut-guide-next" class="tut-guide-btn">下一步</button>
+        </div>
         <div id="qte" class="qte hidden">
           <div class="qte-label">咬钩 · 停在绿区 <span id="qte-hits"></span></div>
           <div class="qte-track"><div id="qte-green" class="qte-green"></div><div id="qte-pointer" class="qte-pointer"></div></div>
@@ -66,9 +76,9 @@
       </div>
 
       <div id="weapon-bar" class="weapon-bar">
-        <button type="button" class="weapon-chip active" data-w="0">1 鱼叉</button>
-        <button type="button" class="weapon-chip" data-w="1">2 刀</button>
-        <button type="button" class="weapon-chip" data-w="2">3 投石</button>
+        <button type="button" class="weapon-chip active" data-w="0">1 霜矛</button>
+        <button type="button" class="weapon-chip" data-w="1">2 雷矛</button>
+        <button type="button" class="weapon-chip" data-w="2">3 跌石</button>
       </div>
 
       <div id="backpack" class="backpack hidden" aria-hidden="true">
@@ -348,7 +358,7 @@
     window.addEventListener('error', (e) => show((e.error && e.error.stack) || e.message));
     window.addEventListener('unhandledrejection', (e) => show(e.reason && e.reason.stack || e.reason));
     try {
-      await import('./js/main.js?v=29f');
+      await import('./js/main.js?v=29u');
     } catch (err) {
       show(err && err.stack || err);
     }

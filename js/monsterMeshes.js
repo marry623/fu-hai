@@ -527,24 +527,24 @@ const BUILDERS = {
   kraken: makeClassicKraken,
 };
 
-/** Base display scales — bumped ~30% for readability */
+/** Base display scales — bumped for in-world readability */
 const MESH_SCALE = {
-  waveWhale: 0.72,
-  trenchWorm: 0.65,
-  lightningSnake: 0.72,
-  voidOctopus: 0.85,
-  sawShark: 0.9,
-  woodUrchin: 0.95,
-  shark: 0.72,
-  serpent: 0.68,
-  kraken: 0.55,
-  bladeCrab: 0.9,
-  sporeJelly: 0.9,
-  ghostHook: 0.9,
-  thiefOtter: 0.9,
-  inkJelly: 0.9,
-  barnacle: 0.9,
-  lavaBarnacle: 0.9,
+  waveWhale: 0.94,
+  trenchWorm: 0.85,
+  lightningSnake: 0.94,
+  voidOctopus: 1.1,
+  sawShark: 1.17,
+  woodUrchin: 1.24,
+  shark: 0.94,
+  serpent: 0.88,
+  kraken: 0.72,
+  bladeCrab: 1.17,
+  sporeJelly: 1.17,
+  ghostHook: 1.17,
+  thiefOtter: 1.17,
+  inkJelly: 1.17,
+  barnacle: 1.17,
+  lavaBarnacle: 1.17,
 };
 
 export function createMonsterMesh(monsterId, gm) {
@@ -552,7 +552,7 @@ export function createMonsterMesh(monsterId, gm) {
   const build = BUILDERS[id] || makeSawShark;
   const g = build(gm);
   g.userData.catalogId = id;
-  g.scale.setScalar(MESH_SCALE[id] || 0.9);
+  g.scale.setScalar(MESH_SCALE[id] || 1.17);
   return g;
 }
 

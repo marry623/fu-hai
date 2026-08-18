@@ -239,6 +239,36 @@ export const SEA_MAPS = [
   }),
 ];
 
+/** Tiny safe tutorial sea — before formal zone 0 */
+export const TUTORIAL_MAP = makeSea({
+  id: -1,
+  name: '练习湾',
+  water: 0x7ee8f0,
+  fog: 0xc8eef8,
+  sky: 0xb8e4f5,
+  minimap: '#1a6a72',
+  corrosionMul: 0,
+  feature: 'tutorial',
+  unlockHint: '新手安全教学',
+  cx: 0,
+  cz: 70,
+  rx: 135,
+  rz: 125,
+  n: 12,
+  jitter: 0.08,
+  spawn: { x: 0, z: 10, yaw: 0 },
+  lh: [{ x: 0, z: 72, id: 'tut-lh' }],
+  reefs: [],
+  islands: [{ x: -42, z: 48, r: 10 }],
+  spawns: [],
+});
+
+/** Lighthouse evacuate ring (all maps) */
+export const EVAC_RADIUS = 22;
+export const EVAC_HOLD = 5;
+
 export function getSeaMap(id) {
-  return SEA_MAPS[Math.max(0, Math.min(SEA_MAPS.length - 1, id | 0))];
+  const n = id | 0;
+  if (n === -1) return TUTORIAL_MAP;
+  return SEA_MAPS[Math.max(0, Math.min(SEA_MAPS.length - 1, n))];
 }

@@ -37,6 +37,7 @@ const DEFAULT = {
     supplies: { bait: 3, plank: 1, repair: 1 },
   },
   unlockedZones: [0],
+  tutorialDone: false,
   hullRepair: 100, // prep-time hull % stored as absolute max fill preference
 };
 
@@ -89,8 +90,9 @@ function normalizeMeta(data) {
       },
     },
     unlockedZones: Array.isArray(data.unlockedZones) && data.unlockedZones.length
-      ? [...new Set(data.unlockedZones)].sort((a, b) => a - b)
+      ? [...new Set(data.unlockedZones.filter((z) => (z | 0) >= 0))].sort((a, b) => a - b)
       : [0],
+    tutorialDone: !!data.tutorialDone,
   };
   return m;
 }
@@ -151,9 +153,22 @@ export function settleRun(meta, {
       supplies: { ...(meta.warehouse?.supplies || { bait: 0, plank: 0, repair: 0 }) },
     },
     unlockedZones: [...(meta.unlockedZones || [0])],
+    tutorialDone: !!meta.tutorialDone,
   };
 
+  const isTutorial = (startZone | 0) === -1;
   const success = outcome === 'return';
+
+  if (isTutorial) {
+    if (success) m.tutorialDone = true;
+    // Sandbox only — mark done, no warehouse fish/supplies, no fragment farm
+    const gain = 0;
+    if (!m.unlockedZones.includes(0)) m.unlockedZones.push(0);
+    m.unlockedZones.sort((a, b) => a - b);
+    saveMeta(m);
+    return { meta: m, gain, success };
+  }
+
   const base = Math.floor(distance / 200) + mods + Math.floor(kills / 2) + newFishCount * 2;
   const gain = Math.max(success ? 2 : 1, success ? base : Math.max(1, Math.floor(base * 0.45)));
   m.fragments += gain;
@@ -189,9 +204,9 @@ export function settleRun(meta, {
   }
   if (success) {
     const next = (startZone | 0) + 1;
-    if (next < 5 && !m.unlockedZones.includes(next)) m.unlockedZones.push(next);
+    if (next > 0 && next < 5 && !m.unlockedZones.includes(next)) m.unlockedZones.push(next);
   }
-  m.unlockedZones.sort((a, b) => a - b);
+  m.unlockedZones = [...new Set(m.unlockedZones.filter((z) => (z | 0) >= 0))].sort((a, b) => a - b);
 
   saveMeta(m);
   return { meta: m, gain, success };
@@ -201,7 +216,7 @@ export const SHOP_TABS = [
   { id: 'sell', name: '出售鱼类' },
   { id: 'hull', name: '船体型号' },
   { id: 'supply', name: '物资' },
-  { id: 'weapon', name: '武器' },
+  { id: 'weapon', name: '技能牌' },
   { id: 'talent', name: '局外天赋' },
 ];
 
@@ -209,7 +224,7 @@ export const SHOP_TABS = [
 export function fishSellPrice(fish) {
   if (!fish) return 0;
   if (fish.defId === 'food' || fish.category === 'food') return 1;
-  const table = { 1: 2, 2: 5, 3: 10, 5: 20 };
+  const table = { 1: 2, 2: 5, 3: 10, 4: 16, 5: 28 };
   return table[fish.rarity] ?? 2;
 }
 
@@ -225,9 +240,9 @@ export const SHOP_SUPPLIES = [
 ];
 
 export const SHOP_WEAPONS = [
-  { id: 'weaponHarpoon', name: '鱼叉', cost: 5, tone: '#5a7a8a', desc: '远程点射，默认可用' },
-  { id: 'weaponKnife', name: '刀', cost: 6, tone: '#9aa4b2', desc: '近身斩断缠绕触手' },
-  { id: 'weaponSling', name: '投石', cost: 6, tone: '#8a6a48', desc: '短距投掷骚扰' },
+  { id: 'skillFrost', name: '霜矛', cost: 0, tone: '#b8e8ff', desc: '1 · 直线冰晶，路径短晕，近处冻断缠绕' },
+  { id: 'skillStorm', name: '雷矛', cost: 0, tone: '#7ad8ff', desc: '2 · 电弧穿刺，穿过最多两只' },
+  { id: 'skillMeteor', name: '陨石', cost: 0, tone: '#ff6030', desc: '3 · 抛物砸落，范围击杀并解缠' },
 ];
 
 export const SHOP_TALENTS = [
@@ -326,11 +341,7 @@ export function thrustMulForBoat(selected, unlocks) {
 }
 
 export function hasWeaponUnlock(meta, weaponIndex) {
-  const ids = ['weaponHarpoon', 'weaponKnife', 'weaponSling'];
-  const id = ids[weaponIndex];
-  if (!id) return false;
-  if (id === 'weaponHarpoon') return meta.unlocks?.weaponHarpoon !== false;
-  return !!meta.unlocks?.[id];
+  return weaponIndex >= 0 && weaponIndex <= 2;
 }
 
 /** Spend fragments to repair "prep hull" marker / grant repair kits into warehouse */

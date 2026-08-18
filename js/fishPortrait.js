@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createToonGradient } from './stylekit.js';
-import { createFishMesh } from './fishMeshes.js';
+import { createFishMesh } from './fishMeshes.js?v=29q';
 
 /** One shared portrait size — CSS scales for thumb vs detail. */
 const PORTRAIT_PX = 256;

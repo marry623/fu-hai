@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createToonGradient } from './stylekit.js';
-import { createMonsterMesh } from './monsterMeshes.js?v=29f';
+import { createMonsterMesh } from './monsterMeshes.js?v=29p';
 
 const cache = new Map();
 const PORTRAIT_PX = 256;
@@ -34,7 +34,7 @@ function ensure() {
 
 export function getMonsterPortrait(monsterId) {
   const id = monsterId || 'shark';
-  const key = `${id}@v29f`;
+  const key = `${id}@v29p`;
   if (cache.has(key)) return cache.get(key);
 
   ensure();

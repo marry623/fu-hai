@@ -1,5 +1,5 @@
-import { getFishDef, activeCombos, RARITY, ADJACENCY } from './fishCatalog.js';
-import { createFishMesh, setFishVitalityVisual, animateFishMesh } from './fishMeshes.js';
+import { getFishDef, activeCombos, RARITY, ADJACENCY } from './fishCatalog.js?v=29q';
+import { createFishMesh, setFishVitalityVisual, animateFishMesh } from './fishMeshes.js?v=29q';
 
 export const SLOT_LABELS = {
   bow: '船头', stern: '船尾', sideL: '左舷', sideR: '右舷', keel: '船底', sail: '船帆',
