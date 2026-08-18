@@ -22,20 +22,22 @@ import { getFishDef, pickFishForZone, RARITY } from './fishCatalog.js?v=29q';
 import { createFishMesh } from './fishMeshes.js?v=29q';
 import { getFishPortrait } from './fishPortrait.js?v=29q';
 import { getItemPortrait } from './itemPortrait.js?v=29r';
-import { getSeaMap, EVAC_HOLD } from './seaMaps.js?v=29l';
-import { getZone } from './zones.js?v=29l';
+import { getSeaMap, EVAC_HOLD } from './seaMaps.js?v=29m';
+import { getZone } from './zones.js?v=29m';
 import {
   loadMeta, settleRun, hullMaxForBoat, thrustMulForBoat, hasWeaponUnlock,
   discoverFish, discoverMonster, syncLoadoutSuppliesFromWarehouse, consumeLoadoutOnDepart,
-} from './meta.js?v=29r';
+  clampBoatId, HULL_NAMES, equippedSkills, skillShopToVfx,
+} from './meta.js?v=29s';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=16c';
-import { createHub } from './hub.js?v=29r';
+import { createHub } from './hub.js?v=29s';
 import { createCoverScene } from './coverScene.js?v=28m';
 import { createHubIsland } from './hubIsland.js?v=28k';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=29q';
 import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=29l';
 import { getMonsterDef, resolveMonsterId, monstersForZone } from './monsterCatalog.js?v=29q';
-import { createSkillVfx, SKILL_CARDS } from './vfx/skillVfx.js?v=29u';
+import { createSkillVfx, SKILL_CARDS } from './vfx/skillVfx.js?v=30a';
+import * as sfx from './audio.js?v=29y';
 
 const canvas = document.getElementById('c');
 const minimapCtx = document.getElementById('minimap').getContext('2d');
@@ -119,7 +121,7 @@ const ui = {
 };
 
 let meta = loadMeta();
-let selectedBoat = meta.loadout?.boatId || 'raft';
+let selectedBoat = clampBoatId(meta.unlocks, meta.loadout?.boatId || 'raft');
 let startZone = meta.unlockedZones?.[0] ?? 0;
 let phase = 'cover'; // cover | hub | run | settle
 let pendingCheckpoint = 0;
@@ -135,6 +137,8 @@ const state = {
   selectedSlot: 'bow',
   slots: { bow: null, stern: null, sideL: null, sideR: null, keel: null, sail: null },
   weapon: 0,
+  /** Shop skill ids snapshotted at depart — in-run casts must not reread hub loadout. */
+  runSkills: null,
   toastTimer: 0,
   shellBlocks: 0,
   speedBuffUntil: 0,
@@ -196,6 +200,26 @@ const legendFx = {
 };
 
 const skillCdUntil = [0, 0, 0];
+let _prevLeftPulled = false;
+let _prevRightPulled = false;
+
+function equippedRunCard(slot) {
+  const skills = (state.started && Array.isArray(state.runSkills) && state.runSkills.length)
+    ? state.runSkills
+    : equippedSkills(meta);
+  const shopId = skills[slot] || skills[0];
+  const vfxId = skillShopToVfx(shopId);
+  return SKILL_CARDS.find((c) => c.id === vfxId) || SKILL_CARDS[0];
+}
+
+function refreshWeaponChips() {
+  document.querySelectorAll('.weapon-chip').forEach((el) => {
+    const w = Number(el.dataset.w);
+    const card = equippedRunCard(w);
+    el.textContent = `${w + 1} ${card.name}`;
+  });
+}
+
 
 function slotHas(id) {
   return Object.values(state.slots).some((s) => s?.defId === id);
@@ -874,6 +898,7 @@ function applyDamage(amount, reason, quiet = false) {
   let dmg = amount;
   if (t < legendFx.obsidianBreakUntil) dmg *= 1.5;
   damageHull(hull, dmg);
+  if (!quiet && amount >= 2) sfx.damage();
   if (slotHas('heatPump')) {
     legendFx.heatPumpUntil = t + 1.9;
     if (!quiet && amount >= 2) showToast('热泵：伤转推力');
@@ -903,6 +928,7 @@ const fishing = createFishingController({
     if (ph === 'qte') {
       ui.qte.classList.remove('hidden');
       ui.btnFishCn.textContent = '收竿';
+      sfx.fishBite();
     } else if (ph === 'wait' || ph === 'cast') {
       ui.qte.classList.add('hidden');
       ui.btnFishCn.textContent = '等待';
@@ -952,6 +978,7 @@ const fishing = createFishingController({
   },
   onCatch(fish) {
     state.fishHold.push(fish);
+    sfx.fishCatch(fish.rarity);
     state.selectedFish = state.fishHold.length - 1;
     syncDeckFish(boat, state.fishHold, gradientMap);
     showCatchLift(fish);
@@ -1004,6 +1031,7 @@ function onSpace() {
   const greenBonus = meta.unlocks.fishmongerEye ? 1.2 : 1;
   const aim = aimPointFromBoat();
   fishing.tryCast(useBait, state.runDistance, greenBonus, startZone, aim.x, aim.z);
+  if (useBait) sfx.fishCast();
   ui.btnFish.classList.add('pressed');
 }
 
@@ -1032,6 +1060,7 @@ function trySalvage() {
     ui.eventModal.classList.remove('hidden');
   } else {
     state.inventory[r.supply] = (state.inventory[r.supply] || 0) + r.amount;
+    sfx.collect();
     showToast(`打捞 ${r.name}×${r.amount}`);
     updateInv();
   }
@@ -1510,12 +1539,14 @@ function useSupply() {
   if (id === 'plank') {
     state.inventory.plank--;
     repairHull(hull, 15);
+    sfx.repair();
     updateHp();
     updateInv();
     showToast('使用木板：船体 +15');
   } else if (id === 'repair') {
     state.inventory.repair--;
     repairHull(hull, 25);
+    sfx.repair();
     updateHp();
     updateInv();
     showToast('使用修补剂：船体 +25');
@@ -1532,10 +1563,12 @@ function eatOrRepair() {
   state.selectedFish = -1;
   if (def.id === 'glue' || (def.category === 'food' && Math.random() < 0.35)) {
     repairHull(hull, 15);
+    sfx.repair();
     showToast(`${f.name}：修理 +15`);
   } else if (def.category === 'food') {
     if (Math.random() < 0.5) {
       repairHull(hull, 20);
+      sfx.repair();
       showToast(`${f.name}：+20 耐久`);
     } else {
       state.speedBuffUntil = now() + 10;
@@ -1543,6 +1576,7 @@ function eatOrRepair() {
     }
   } else {
     repairHull(hull, 10);
+    sfx.repair();
     showToast(`勉强吃了 ${f.name}… +10`);
   }
   updateHp();
@@ -1631,7 +1665,7 @@ function finishRun(outcome) {
   // Practice bay is sandboxed — nothing transfers to warehouse
   const fishToStore = wasTutorial ? [] : (outcome === 'return' ? collectRunFish(state) : []);
   const suppliesToStore = wasTutorial ? null : (outcome === 'return' ? { ...state.inventory } : null);
-  const { meta: m, gain, success } = settleRun(meta, {
+  const { meta: m, gain, success, lostHull } = settleRun(meta, {
     distance: dist,
     mods: state.mods,
     kills: state.kills,
@@ -1640,8 +1674,12 @@ function finishRun(outcome) {
     fishToStore,
     suppliesToStore,
     startZone,
+    boatId: selectedBoat,
   });
   meta = m;
+  selectedBoat = clampBoatId(meta.unlocks, meta.loadout?.boatId || selectedBoat);
+  setBoatVariant(boat, selectedBoat);
+  hubBoatPreview?.applyBoatId?.(selectedBoat);
   if (wasTutorial && success) startZone = 0;
   const title = success ? (wasTutorial ? '教学完成 · 归航' : '成功归航') : '沉船结算';
   const storeNote = wasTutorial
@@ -1649,7 +1687,8 @@ function finishRun(outcome) {
     : success
       ? `鱼获入库 ${fishToStore.length} · 新鱼种 ${runNewFish}`
       : '沉船未入库活鱼（防刷）';
-  const stats = `航行 ${dist} 米 · 改装 ${state.mods} · 击杀 ${state.kills} · 海图碎片 +${gain}
+  const hullNote = lostHull ? ` · ${HULL_NAMES[lostHull] || lostHull}已沉没，需在市集重买` : '';
+  const stats = `航行 ${dist} 米 · 改装 ${state.mods} · 击杀 ${state.kills} · 海图碎片 +${gain}${hullNote}
 ${storeNote}`;
   if (ui.settleTitle) ui.settleTitle.textContent = title;
   if (ui.settleStats) ui.settleStats.textContent = stats;
@@ -1665,6 +1704,7 @@ ${storeNote}`;
 }
 
 function onSink() {
+  sfx.sinkSound();
   finishRun('sink');
 }
 
@@ -1699,7 +1739,7 @@ function startRun(fromCheckpoint = false) {
   fishing.reset();
   hideFishingFx();
   resetMonsterFx();
-  selectedBoat = meta.loadout?.boatId || selectedBoat;
+  selectedBoat = clampBoatId(meta.unlocks, meta.loadout?.boatId || selectedBoat);
   setBoatVariant(boat, selectedBoat);
   const maxHp = hullMaxForBoat(meta.unlocks, selectedBoat);
   hull = createHull(maxHp);
@@ -1712,6 +1752,10 @@ function startRun(fromCheckpoint = false) {
   lastBoatZ = sp.z;
 
   state.started = true;
+  if (!fromCheckpoint) state.runSkills = equippedSkills(meta);
+  else if (!Array.isArray(state.runSkills) || !state.runSkills.length) {
+    state.runSkills = equippedSkills(meta);
+  }
   state.runDistance = fromCheckpoint ? state.runDistance : 0;
   state.maxZ = paddle.state.z;
   state.zone = startZone;
@@ -1737,7 +1781,7 @@ function startRun(fromCheckpoint = false) {
       meta = syncLoadoutSuppliesFromWarehouse(meta);
       applyLoadoutToRun(boat, state, meta, gradientMap);
       meta = consumeLoadoutOnDepart(meta);
-      if (selectedBoat === 'cursedBoat' && meta.unlocks.cursedBoat) {
+      if (meta.unlocks.cursedBoat) {
         const f = pickFishForZone(Math.max(1, startZone));
         state.fishHold.push(f);
         const disc = discoverFish(meta, [f.defId]);
@@ -1750,6 +1794,7 @@ function startRun(fromCheckpoint = false) {
   }
   state.shellBlocks = 0;
   skillCdUntil[0] = skillCdUntil[1] = skillCdUntil[2] = 0;
+  refreshWeaponChips();
   skillVfx.clear();
   ui.sinkModal.classList.add('hidden');
   ui.settleModal?.classList.add('hidden');
@@ -1765,8 +1810,6 @@ function startRun(fromCheckpoint = false) {
     lhMeshes: seaWorld.getLighthouses(),
     spawn: loaded.spawn || { x: 0, z: 0 },
   });
-  applyZoneVisual(getZone(0, startZone));
-
   if (isTut && !fromCheckpoint) {
     state.inventory.plank = Math.max(state.inventory.plank, 1);
     updateInv();
@@ -1954,7 +1997,7 @@ function drawHubMap(canvas) {
 }
 
 function refreshTitleMeta() {
-  if (ui.fragCount) ui.fragCount.textContent = `海图 ${meta.fragments}`;
+  if (ui.fragCount) ui.fragCount.textContent = `海图碎片 ${meta.fragments}`;
 }
 
 function updatePrompts() {
@@ -2159,8 +2202,13 @@ function tick() {
     ui.runDist.textContent = String(Math.floor(state.runDistance));
     if (ui.comboText) ui.comboText.textContent = `×${phys.combo}`;
     ui.speed.textContent = String(Math.round(phys.speed * 4)).padStart(3, '0');
-    ui.oarL.classList.toggle('pulled', phys.leftPhase > 0.4);
-    ui.oarR.classList.toggle('pulled', phys.rightPhase > 0.4);
+    const lp = phys.leftPhase > 0.4;
+    const rp = phys.rightPhase > 0.4;
+    if ((lp && !_prevLeftPulled) || (rp && !_prevRightPulled)) sfx.paddle();
+    _prevLeftPulled = lp;
+    _prevRightPulled = rp;
+    ui.oarL.classList.toggle('pulled', lp);
+    ui.oarR.classList.toggle('pulled', rp);
     setOarStroke(boat, -1, phys.leftPhase);
     setOarStroke(boat, 1, phys.rightPhase);
 
@@ -2168,6 +2216,7 @@ function tick() {
     state.zone = zone.id;
 
     let corrMul = zone.corrosionMul * b.corrosionMul;
+    if (meta.unlocks.ghostWake) corrMul *= 0.82;
     if (slotHas('magmaMaw')) corrMul *= 1.18;
     if (now() < legendFx.heatPumpUntil) corrMul *= 1.7;
     // simulate corrosion rates via scaled dt
@@ -2225,10 +2274,10 @@ function tick() {
     tickMonsterFx(dt);
     tickLegendSkills(dt, phys, t);
     {
-      const card = SKILL_CARDS[state.weapon] || SKILL_CARDS[0];
+      const card = equippedRunCard(state.weapon);
       const hit = mouseOnWater();
       if (hit) {
-        skillVfx.setAim(boatPos(), hit, card.id, card.range, card.radius || 8, dt);
+        skillVfx.setAim(boatPos(), hit, card.id, card.range, card.radius || 0, dt);
       } else {
         skillVfx.hideAim();
       }
@@ -2277,9 +2326,10 @@ function tick() {
         repairHull(hull, hull.maxDurability);
         updateHp();
         showToast('灯塔归航！耐久已回满', 2200);
+        sfx.evacuateSuccess();
         finishRun('return');
       },
-      cutWrap: state.weapon === 1,
+      cutWrap: equippedRunCard(state.weapon).id === 'thunder',
     });
 
     tickTutorialGuide(dt);
@@ -2453,9 +2503,57 @@ canvas.addEventListener('pointermove', (e) => {
   state.captainLocal.x = nx * 0.9;
   state.captainLocal.z = -ny * 1.2;
 });
+function noteSkillWraps(wraps) {
+  wraps.ids.forEach(registerMonster);
+  if (!wraps.n) return 0;
+  state.kills += wraps.n;
+  if (monsterFx.sealedSlot) {
+    showToast(`刮除藤壶，「${SLOT_LABELS[monsterFx.sealedSlot]}」解封`);
+    monsterFx.sealedSlot = null;
+    monsterFx.heatSeal = false;
+  }
+  return wraps.n;
+}
+
+function applySkillHit(card, origin, dir, range, impact, extra = {}) {
+  if (!state.started || hull.sunk) return;
+  const clockT = clock.elapsedTime;
+  const lineYaw = Math.atan2(dir.x, dir.z);
+  if (card.id === 'ice') {
+    const front = extra.front ?? range;
+    const stunned = hazards.stunAlongLine(origin, lineYaw, front, 1.6, clockT, 3.4);
+    const wraps = hazards.cutWrapsAlongLine(origin, lineYaw, front, 4.5);
+    const wn = noteSkillWraps(wraps);
+    if (wn) extra.onWrapToast?.(wn);
+    else if (stunned && extra.announceStun) extra.onStunToast?.(stunned);
+    return;
+  }
+  if (card.id === 'thunder' || card.id === 'void' || card.id === 'phoenix' || card.id === 'beam') {
+    const pierce = card.id === 'beam' ? 4 : 2;
+    const hits = hazards.pierceLine(origin, lineYaw, range, pierce, (id) => {
+      state.kills++;
+      registerMonster(id);
+    });
+    const wraps = hazards.cutWrapsAlongLine(origin, lineYaw, range, 4.5);
+    const wn = noteSkillWraps(wraps);
+    const n = hits.length + wn;
+    showToast(n ? `${card.name} ×${n}` : `${card.name}！`);
+    return;
+  }
+  const rad = Math.max(0.5, Number(card.radius) || 5);
+  const n = hazards.blastRadius(impact, rad, (id) => {
+    state.kills++;
+    registerMonster(id);
+  });
+  const wraps = hazards.cutWrapsInRadius(impact, rad + 1);
+  const wn = noteSkillWraps(wraps);
+  hazards.shoveWraps(impact, rad + 1);
+  showToast(n || wn ? `${card.name} ${n + wn}` : `${card.name}！`);
+}
+
 function tryCastSkill() {
   if (!state.started || hull.sunk || state.lighthouseOpen || state.seaMapOpen) return;
-  const card = SKILL_CARDS[state.weapon] || SKILL_CARDS[0];
+  const card = equippedRunCard(state.weapon);
   const t = now();
   if (t < skillCdUntil[state.weapon]) {
     showToast(`${card.name}冷却中`);
@@ -2481,49 +2579,34 @@ function tryCastSkill() {
   const dir = { x: dx / dist, z: dz / dist };
   const range = dist;
   const impact = { x: hit.x, z: hit.z };
-  skillVfx.cast(card.id, origin, dir, range);
+  sfx.skill(card.id);
   skillCdUntil[state.weapon] = t + card.cd;
-  const clockT = clock.elapsedTime;
-  const lineYaw = Math.atan2(dir.x, dir.z);
-
   if (card.id === 'ice') {
-    const stunned = hazards.stunAlongLine(origin, lineYaw, range, 1.6, clockT, 3.4);
-    const wraps = hazards.cutWrapsAlongLine(origin, lineYaw, range, 4.5);
-    wraps.ids.forEach(registerMonster);
-    if (wraps.n) {
-      state.kills += wraps.n;
-      if (monsterFx.sealedSlot) {
-        showToast(`刮除藤壶，「${SLOT_LABELS[monsterFx.sealedSlot]}」解封`);
-        monsterFx.sealedSlot = null;
-        monsterFx.heatSeal = false;
-      }
-      showToast(`霜矛冻断缠绕 ×${wraps.n}`);
-    } else {
-      showToast(stunned ? `霜矛冻结 ×${stunned}` : '霜矛！');
-    }
-  } else if (card.id === 'thunder') {
-    const hits = hazards.pierceLine(origin, lineYaw, range, 2, (id) => {
-      state.kills++;
-      registerMonster(id);
+    let iceAnnounced = false;
+    skillVfx.cast(card.id, origin, dir, range, {
+      onSweep(front) {
+        applySkillHit(card, origin, dir, range, impact, {
+          front,
+          announceStun: !iceAnnounced,
+          onWrapToast(n) {
+            iceAnnounced = true;
+            showToast(`霜矛冻断缠绕 ×${n}`);
+          },
+          onStunToast(n) {
+            iceAnnounced = true;
+            showToast(`霜矛冻结 ×${n}`);
+          },
+        });
+        if (front >= range * 0.98 && !iceAnnounced) {
+          iceAnnounced = true;
+          showToast('霜矛！');
+        }
+      },
     });
-    showToast(hits.length ? `雷矛穿刺 ×${hits.length}` : '雷矛！');
   } else {
-    const n = hazards.blastRadius(impact, 8, (id) => {
-      state.kills++;
-      registerMonster(id);
+    skillVfx.cast(card.id, origin, dir, range, {
+      onImpact: () => applySkillHit(card, origin, dir, range, impact),
     });
-    const wraps = hazards.cutWrapsInRadius(impact, 9);
-    wraps.ids.forEach(registerMonster);
-    if (wraps.n) {
-      state.kills += wraps.n;
-      if (monsterFx.sealedSlot) {
-        showToast(`刮除藤壶，「${SLOT_LABELS[monsterFx.sealedSlot]}」解封`);
-        monsterFx.sealedSlot = null;
-        monsterFx.heatSeal = false;
-      }
-    }
-    hazards.shoveWraps(impact, 9);
-    showToast(n || wraps.n ? `陨石命中 ${n + wraps.n}` : '陨石砸落！');
   }
 }
 
@@ -2575,7 +2658,7 @@ ui.btnLhReturn?.addEventListener('click', () => {
 
 hub = createHub({
   getMeta: () => meta,
-  setMeta: (m) => { meta = m; refreshTitleMeta(); },
+  setMeta: (m) => { meta = m; refreshTitleMeta(); refreshWeaponChips(); },
   getBoat: () => selectedBoat,
   setBoat: (id) => {
     const bid = id === 'lightBoat' ? 'raft' : id;
@@ -2660,12 +2743,26 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR' && state.inventory.plank > 0) {
     state.inventory.plank--;
     repairHull(hull, 15);
+    sfx.repair();
     updateHp(); updateInv();
     showToast('木板修理 +15');
   }
 });
 
+{
+  const btn = document.createElement('button');
+  btn.id = 'sfx-toggle';
+  btn.type = 'button';
+  btn.textContent = '🔊';
+  btn.addEventListener('click', () => {
+    sfx.setEnabled(!sfx.isEnabled());
+    btn.textContent = sfx.isEnabled() ? '🔊' : '🔇';
+    btn.classList.toggle('muted', !sfx.isEnabled());
+  });
+  document.body.appendChild(btn);
+}
 applyZoneVisual(getZone(0, startZone));
+refreshWeaponChips();
 refreshTitleMeta();
 updateHp();
 updateInv();

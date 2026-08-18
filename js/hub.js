@@ -1,6 +1,6 @@
 /** Hub UI — backpack desk; 整备=3D船, 出港=海域地图, 仓库=格子 */
 
-import { ZONES } from './zones.js?v=29l';
+import { ZONES } from './zones.js?v=29m';
 import { SLOT_ORDER, SLOT_LABELS } from './slots.js';
 import { getFishDef, FISH_CATALOG, RARITY } from './fishCatalog.js?v=29q';
 import { getFishPortrait } from './fishPortrait.js?v=29q';
@@ -13,10 +13,9 @@ import {
   SHOP_SUPPLIES,
   SHOP_WEAPONS,
   SHOP_TALENTS,
+  HULL_NAMES,
   fishSellPrice,
-  ZONE_UNLOCK_COST,
   tryUnlock,
-  tryUnlockZone,
   buySupply,
   sellWarehouseFish,
   hubFeedFish,
@@ -25,7 +24,9 @@ import {
   moveWarehouseToLoadoutCargo,
   returnCargoToWarehouse,
   saveLoadout,
-} from './meta.js?v=29r';
+  equippedSkills,
+  cycleSkillSlot,
+} from './meta.js?v=29s';
 import { HUB_SPOTS } from './hubIsland.js?v=23h';
 
 const TAB_TITLES = {
@@ -356,11 +357,7 @@ export function createHub(deps) {
   function renderDepartSummary(meta) {
     if (!els.departSummary) return;
     const boatId = deps.getBoat();
-    const boatName = ({
-      raft: '木筏',
-      heavyRaft: '重筏',
-      chargeBoat: '冲锋船',
-    })[boatId === 'lightBoat' ? 'raft' : boatId] || boatId;
+    const boatName = HULL_NAMES[boatId === 'lightBoat' ? 'raft' : boatId] || boatId;
     const zone = ZONES.find((z) => z.id === deps.getStartZone()) || ZONES[0];
     const slots = meta.loadout?.slots || {};
     const filled = SLOT_ORDER.filter((s) => slots[s]).length;
@@ -460,15 +457,30 @@ export function createHub(deps) {
       }
     }
 
+    const equipped = equippedSkills(meta);
+    const skillSlotCards = equipped.map((sid, i) => {
+      const item = SHOP_WEAPONS.find((w) => w.id === sid);
+      const name = item?.name || sid;
+      let face = '<span class="hub-bp-q">技</span>';
+      try {
+        face = `<img src="${getItemPortrait(sid)}" alt="" draggable="false" />`;
+      } catch (_) { /* keep */ }
+      return `
+        <button type="button" class="hub-bp-card" data-kind="skill" data-skill-slot="${i}">
+          <div class="hub-bp-card-face">${face}</div>
+          <div class="hub-bp-card-cap">${i + 1}. ${name}<span>出港技能</span></div>
+        </button>`;
+    });
+
     const boats = [
       { id: 'raft', name: '木筏', need: true },
-      { id: 'heavyRaft', name: '重筏', need: meta.unlocks.heavyRaft },
-      { id: 'chargeBoat', name: '冲锋船', need: meta.unlocks.chargeBoat },
+      { id: 'heavyRaft', name: '重筏', need: !!meta.unlocks.heavyRaft },
+      { id: 'chargeBoat', name: '冲锋船', need: !!meta.unlocks.chargeBoat },
     ];
     const curBoat = deps.getBoat() === 'lightBoat' ? 'raft' : deps.getBoat();
     const boatBtns = boats.map((b) => `
       <button type="button" class="hub-chip ${curBoat === b.id ? 'selected' : ''}"
-        data-boat="${b.id}" ${b.need ? '' : 'disabled'}>${b.name}${b.need ? '' : ' ·锁'}</button>
+        data-boat="${b.id}" ${b.need ? '' : 'disabled'}>${b.name}${b.need ? '' : ' ·需买'}</button>
     `).join('');
 
     els.backpack.innerHTML = `
@@ -478,6 +490,8 @@ export function createHub(deps) {
       <div class="hub-bp-grid">${supplyCards.join('')}</div>
       <p class="hub-bp-sec">改装</p>
       <div class="hub-bp-grid">${modCards}</div>
+      <p class="hub-bp-sec">技能牌 · 点按切换</p>
+      <div class="hub-bp-grid">${skillSlotCards.join('')}</div>
       <p class="hub-bp-sec">武器</p>
       <div class="hub-bp-grid">${weaponCards.join('')}</div>`;
 
@@ -490,6 +504,14 @@ export function createHub(deps) {
         deps.boatPreview?.syncLoadout?.(m);
         render();
         refreshCenter();
+      });
+    });
+    els.backpack.querySelectorAll('[data-skill-slot]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const slot = Number(btn.dataset.skillSlot);
+        const m = cycleSkillSlot(deps.getMeta(), slot);
+        deps.setMeta(m);
+        render();
       });
     });
   }
@@ -509,19 +531,13 @@ export function createHub(deps) {
     els.zones.innerHTML = ZONES.map((z) => {
       const unlocked = z.id === -1 || (meta.unlockedZones || [0]).includes(z.id);
       const selected = start === z.id;
-      const cost = ZONE_UNLOCK_COST[z.id];
-      let action = '';
-      if (!unlocked && cost != null && z.id !== -1) {
-        action = `<button type="button" class="bp-btn dim" data-unlock-zone="${z.id}">解锁 ${cost}</button>`;
-      }
       return `<div class="hub-zone ${selected ? 'selected' : ''} ${unlocked ? '' : 'locked'}">
         <button type="button" class="hub-zone-pick" data-pick-zone="${z.id}" ${unlocked ? '' : 'disabled'}>
           <strong><span class="hub-zone-swatch" style="background:${z.color || '#2ec4b6'}"></span>${z.name}</strong>
           <span>${unlocked
             ? (FEATURE_LABELS[z.feature] || z.unlockHint || '可出航')
-            : (z.unlockHint || '未解锁')}</span>
+            : (z.unlockHint || '航行归航解锁')}</span>
         </button>
-        ${action}
       </div>`;
     }).join('');
 
@@ -533,20 +549,6 @@ export function createHub(deps) {
         deps.setStartZone(id);
         render();
         deps.drawHubMap?.(els.mapCanvas);
-      });
-    });
-    els.zones.querySelectorAll('[data-unlock-zone]').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = Number(btn.dataset.unlockZone);
-        const r = tryUnlockZone(meta, id);
-        deps.toast(r.msg);
-        if (r.ok) {
-          deps.setMeta(r.meta);
-          deps.setStartZone(id);
-          render();
-          deps.drawHubMap?.(els.mapCanvas);
-        }
       });
     });
   }
@@ -684,25 +686,69 @@ export function createHub(deps) {
     if (!panel) return;
     const tabMeta = SHOP_TABS.find((t) => t.id === shopTab);
     const blurb = {
-      sell: '点击仓库鱼获卡片出售，换取海图碎片。',
-      hull: '解锁船体后可在出港页选用。',
-      supply: '物资购入后进入仓库，出港时自动携带部分。',
-      weapon: '每局可带三张。1 霜矛冻结，2 雷矛穿刺，3 陨石砸落解缠。',
-      talent: '怪谈系局外天赋，影响整备与出航。',
+      sell: '先点鱼获，再在左侧确认出售。卖鱼是零钱，主收入来自归航。',
+      hull: '买的是一艘在港船。归航带回；沉船丢失，木筏始终免费。',
+      supply: '物资进仓库，出港自动带一部分。每次出航都会消耗。',
+      weapon: '霜矛、雷矛、陨石出航自带。其余用海图碎片学会；准备界面选出港三张。',
+      talent: '永久能力。沉船不会丢掉天赋。',
     }[shopTab] || '';
     let detail = `<h3 class="hub-clip-h">${tabMeta?.name || '商店'}</h3>
       <p class="hub-fs-blurb">${blurb}</p>
-      <p class="hub-fs-blurb">碎片 <strong>${meta.fragments || 0}</strong></p>`;
+      <p class="hub-fs-blurb">海图碎片 <strong>${meta.fragments || 0}</strong></p>`;
     if (shopDetail) {
+      const actBtn = shopDetail.act
+        ? `<button type="button" class="bp-btn bright hub-shop-act" data-shop-act="${shopDetail.act}" data-shop-act-id="${shopDetail.actId}">${shopDetail.actLabel}</button>`
+        : '';
       detail += `<div class="hub-shop-detail">
         <strong>${shopDetail.title}</strong>
         <p>${shopDetail.desc || ''}</p>
         <p class="hub-shop-detail-price">${shopDetail.priceLine || ''}</p>
+        ${actBtn}
       </div>`;
     } else {
       detail += `<p class="hub-fs-blurb muted">选中卡片查看说明</p>`;
     }
     panel.innerHTML = detail;
+    panel.querySelector('[data-shop-act]')?.addEventListener('click', () => {
+      const act = shopDetail?.act;
+      const actId = shopDetail?.actId;
+      if (!act) return;
+      if (act === 'sell') {
+        const idx = Number(actId);
+        const fish = deps.getMeta().warehouse?.fish?.[idx];
+        const r = sellWarehouseFish(deps.getMeta(), idx);
+        deps.toast(r.msg);
+        if (r.ok) {
+          shopDetail = {
+            title: fish?.name || '已售出',
+            desc: '已换成海图碎片',
+            priceLine: `+${r.price} 海图碎片`,
+          };
+          deps.setMeta(r.meta);
+          render();
+        }
+        return;
+      }
+      if (act === 'supply') {
+        const r = buySupply(deps.getMeta(), actId);
+        deps.toast(r.msg);
+        if (r.ok) { deps.setMeta(r.meta); render(); }
+        return;
+      }
+      if (act === 'buy') {
+        const r = tryUnlock(deps.getMeta(), actId);
+        deps.toast(r.msg);
+        if (r.ok) {
+          shopDetail = { ...shopDetail, act: null, priceLine: '已入手' };
+          deps.setMeta(r.meta);
+          if (SHOP_HULLS.some((h) => h.id === actId)) {
+            deps.setBoat(actId);
+            deps.boatPreview?.syncLoadout?.(r.meta);
+          }
+          render();
+        }
+      }
+    });
   }
 
   function renderShop(meta) {
@@ -734,43 +780,44 @@ export function createHub(deps) {
         return shopCardHtml({
           key: `buy:${item.id}`,
           title: item.name,
-          sub: owned ? '已拥有' : `${item.cost} 碎片`,
+          sub: owned ? '在港 · 沉船丢失' : `${item.cost} 海图碎片`,
           tone: item.tone,
           itemId: item.id,
           owned,
-          disabled: owned || meta.fragments < item.cost,
+          disabled: owned,
         });
       }).join('');
     } else if (shopTab === 'supply') {
       cards = SHOP_SUPPLIES.map((item) => shopCardHtml({
         key: `supply:${item.id}`,
         title: item.name,
-        sub: `${item.cost} 碎片 · ×${item.amount}`,
+        sub: `${item.cost} 海图碎片 · ×${item.amount}`,
         tone: item.tone,
         itemId: item.id,
-        disabled: meta.fragments < item.cost,
       })).join('');
     } else if (shopTab === 'weapon') {
-      cards = SHOP_WEAPONS.map((item) => shopCardHtml({
-        key: `buy:${item.id}`,
-        title: item.name,
-        sub: '出航携带',
-        tone: item.tone,
-        itemId: item.id,
-        owned: true,
-        disabled: true,
-      })).join('');
+      cards = SHOP_WEAPONS.map((item) => {
+        const owned = item.cost <= 0 || !!meta.unlocks[item.id];
+        return shopCardHtml({
+          key: `buy:${item.id}`,
+          title: item.name,
+          sub: owned ? (item.cost <= 0 ? '出航自带' : '已学会') : `${item.cost} 海图碎片`,
+          tone: item.tone,
+          itemId: item.id,
+          owned,
+        });
+      }).join('');
     } else if (shopTab === 'talent') {
       cards = SHOP_TALENTS.map((item) => {
         const owned = !!meta.unlocks[item.id];
         return shopCardHtml({
           key: `buy:${item.id}`,
           title: item.name,
-          sub: owned ? '已拥有' : `${item.cost} 碎片`,
+          sub: owned ? '已学会' : `${item.cost} 海图碎片`,
           tone: item.tone,
           itemId: item.id,
           owned,
-          disabled: owned || meta.fragments < item.cost,
+          disabled: owned,
         });
       }).join('');
     }
@@ -797,53 +844,50 @@ export function createHub(deps) {
           if (!fish) return;
           shopDetail = {
             title: fish.name,
-            desc: `稀有度 ${'★'.repeat(Math.min(5, fish.rarity || 1))} · 出售换取碎片`,
-            priceLine: `售价 ${fishSellPrice(fish)} 碎片`,
+            desc: `稀有度 ${'★'.repeat(Math.min(5, fish.rarity || 1))} · 卖鱼换零钱，主收入仍是归航`,
+            priceLine: `售价 ${fishSellPrice(fish)} 海图碎片`,
+            act: 'sell',
+            actId: String(idx),
+            actLabel: '确认出售',
           };
-          const r = sellWarehouseFish(deps.getMeta(), idx);
-          deps.toast(r.msg);
-          if (r.ok) {
-            shopDetail = {
-              title: fish.name,
-              desc: '已售出',
-              priceLine: `+${r.price} 碎片`,
-            };
-            deps.setMeta(r.meta);
-            render();
-          } else {
-            renderShopDetail(deps.getMeta());
-          }
+          renderShopDetail(deps.getMeta());
           return;
         }
         if (key.startsWith('supply:')) {
           const id = key.slice(7);
           const item = SHOP_SUPPLIES.find((s) => s.id === id);
           shopDetail = item
-            ? { title: item.name, desc: item.desc, priceLine: `${item.cost} 碎片` }
+            ? {
+              title: item.name,
+              desc: item.desc,
+              priceLine: `${item.cost} 海图碎片`,
+              act: meta.fragments >= item.cost ? 'supply' : null,
+              actId: id,
+              actLabel: '购入',
+            }
             : null;
           renderShopDetail(meta);
-          const r = buySupply(deps.getMeta(), id);
-          deps.toast(r.msg);
-          if (r.ok) { deps.setMeta(r.meta); render(); }
           return;
         }
         if (key.startsWith('buy:')) {
           const id = key.slice(4);
           const item = catalog.find((s) => s.id === id);
+          const weapon = SHOP_WEAPONS.find((w) => w.id === id);
+          const isFreeSkill = !!weapon && weapon.cost <= 0;
+          const owned = !!meta.unlocks[id] || isFreeSkill;
           shopDetail = item
             ? {
               title: item.name,
               desc: item.desc,
-              priceLine: SHOP_WEAPONS.some((w) => w.id === id) || meta.unlocks[id]
-                ? '出航携带'
-                : `${item.cost} 碎片`,
+              priceLine: isFreeSkill
+                ? '出航自带'
+                : (owned ? (SHOP_HULLS.some((h) => h.id === id) ? '已在港' : '已学会') : `${item.cost} 海图碎片`),
+              act: (!isFreeSkill && !owned && meta.fragments >= item.cost) ? 'buy' : null,
+              actId: id,
+              actLabel: SHOP_HULLS.some((h) => h.id === id) ? '购入船体' : '学习',
             }
             : null;
           renderShopDetail(meta);
-          if (item && (SHOP_WEAPONS.some((w) => w.id === id) || meta.unlocks[id])) return;
-          const r = tryUnlock(deps.getMeta(), id);
-          deps.toast(r.msg);
-          if (r.ok) { deps.setMeta(r.meta); render(); }
         }
       });
     });

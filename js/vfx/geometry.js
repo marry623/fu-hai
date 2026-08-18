@@ -244,3 +244,99 @@ export function createBoltRibbonGeometry(nodes = 64, strands = 12) {
   geometry.boundingSphere = new Sphere(new Vector3(), 1e4);
   return geometry;
 }
+
+/** Swept tapered wing in local XZ. Side +1 = right. */
+export function createPhoenixWingGeometry(side = 1) {
+  const s = side >= 0 ? 1 : -1;
+  const points = [
+    [0, 0, 0.34],
+    [0.2 * s, 0, 0.52],
+    [0.62 * s, 0, 0.25],
+    [1 * s, 0, -0.08],
+    [0.74 * s, 0, -0.46],
+    [0.34 * s, 0, -0.62],
+    [0.08 * s, 0, -0.4],
+  ];
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(points.flat(), 3));
+  geometry.setAttribute(
+    'uv',
+    new Float32BufferAttribute(points.map(([x, , z]) => [Math.abs(x), z + 0.62]).flat(), 2),
+  );
+  geometry.setIndex([0, 1, 2, 0, 2, 6, 2, 3, 4, 2, 4, 5, 2, 5, 6]);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/** Parameter-space beam tube: position = (t, a, 0). */
+export function createBeamTubeGeometry(nodes = 64, sides = 22) {
+  const steps = Math.max(2, Math.round(nodes));
+  const facets = Math.max(3, Math.round(sides));
+  const columns = facets + 1;
+  const positions = new Float32Array(steps * columns * 3);
+  let v = 0;
+  for (let i = 0; i < steps; i++) {
+    const tt = i / (steps - 1);
+    for (let j = 0; j < columns; j++) {
+      positions[v++] = tt;
+      positions[v++] = j / facets;
+      positions[v++] = 0;
+    }
+  }
+  const indices = new Uint16Array((steps - 1) * facets * 6);
+  let k = 0;
+  for (let i = 0; i < steps - 1; i++) {
+    for (let j = 0; j < facets; j++) {
+      const a = i * columns + j;
+      const b = a + columns;
+      indices[k++] = a;
+      indices[k++] = b;
+      indices[k++] = a + 1;
+      indices[k++] = b;
+      indices[k++] = b + 1;
+      indices[k++] = a + 1;
+    }
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new BufferAttribute(positions, 3));
+  geometry.setIndex(new BufferAttribute(indices, 1));
+  geometry.boundingSphere = new Sphere(new Vector3(), 1e4);
+  return geometry;
+}
+
+/** Instanced shock discs: position = (band, a, 0). */
+export function createBeamRingGeometry(rings = 10, segments = 36) {
+  const count = Math.max(1, Math.round(rings));
+  const facets = Math.max(6, Math.round(segments));
+  const columns = facets + 1;
+  const positions = new Float32Array(2 * columns * 3);
+  let v = 0;
+  for (let band = 0; band < 2; band++) {
+    for (let j = 0; j < columns; j++) {
+      positions[v++] = band;
+      positions[v++] = j / facets;
+      positions[v++] = 0;
+    }
+  }
+  const indices = new Uint16Array(facets * 6);
+  let k = 0;
+  for (let j = 0; j < facets; j++) {
+    const a = j;
+    const b = columns + j;
+    indices[k++] = a;
+    indices[k++] = b;
+    indices[k++] = a + 1;
+    indices[k++] = b;
+    indices[k++] = b + 1;
+    indices[k++] = a + 1;
+  }
+  const ringIndex = new Float32Array(count);
+  for (let i = 0; i < count; i++) ringIndex[i] = i;
+  const geometry = new InstancedBufferGeometry();
+  geometry.setAttribute('position', new BufferAttribute(positions, 3));
+  geometry.setAttribute('aRing', new InstancedBufferAttribute(ringIndex, 1));
+  geometry.setIndex(new BufferAttribute(indices, 1));
+  geometry.instanceCount = count;
+  geometry.boundingSphere = new Sphere(new Vector3(), 1e4);
+  return geometry;
+}

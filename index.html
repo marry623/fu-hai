@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>浮骸 · 海上肉鸽</title>
-  <link rel="stylesheet" href="css/style.css?v=29r" />
+  <link rel="stylesheet" href="css/style.css?v=29s" />
 </head>
 <body>
   <div id="game-root">
@@ -22,7 +22,7 @@
           <canvas id="minimap" width="140" height="140"></canvas>
           <div class="map-meta">
             <div class="meta-chip gold" id="zone-name">海域</div>
-            <div class="meta-chip" id="frag-count">海图 0</div>
+            <div class="meta-chip" id="frag-count">海图碎片 0</div>
           </div>
         </div>
       </div>
@@ -277,7 +277,7 @@
                 <span class="bp-mat-title" id="hub-drawer-title">出港</span>
                 <span class="bp-mat-count hub-mat-meta" id="hub-mat-meta">海图</span>
                 <div class="hub-mat-chips">
-                  <span class="hub-meta-chip">碎片 <strong id="hub-drawer-frags">0</strong></span>
+                  <span class="hub-meta-chip">海图碎片 <strong id="hub-drawer-frags">0</strong></span>
                   <span class="hub-meta-chip">最远 <strong id="hub-drawer-best">0m</strong></span>
                 </div>
               </div>
@@ -325,7 +325,7 @@
                   <button type="button" id="btn-depart" class="bp-btn bright hub-depart-btn">出港航行</button>
                 </div>
                 <div id="hub-fs-left-shop" class="hub-clip-panel hidden">
-                  <p class="bp-clip-empty">用海图碎片解锁船型与能力。</p>
+                  <p class="bp-clip-empty">归航和卖鱼获得海图碎片。买船出航，沉船后需重买。木筏免费。</p>
                 </div>
                 <div id="hub-fs-left-codex" class="hub-clip-panel hidden">
                   <div id="hub-codex" class="hub-codex">
@@ -357,10 +357,26 @@
     };
     window.addEventListener('error', (e) => show((e.error && e.error.stack) || e.message));
     window.addEventListener('unhandledrejection', (e) => show(e.reason && e.reason.stack || e.reason));
-    try {
-      await import('./js/main.js?v=29u');
-    } catch (err) {
-      show(err && err.stack || err);
+    const fileHint = '请勿直接双击 index.html。运行项目里的 play.bat，或打开 http://127.0.0.1:8787/\nChrome 在 file:// 下无法加载 ES 模块。';
+    const urls = location.protocol === 'file:'
+      ? ['./js/main.js', './js/main.js?v=30a']
+      : ['./js/main.js?v=30a'];
+    if (location.protocol === 'file:') show(fileHint);
+    let last = null;
+    let ok = false;
+    for (const url of urls) {
+      try {
+        await import(url);
+        ok = true;
+        break;
+      } catch (err) {
+        last = err;
+      }
+    }
+    if (ok) {
+      if (location.protocol !== 'file:' && box) box.hidden = true;
+    } else {
+      show(((last && last.stack) || last || '') + '\n\n' + fileHint);
     }
   </script>
 </body>

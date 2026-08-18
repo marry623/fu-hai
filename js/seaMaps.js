@@ -132,7 +132,7 @@ export const SEA_MAPS = [
   makeSea({
     id: 1, name: '缠绕藻林',
     water: 0x34d399, fog: 0x6ee7b7, sky: 0x86efac, minimap: '#0d4a38',
-    corrosionMul: 1.1, feature: 'current', unlockHint: '航行归航或花 5 碎片',
+    corrosionMul: 1.1, feature: 'current', unlockHint: '航行归航解锁',
     cx: 40, cz: 640, rx: 760, rz: 740, rot: 0.22, n: 17, jitter: 0.18,
     spawn: { x: 20, z: 10, yaw: 0.1 },
     lh: [
@@ -159,7 +159,7 @@ export const SEA_MAPS = [
   makeSea({
     id: 2, name: '沉船雾区',
     water: 0xd4a017, fog: 0xfde68a, sky: 0xfcd34d, minimap: '#5a4010',
-    corrosionMul: 1.2, feature: 'fog', unlockHint: '航行归航或花 12 碎片',
+    corrosionMul: 1.2, feature: 'fog', unlockHint: '航行归航解锁',
     cx: -20, cz: 600, rx: 800, rz: 700, rot: -0.18, n: 18, jitter: 0.15,
     spawn: { x: -10, z: -10, yaw: 0 },
     lh: [
@@ -186,7 +186,7 @@ export const SEA_MAPS = [
   makeSea({
     id: 3, name: '雷暴裂口',
     water: 0x6366f1, fog: 0x8b5cf6, sky: 0xa78bfa, minimap: '#2a1a4a',
-    corrosionMul: 1.4, feature: 'lightning', unlockHint: '航行归航或花 20 碎片',
+    corrosionMul: 1.4, feature: 'lightning', unlockHint: '航行归航解锁',
     cx: 0, cz: 660, rx: 740, rz: 780, rot: 0.35, n: 16, jitter: 0.2,
     spawn: { x: 0, z: 5, yaw: 0 },
     lh: [
@@ -213,7 +213,7 @@ export const SEA_MAPS = [
   makeSea({
     id: 4, name: '熔岩海沟',
     water: 0xb91c1c, fog: 0x7f1d1d, sky: 0xf87171, minimap: '#4a1010',
-    corrosionMul: 3, feature: 'heat', unlockHint: '航行归航或花 30 碎片',
+    corrosionMul: 3, feature: 'heat', unlockHint: '航行归航解锁',
     cx: 30, cz: 630, rx: 770, rz: 730, rot: -0.28, n: 17, jitter: 0.17,
     spawn: { x: 15, z: 0, yaw: -0.1 },
     lh: [

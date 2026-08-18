@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
-import { getSeaMap, constrainToPoly, pointInPoly, EVAC_RADIUS } from './seaMaps.js?v=29j';
+import { getSeaMap, constrainToPoly, pointInPoly, EVAC_RADIUS } from './seaMaps.js?v=29m';
 
 function M(geo, color, gradientMap, outline = 1.05) {
   const m = new THREE.Mesh(geo, toonMat(color, gradientMap));

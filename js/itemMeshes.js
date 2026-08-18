@@ -412,6 +412,106 @@ function meshSkillMeteor(gm) {
   return g;
 }
 
+function meshSkillVoid(gm) {
+  const g = new THREE.Group();
+  const seam = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 1.35), mat(0x140428, gm, { transparent: true, opacity: 0.95 }));
+  add(g, seam, 1.08);
+  const edge = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 1.4), mat(0x44eeff, gm));
+  edge.position.x = 0.12;
+  add(g, edge, 1.18);
+  const blade = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), mat(0x8822cc, gm));
+  blade.position.set(0, 0.15, 0.12);
+  add(g, blade, 1.16);
+  g.rotation.set(0.2, 0.5, 0.1);
+  return g;
+}
+
+function meshSkillPhoenix(gm) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.9, 6), mat(0xff7a20, gm));
+  body.rotation.z = -Math.PI / 2;
+  add(g, body, 1.12);
+  const wing = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.7, 5), mat(0xffc040, gm));
+  wing.rotation.set(0.4, 0, -0.9);
+  wing.position.set(-0.05, 0.28, 0);
+  add(g, wing, 1.14);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 5), mat(0xfff0c0, gm));
+  head.position.set(0.42, 0.08, 0);
+  add(g, head, 1.16);
+  g.rotation.set(0.25, -0.35, 0.15);
+  return g;
+}
+
+function meshSkillSingularity(gm) {
+  const g = new THREE.Group();
+  add(g, new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), mat(0x120018, gm)), 1.08);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 6, 16), mat(0xa060ff, gm));
+  ring.rotation.x = 0.7;
+  add(g, ring, 1.16);
+  const ring2 = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.04, 6, 14), mat(0xf0c8ff, gm));
+  ring2.rotation.y = 0.9;
+  add(g, ring2, 1.18);
+  g.rotation.set(0.3, 0.4, 0);
+  return g;
+}
+
+function meshSkillWorldroot(gm) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.14, 0.9, 6), mat(0x5a3010, gm));
+  add(g, trunk);
+  for (let i = 0; i < 4; i++) {
+    const leaf = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), mat(0x5adf40, gm));
+    leaf.position.set(Math.cos(i * 1.6) * 0.28, 0.35 + (i % 2) * 0.18, Math.sin(i * 1.6) * 0.2);
+    add(g, leaf, 1.14);
+  }
+  g.rotation.set(0.15, 0.4, 0);
+  return g;
+}
+
+function meshSkillBeam(gm) {
+  const g = new THREE.Group();
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.35, 8), mat(0xe8f4ff, gm));
+  core.rotation.z = Math.PI / 2;
+  add(g, core, 1.2);
+  const sheath = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 1.15, 8), mat(0x4488ff, gm, { transparent: true, opacity: 0.7 }));
+  sheath.rotation.z = Math.PI / 2;
+  add(g, sheath, 1.12);
+  const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.18, 0), mat(0x7ab8ff, gm));
+  orb.position.x = -0.7;
+  add(g, orb, 1.16);
+  g.rotation.set(0.2, -0.3, 0.1);
+  return g;
+}
+
+function meshSkillSnare(gm) {
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.045, 6, 14), mat(0x8a7cff, gm));
+  ring.rotation.x = Math.PI / 2;
+  add(g, ring, 1.14);
+  for (let i = 0; i < 4; i++) {
+    const col = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.7, 0.05), mat(0xc8d0ff, gm));
+    const a = (i / 4) * Math.PI * 2;
+    col.position.set(Math.cos(a) * 0.42, 0.2, Math.sin(a) * 0.42);
+    add(g, col, 1.16);
+  }
+  g.rotation.set(0.25, 0.45, 0);
+  return g;
+}
+
+function meshSkillGlacier(gm) {
+  const g = new THREE.Group();
+  const ice = mat(0xc8f0ff, gm);
+  for (let i = 0; i < 6; i++) {
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.55 + (i % 2) * 0.25, 5), ice);
+    const a = (i / 6) * Math.PI * 2;
+    spike.position.set(Math.cos(a) * 0.32, 0.1, Math.sin(a) * 0.32);
+    spike.rotation.z = Math.cos(a) * 0.25;
+    add(g, spike, 1.12);
+  }
+  g.rotation.set(0.2, 0.35, 0);
+  return g;
+}
+
 const BUILDERS = {
   bait: meshBait,
   plank: meshPlank,
@@ -419,6 +519,13 @@ const BUILDERS = {
   skillFrost: meshSkillFrost,
   skillStorm: meshSkillStorm,
   skillMeteor: meshSkillMeteor,
+  skillVoid: meshSkillVoid,
+  skillPhoenix: meshSkillPhoenix,
+  skillSingularity: meshSkillSingularity,
+  skillWorldroot: meshSkillWorldroot,
+  skillBeam: meshSkillBeam,
+  skillSnare: meshSkillSnare,
+  skillGlacier: meshSkillGlacier,
   weaponHarpoon: meshSkillFrost,
   weaponKnife: meshSkillStorm,
   weaponSling: meshSkillMeteor,

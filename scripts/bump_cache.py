@@ -21,11 +21,13 @@ def main() -> None:
     ver = sys.argv[1]
     if not re.fullmatch(r"[0-9]+[a-z]?", ver):
         raise SystemExit("version like 29u")
-    bump_file(
-        ROOT / "index.html",
-        r"await import\('\./js/main\.js\?v=[^']+'\);",
-        f"await import('./js/main.js?v={ver}');",
-    )
+    html = ROOT / "index.html"
+    text = html.read_text(encoding="utf-8")
+    new, n = re.subn(r"\./js/main\.js\?v=[0-9]+[a-z]?", f"./js/main.js?v={ver}", text)
+    if n < 1:
+        raise SystemExit(f"index.html: expected main.js?v= tokens, got {n}")
+    html.write_text(new, encoding="utf-8", newline="\n")
+    print(f"updated index.html ({n} tokens)")
     bump_file(
         ROOT / "js" / "main.js",
         r"from '\./vfx/skillVfx\.js\?v=[^']+'",
