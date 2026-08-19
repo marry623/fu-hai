@@ -1,0 +1,126 @@
+/** Per-sea look packs — painterly palettes inspired by small-world biomes.
+ *  Visual only. Collision, corrosion, current, and combat stay in seaMaps / main.
+ */
+
+function pack({
+  id, name,
+  sky, fog, water,
+  fogNear, fogFar,
+  horizon, zenith,
+  sun, hemiSky, hemiGround, ambient, accent,
+  sunIntensity = 1.15,
+  hemiIntensity = 1.05,
+  cloudTint, cloudShade, cloudCount, cloudY = 48, cloudScale = 1,
+  islandSkin, reefSkin,
+  particle, particleColor, particleCount,
+  lighthouseStone, lighthouseLamp, lighthouseStripe,
+  beach, flash = false, particleAlt = null,
+  ground = null,
+}) {
+  return {
+    id, name,
+    sky, fog, water, fogNear, fogFar,
+    horizon, zenith,
+    sun, hemiSky, hemiGround, ambient, accent,
+    sunIntensity, hemiIntensity,
+    cloudTint, cloudShade, cloudCount, cloudY, cloudScale,
+    islandSkin, reefSkin,
+    particle, particleColor, particleCount,
+    lighthouseStone, lighthouseLamp, lighthouseStripe,
+    beach, flash, particleAlt,
+    ground: ground || [beach, beach, beach],
+  };
+}
+
+/** @type {Record<number, ReturnType<typeof pack>>} */
+export const SEA_BIOMES = {
+  [-1]: pack({
+    id: -1, name: 'practice',
+    sky: 0xcdeef2, fog: 0xc8e8ee, water: 0x7ee8f0,
+    fogNear: 220, fogFar: 720,
+    horizon: 0xd8f2f4, zenith: 0xb8e0ea,
+    sun: 0xfffaef, hemiSky: 0xf4fbff, hemiGround: 0x5fc6cf, ambient: 0xfff8ee, accent: 0xff7a8c,
+    cloudTint: 0xfffdf8, cloudShade: 0xd4e8ee, cloudCount: 8, cloudY: 52, cloudScale: 0.85,
+    islandSkin: 'sand', reefSkin: 'coral',
+    particle: 'bubble', particleColor: 0xc8f4ff, particleCount: 90,
+    lighthouseStone: 0x8a7a68, lighthouseLamp: 0xfff4a8, lighthouseStripe: 0xe85d4c,
+    beach: 0xf3d9a4,
+    ground: [0xf3d9a4, 0xf8e6c2, 0xf0c98a],
+  }),
+  0: pack({
+    id: 0, name: 'coral',
+    sky: 0xcdeef2, fog: 0xa8d6dc, water: 0x5fc6cf,
+    fogNear: 240, fogFar: 1000,
+    horizon: 0xe8f6f8, zenith: 0x9ad0dc,
+    sun: 0xfffaef, hemiSky: 0xfff8ef, hemiGround: 0x3aa8b8, ambient: 0xfffaef, accent: 0xff7a8c,
+    cloudTint: 0xffffff, cloudShade: 0xd0e8ee, cloudCount: 14, cloudY: 56, cloudScale: 1,
+    islandSkin: 'sand', reefSkin: 'coral',
+    particle: 'bubble', particleColor: 0xd8f6ff, particleCount: 160,
+    lighthouseStone: 0x9b6f4a, lighthouseLamp: 0xfff4a8, lighthouseStripe: 0xff7a8c,
+    beach: 0xf8e6c2,
+    ground: [0xf8e6c2, 0xf3d9a4, 0xf0c98a],
+  }),
+  1: pack({
+    id: 1, name: 'kelp',
+    sky: 0xd8e2c6, fog: 0xb6c9a3, water: 0x3aa878,
+    fogNear: 180, fogFar: 720,
+    horizon: 0xcfe0bd, zenith: 0x88a878,
+    sun: 0xfff8e0, hemiSky: 0xe8f0d4, hemiGround: 0x3a5a40, ambient: 0xeef2d8, accent: 0xf4a261,
+    sunIntensity: 0.95, hemiIntensity: 0.95,
+    cloudTint: 0xe8eed8, cloudShade: 0x9bb87c, cloudCount: 16, cloudY: 38, cloudScale: 0.8,
+    islandSkin: 'moss', reefSkin: 'kelp',
+    particle: 'pollen', particleColor: 0xcdef8f, particleCount: 140,
+    lighthouseStone: 0x3b5a3a, lighthouseLamp: 0xe8f4a0, lighthouseStripe: 0x5e7c4a,
+    beach: 0x5e7c4a,
+    ground: [0x3a5a40, 0x5e7c4a, 0x9bb87c],
+  }),
+  2: pack({
+    id: 2, name: 'wreck',
+    sky: 0xfbe9c0, fog: 0xe7c08a, water: 0xc4a05a,
+    fogNear: 100, fogFar: 520,
+    horizon: 0xfefae0, zenith: 0xe7c08a,
+    sun: 0xfff4d0, hemiSky: 0xfff4d0, hemiGround: 0x8b5a2b, ambient: 0xfff8e8, accent: 0x606c38,
+    sunIntensity: 1.25, hemiIntensity: 1.05,
+    cloudTint: 0xfff8e0, cloudShade: 0xd4a574, cloudCount: 10, cloudY: 42, cloudScale: 0.95,
+    islandSkin: 'golden', reefSkin: 'grove',
+    particle: 'pollen', particleColor: 0xf1c86b, particleCount: 180,
+    lighthouseStone: 0x8a5a2c, lighthouseLamp: 0xfff4d0, lighthouseStripe: 0xc49a3d,
+    beach: 0xdda15e,
+    ground: [0x8b5a2b, 0xdda15e, 0xfefae0],
+  }),
+  3: pack({
+    id: 3, name: 'rift',
+    sky: 0x0e0c18, fog: 0x1a1628, water: 0x241e50,
+    fogNear: 170, fogFar: 780,
+    horizon: 0x2a2458, zenith: 0x080610,
+    sun: 0x8090c8, hemiSky: 0x3a3470, hemiGround: 0x0e0c18, ambient: 0x1a1830, accent: 0xa78bfa,
+    sunIntensity: 0.75, hemiIntensity: 0.7,
+    cloudTint: 0x2a2458, cloudShade: 0x0e0c18, cloudCount: 18, cloudY: 32, cloudScale: 1.4,
+    islandSkin: 'basalt', reefSkin: 'spire',
+    particle: 'rain', particleColor: 0xb8c8ff, particleCount: 480,
+    lighthouseStone: 0x1a1628, lighthouseLamp: 0xe0eaff, lighthouseStripe: 0x4a4e69,
+    beach: 0x1a1628,
+    ground: [0x0e0c14, 0x1d1820, 0x2b2d42],
+    flash: true,
+  }),
+  4: pack({
+    id: 4, name: 'trench',
+    sky: 0x1a0f10, fog: 0x1a0e10, water: 0x4a1818,
+    fogNear: 150, fogFar: 680,
+    horizon: 0x3a1414, zenith: 0x0e0c14,
+    sun: 0xff8866, hemiSky: 0xff9050, hemiGround: 0x1d1820, ambient: 0x3a1810, accent: 0xff7a2a,
+    sunIntensity: 1.45, hemiIntensity: 0.9,
+    cloudTint: 0x3a2828, cloudShade: 0x1a0f10, cloudCount: 8, cloudY: 36, cloudScale: 1.1,
+    islandSkin: 'lava', reefSkin: 'vent',
+    particle: 'cinder', particleColor: 0xff8866, particleCount: 220,
+    lighthouseStone: 0x1d1820, lighthouseLamp: 0xff7a2a, lighthouseStripe: 0xe63946,
+    beach: 0x1d1820,
+    ground: [0x0e0c14, 0x1d1820, 0x3a2828],
+    particleAlt: 'spark',
+  }),
+};
+
+export function getSeaBiome(zoneId) {
+  const z = zoneId | 0;
+  return SEA_BIOMES[z] || SEA_BIOMES[0];
+}

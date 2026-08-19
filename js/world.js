@@ -2,36 +2,36 @@ import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
 
 export function createDuskSky() {
-  const geo = new THREE.SphereGeometry(900, 32, 16);
+  const geo = new THREE.SphereGeometry(1100, 32, 16);
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
-    uniforms: {},
+    fog: false,
+    uniforms: {
+      uHorizon: { value: new THREE.Color(0xff9e47) },
+      uZenith: { value: new THREE.Color(0x293385) },
+      uGlow: { value: new THREE.Color(0xffd173) },
+      uExp: { value: 1.5 },
+    },
     vertexShader: `
-      varying vec3 vWorld;
+      varying vec3 vDir;
       void main() {
-        vec4 w = modelMatrix * vec4(position, 1.0);
-        vWorld = w.xyz;
-        gl_Position = projectionMatrix * viewMatrix * w;
+        vDir = normalize(position);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
     fragmentShader: `
-      varying vec3 vWorld;
+      uniform vec3 uHorizon;
+      uniform vec3 uZenith;
+      uniform vec3 uGlow;
+      uniform float uExp;
+      varying vec3 vDir;
       void main() {
-        float h = normalize(vWorld).y;
-        // dusk cartoon: warm orange horizon → hot pink/magenta → purple → deep teal zenith
-        vec3 zenith = vec3(0.16, 0.20, 0.52);
-        vec3 upper = vec3(0.42, 0.22, 0.62);
-        vec3 mid = vec3(0.95, 0.35, 0.62);
-        vec3 horizon = vec3(1.0, 0.62, 0.28);
-        vec3 glow = vec3(1.0, 0.82, 0.45);
-
-        vec3 col = mix(horizon, mid, smoothstep(-0.08, 0.12, h));
-        col = mix(col, upper, smoothstep(0.08, 0.38, h));
-        col = mix(col, zenith, smoothstep(0.32, 0.92, h));
-        float sunBand = exp(-pow((h - 0.02) * 5.5, 2.0));
-        col = mix(col, glow, sunBand * 0.55);
-        // cartoon posterize — keep vivid blocks
+        float t = clamp(vDir.y + 0.05, 0.0, 1.0);
+        t = pow(t, uExp);
+        vec3 col = mix(uHorizon, uZenith, t);
+        float sunBand = exp(-pow((vDir.y - 0.02) * 5.5, 2.0));
+        col = mix(col, uGlow, sunBand * 0.35);
         col = floor(col * 8.0 + 0.5) / 8.0;
         gl_FragColor = vec4(col, 1.0);
       }
@@ -40,6 +40,17 @@ export function createDuskSky() {
   const sky = new THREE.Mesh(geo, mat);
   sky.name = 'duskSky';
   sky.renderOrder = -100;
+  sky.frustumCulled = false;
+  sky.userData.setBiome = (biome) => {
+    mat.uniforms.uHorizon.value.setHex(biome.horizon);
+    mat.uniforms.uZenith.value.setHex(biome.zenith);
+    mat.uniforms.uGlow.value.setHex(biome.sun);
+    mat.uniforms.uExp.value = biome.id === 2 ? 1.15 : biome.id >= 3 ? 1.35 : 1.55;
+  };
+  sky.userData.follow = (pos) => {
+    sky.position.x = pos.x;
+    sky.position.z = pos.z;
+  };
   return sky;
 }
 
@@ -68,27 +79,68 @@ export function createSun() {
   glow.lookAt(0, 20, 0);
   glow.userData.skipOutline = true;
   group.add(glow);
+
+  group.userData.setBiome = (biome) => {
+    disc.material.color.setHex(biome.sun);
+    glow.material.color.setHex(biome.accent);
+    glow.material.opacity = biome.id >= 2 ? 0.18 : 0.28;
+    group.visible = biome.sunIntensity >= 0.55;
+  };
+  const look = new THREE.Vector3();
+  group.userData.follow = (pos) => {
+    group.position.x = pos.x;
+    group.position.z = pos.z;
+    look.set(pos.x, 20, pos.z);
+    disc.lookAt(look);
+    glow.lookAt(look);
+  };
   return group;
 }
 
 export function createClouds(gradientMap) {
   const root = new THREE.Group();
+  root.name = 'worldClouds';
   const positions = [
     [-80, 42, -120], [40, 48, -160], [120, 38, -90],
     [-140, 50, -40], [20, 55, 140], [-60, 44, 160],
     [160, 46, 60], [-180, 52, 100], [90, 40, -200],
     [-30, 58, -250], [200, 45, -150], [-220, 48, -180],
+    [70, 50, 220], [-250, 44, 40], [240, 52, 90],
+    [-100, 36, 240], [30, 60, -40], [-160, 42, -280],
+    [280, 46, -60], [-40, 54, 280],
   ];
 
   for (const [x, y, z] of positions) {
     const cloud = makeCloud(gradientMap);
     cloud.position.set(x, y, z);
+    cloud.userData.baseY = y;
+    cloud.userData.baseScale = 0.8 + Math.random() * 1.4;
     cloud.rotation.y = Math.random() * Math.PI;
-    const s = 0.8 + Math.random() * 1.4;
-    cloud.scale.setScalar(s);
+    cloud.scale.setScalar(cloud.userData.baseScale);
     root.add(cloud);
   }
+
+  root.userData.setBiome = (biome) => {
+    const n = Math.max(0, Math.min(root.children.length, biome.cloudCount ?? 12));
+    root.children.forEach((cloud, i) => {
+      cloud.visible = i < n;
+      cloud.position.y = biome.cloudY ?? cloud.userData.baseY;
+      cloud.scale.setScalar((cloud.userData.baseScale || 1) * (biome.cloudScale ?? 1));
+      tintCloud(cloud, biome.cloudTint, biome.cloudShade);
+    });
+  };
+  root.userData.follow = (pos) => {
+    root.position.x = pos.x;
+    root.position.z = pos.z;
+  };
   return root;
+}
+
+function tintCloud(cloud, tint, shade) {
+  cloud.traverse((m) => {
+    if (!m.isMesh || m.userData.isOutline || !m.material?.color) return;
+    m.material.color.setHex(m.userData.cloudLayer === 'bot' ? shade : tint);
+  });
 }
 
 function makeCloud(gradientMap) {
@@ -110,6 +162,7 @@ function makeCloud(gradientMap) {
       new THREE.SphereGeometry(1, 5, 4),
       i < 3 ? top : bot
     );
+    mesh.userData.cloudLayer = i < 3 ? 'top' : 'bot';
     mesh.position.set(bx, by, bz);
     mesh.scale.set(sx, sy, sz);
     g.add(mesh);

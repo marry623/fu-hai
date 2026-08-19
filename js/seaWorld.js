@@ -2,24 +2,32 @@
 
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
-import { getSeaMap, constrainToPoly, pointInPoly, EVAC_RADIUS } from './seaMaps.js?v=29m';
+import { getSeaMap, constrainToPoly, pointInPoly, EVAC_RADIUS } from './seaMaps.js?v=30h';
+import { getSeaBiome } from './seaBiomes.js?v=30h';
+import { scatterBiomeDecor, updateBiomeDecor, jitterRockCluster } from './biomeDecor.js?v=30h';
 
 function M(geo, color, gradientMap, outline = 1.05) {
-  const m = new THREE.Mesh(geo, toonMat(color, gradientMap));
+  const m = new THREE.Mesh(geo, toonMat(color, gradientMap, { flatShading: true }));
   if (outline) addOutline(m, outline);
   return m;
 }
 
-function makeLighthouse(gm) {
+function makeLighthouse(gm, biome) {
   const g = new THREE.Group();
   // Built at ~3× original dimensions so the tower reads from far away
   const S = 3;
-  const base = M(new THREE.CylinderGeometry(1.4 * S, 1.6 * S, 0.8 * S, 6), 0x4a5568, gm, 1.04);
+  const stone = biome?.lighthouseStone ?? 0x4a5568;
+  const stripe = biome?.lighthouseStripe ?? 0xe85d4c;
+  const lamp = biome?.lighthouseLamp ?? 0xfff4a8;
+  const cream = biome?.islandSkin === 'sand' || biome?.islandSkin === 'golden' || biome?.id === -1
+    ? 0xfefae0
+    : stone;
+  const base = M(new THREE.CylinderGeometry(1.4 * S, 1.6 * S, 0.8 * S, 6), stone, gm, 1.04);
   base.position.y = 0.4 * S;
   g.add(base);
   const stripes = [
-    [0xf5f0e6, 1.0], [0xe85d4c, 0.92], [0xf5f0e6, 0.85],
-    [0xe85d4c, 0.78], [0xf5f0e6, 0.72],
+    [cream, 1.0], [stripe, 0.92], [cream, 0.85],
+    [stripe, 0.78], [cream, 0.72],
   ];
   let y = 0.8 * S;
   for (const [col, r] of stripes) {
@@ -28,7 +36,7 @@ function makeLighthouse(gm) {
     g.add(ring);
     y += 1.45 * S;
   }
-  const cap = M(new THREE.ConeGeometry(0.95 * S, 1.0 * S, 8), 0xe85d4c, gm, 1.06);
+  const cap = M(new THREE.ConeGeometry(0.95 * S, 1.0 * S, 8), stripe, gm, 1.06);
   cap.position.y = y + 0.6 * S;
   g.add(cap);
 
@@ -36,7 +44,7 @@ function makeLighthouse(gm) {
   const beaconY = y + 0.35 * S;
   const lightCore = new THREE.Mesh(
     new THREE.SphereGeometry(1.35 * S, 10, 8),
-    new THREE.MeshBasicMaterial({ color: 0xfff4a8 })
+    new THREE.MeshBasicMaterial({ color: lamp })
   );
   lightCore.position.y = beaconY;
   lightCore.userData.skipOutline = true;
@@ -45,7 +53,7 @@ function makeLighthouse(gm) {
   const lightHalo = new THREE.Mesh(
     new THREE.SphereGeometry(2.2 * S, 10, 8),
     new THREE.MeshBasicMaterial({
-      color: 0xffe066,
+      color: lamp,
       transparent: true,
       opacity: 0.35,
       depthWrite: false,
@@ -59,7 +67,7 @@ function makeLighthouse(gm) {
   const beam = new THREE.Mesh(
     new THREE.CylinderGeometry(0.55 * S, 1.8 * S, 55 * S, 8, 1, true),
     new THREE.MeshBasicMaterial({
-      color: 0xfff0a0,
+      color: lamp,
       transparent: true,
       opacity: 0.22,
       side: THREE.DoubleSide,
@@ -70,7 +78,7 @@ function makeLighthouse(gm) {
   beam.userData.skipOutline = true;
   g.add(beam);
 
-  const point = new THREE.PointLight(0xffe8a0, 4.5, 900, 1.4);
+  const point = new THREE.PointLight(lamp, 4.5, 900, 1.4);
   point.position.y = beaconY;
   g.add(point);
 
@@ -99,22 +107,107 @@ function makeLighthouse(gm) {
   return g;
 }
 
-function beachRing(poly, gradientMap) {
+function beachRing(poly, gradientMap, sandHex = 0xe8d5a3) {
   const g = new THREE.Group();
   for (let i = 0; i < poly.length; i++) {
     const a = poly[i];
     const b = poly[(i + 1) % poly.length];
     const mx = (a.x + b.x) / 2;
     const mz = (a.z + b.z) / 2;
-    const sand = M(new THREE.CylinderGeometry(16, 20, 0.8, 6), 0xe8d5a3, gradientMap, 1.02);
+    const sand = M(new THREE.CylinderGeometry(10, 13, 0.7, 6), sandHex, gradientMap, 1.02);
     sand.position.set(mx, -0.15, mz);
     g.add(sand);
     // Outer shelf between vertices for continuous shoreline
-    const sand2 = M(new THREE.CylinderGeometry(12, 14, 0.6, 6), 0xe8d5a3, gradientMap, 1.02);
+    const sand2 = M(new THREE.CylinderGeometry(8, 10, 0.5, 6), sandHex, gradientMap, 1.02);
     sand2.position.set(a.x, -0.2, a.z);
     g.add(sand2);
   }
   return g;
+}
+
+function reefColor(biome, i) {
+  switch (biome.reefSkin) {
+    case 'coral': return i % 2 ? biome.accent : 0xf0c98a;
+    case 'kelp': return i % 2 ? 0x3a5a40 : 0x5e7c4a;
+    case 'grove': return i % 2 ? 0x5a3a18 : 0x8a5a2c;
+    case 'wreck': return i % 2 ? 0x4a3a28 : biome.lighthouseStone;
+    case 'spire': return biome.lighthouseStone;
+    case 'vent': return biome.lighthouseStone;
+    default: return 0x6b7a88;
+  }
+}
+
+function hash2(x, z) {
+  const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+function makeIslandMesh(isl, biome, gm) {
+  const r = isl.r;
+  const shape = isl.shape || 'round';
+  const geo = new THREE.IcosahedronGeometry(1, 2);
+  const pos = geo.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  const g0 = new THREE.Color(biome.ground?.[0] ?? biome.beach ?? 0xf8e6c2);
+  const g1 = new THREE.Color(biome.ground?.[1] ?? g0);
+  const g2 = new THREE.Color(biome.ground?.[2] ?? g1);
+  const seed = hash2(isl.x, isl.z);
+  let stretchX = 1;
+  let stretchZ = 1;
+  if (shape === 'oblong') {
+    stretchX = 1.28;
+    stretchZ = 0.72;
+  }
+  const yaw = seed * Math.PI * 2;
+  const c = Math.cos(yaw);
+  const s = Math.sin(yaw);
+
+  for (let i = 0; i < pos.count; i++) {
+    let x = pos.getX(i);
+    let y = pos.getY(i);
+    let z = pos.getZ(i);
+    const nrm = Math.hypot(x, y, z) || 1;
+    x /= nrm;
+    y /= nrm;
+    z /= nrm;
+    const noise = 0.1 * Math.sin((x + seed) * 7.1) * Math.cos((z - seed) * 5.3);
+    let px = x * (1 + noise) * stretchX;
+    let pz = z * (1 + noise) * stretchZ;
+    let py = Math.max(-0.12, y * 0.4 + 0.14);
+    if (shape === 'kidney') {
+      const bite = Math.max(0, px - 0.32);
+      px -= bite * 0.58;
+    }
+    const d = Math.hypot(px, pz) || 1;
+    if (d > 0.98) {
+      px = (px / d) * 0.98;
+      pz = (pz / d) * 0.98;
+    }
+    const wx = (px * c - pz * s) * r;
+    const wz = (px * s + pz * c) * r;
+    const wy = py * r * 0.52 + 0.2;
+    pos.setXYZ(i, wx, wy, wz);
+    const t = Math.max(0, Math.min(1, wy / (r * 0.45)));
+    const col = g0.clone().lerp(g1, t).lerp(g2, t * t * 0.4);
+    colors[i * 3] = col.r;
+    colors[i * 3 + 1] = col.g;
+    colors[i * 3 + 2] = col.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.computeVertexNormals();
+  const mat = toonMat(0xffffff, gm, { vertexColors: true, flatShading: true });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(isl.x, 0, isl.z);
+  addOutline(m, 1.03);
+  return m;
+}
+
+function makeShoal(s, sandHex, gm) {
+  const m = M(new THREE.CylinderGeometry(1, 1.1, 0.32, 8), sandHex, gm, 1.02);
+  m.scale.set(s.rx, 1, s.rz);
+  m.position.set(s.x, -0.04, s.z);
+  m.rotation.y = s.yaw || 0;
+  return m;
 }
 
 /**
@@ -133,6 +226,8 @@ export function createSeaWorld() {
   let current = null;
   /** @type {THREE.Object3D[]} */
   let lighthouses = [];
+  /** @type {THREE.Group|null} */
+  let decorRoot = null;
 
   function reset() {
     while (root.children.length) {
@@ -140,6 +235,7 @@ export function createSeaWorld() {
       root.remove(c);
     }
     lighthouses = [];
+    decorRoot = null;
     current = null;
   }
 
@@ -147,30 +243,50 @@ export function createSeaWorld() {
     reset();
     if (!root.parent) scene.add(root);
     const map = getSeaMap(zoneId);
+    const biome = getSeaBiome(zoneId);
     current = map;
 
-    // Apply palette
-    scene.background.set(map.sky);
-    scene.fog.color.set(map.fog);
-    // Large seas: keep distant beacons readable
-    scene.fog.near = map.feature === 'fog' ? 120 : 220;
-    scene.fog.far = map.feature === 'fog' ? 520 : 980;
-    setWaterColor(water, map.water);
+    scene.background.setHex(biome.sky);
+    scene.fog.color.setHex(biome.fog);
+    scene.fog.near = biome.fogNear;
+    scene.fog.far = biome.fogFar;
+    setWaterColor(water, biome.water);
 
-    root.add(beachRing(map.navigable, gradientMap));
+    root.add(beachRing(map.navigable, gradientMap, biome.beach));
+
+    for (const shoal of map.shoals || []) {
+      root.add(makeShoal(shoal, biome.beach, gradientMap));
+    }
 
     for (const isl of map.islands) {
-      const sand = M(new THREE.CylinderGeometry(isl.r, isl.r * 1.15, 0.8, 7), 0xf0e0c0, gradientMap, 1.03);
-      sand.position.set(isl.x, 0.2, isl.z);
-      root.add(sand);
-      const grass = M(new THREE.CylinderGeometry(isl.r * 0.7, isl.r * 0.85, 0.5, 6), 0x5cb85c, gradientMap, 1.04);
-      grass.position.set(isl.x, 0.7, isl.z);
-      root.add(grass);
+      root.add(makeIslandMesh(isl, biome, gradientMap));
+      if (biome.islandSkin === 'lava') {
+        const seam = M(new THREE.BoxGeometry(isl.r * 0.7, 0.28, 0.28), biome.accent, gradientMap, 1.08);
+        seam.position.set(isl.x, 1.1, isl.z);
+        seam.rotation.y = isl.x * 0.02;
+        root.add(seam);
+      }
     }
 
     for (const r of map.reefs) {
+      const skin = biome.reefSkin;
+      if (skin === 'grove' || skin === 'coral' || skin === 'kelp') {
+        const col = reefColor(biome, 0);
+        const cluster = jitterRockCluster(gradientMap, col, r.r * 0.38, hash2(r.x, r.z));
+        cluster.position.set(r.x, 0, r.z);
+        root.add(cluster);
+        continue;
+      }
       for (let i = 0; i < 3; i++) {
-        const rock = M(new THREE.DodecahedronGeometry(r.r * (0.35 + i * 0.15), 0), 0x6b7a88, gradientMap, 1.05);
+        const col = reefColor(biome, i);
+        let rock;
+        if (skin === 'spire') {
+          rock = M(new THREE.ConeGeometry(r.r * (0.22 + i * 0.12), r.r * (0.85 + i * 0.35), 5), col, gradientMap, 1.05);
+        } else if (skin === 'vent') {
+          rock = M(new THREE.DodecahedronGeometry(r.r * (0.32 + i * 0.14), 0), col, gradientMap, 1.05);
+        } else {
+          rock = M(new THREE.DodecahedronGeometry(r.r * (0.35 + i * 0.15), 0), col, gradientMap, 1.05);
+        }
         rock.position.set(
           r.x + (Math.random() - 0.5) * r.r,
           0.2 + Math.random() * 0.4,
@@ -183,7 +299,7 @@ export function createSeaWorld() {
 
     lighthouses = [];
     for (const lh of map.lighthouses) {
-      const mesh = makeLighthouse(gradientMap);
+      const mesh = makeLighthouse(gradientMap, biome);
       mesh.position.set(lh.x, 0, lh.z);
       mesh.userData.checkpoint = lh.id;
       mesh.userData.lhId = lh.id;
@@ -193,6 +309,8 @@ export function createSeaWorld() {
       root.add(mesh);
       lighthouses.push(mesh);
     }
+
+    decorRoot = scatterBiomeDecor(root, map, biome, gradientMap);
 
     return map;
   }
@@ -357,6 +475,7 @@ export function createSeaWorld() {
     scatterProps,
     updateBeacons,
     setEvacRingActive,
+    updateDecor: (time) => updateBiomeDecor(decorRoot, time),
     getMap: () => current,
     getLighthouses: () => lighthouses,
   };

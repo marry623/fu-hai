@@ -204,8 +204,9 @@ export function settleRun(meta, {
 
   const boat = clampBoatId(meta.unlocks, boatId);
   // Voyage paycheck — distance is the main term; mods no longer pay (was re-equip farmable).
+  // Sink pays 0 fragments so wrecking cannot farm the return formula.
   const base = 40 + Math.floor(distance / 15) + Math.floor(kills / 3) * 10 + newFishCount * 10;
-  const gain = success ? base : Math.max(10, Math.floor(base * 0.4));
+  const gain = success ? base : 0;
   m.fragments += gain;
   m.bestDistance = Math.max(m.bestDistance || 0, distance);
 

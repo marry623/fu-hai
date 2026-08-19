@@ -22,8 +22,8 @@ import { getFishDef, pickFishForZone, RARITY } from './fishCatalog.js?v=29q';
 import { createFishMesh } from './fishMeshes.js?v=29q';
 import { getFishPortrait } from './fishPortrait.js?v=29q';
 import { getItemPortrait } from './itemPortrait.js?v=29r';
-import { getSeaMap, EVAC_HOLD } from './seaMaps.js?v=29m';
-import { getZone } from './zones.js?v=29m';
+import { getSeaMap, EVAC_HOLD } from './seaMaps.js?v=30h';
+import { getZone } from './zones.js?v=30h';
 import {
   loadMeta, settleRun, hullMaxForBoat, thrustMulForBoat, hasWeaponUnlock,
   discoverFish, discoverMonster, syncLoadoutSuppliesFromWarehouse, consumeLoadoutOnDepart,
@@ -34,9 +34,11 @@ import { createHub } from './hub.js?v=29s';
 import { createCoverScene } from './coverScene.js?v=28m';
 import { createHubIsland } from './hubIsland.js?v=28k';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=29q';
-import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=29l';
+import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=30h';
+import { getSeaBiome } from './seaBiomes.js?v=30h';
+import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=30b';
-import { createSkillVfx, SKILL_CARDS } from './vfx/skillVfx.js?v=30f';
+import { createSkillVfx, SKILL_CARDS } from './vfx/skillVfx.js?v=30h';
 import * as sfx from './audio.js?v=29y';
 
 const canvas = document.getElementById('c');
@@ -546,13 +548,16 @@ scene.background = new THREE.Color(0x7dd3fc);
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 2200);
 const gradientMap = createToonGradient();
 
-scene.add(new THREE.HemisphereLight(0xffe8d0, 0x2ecfc4, 1.1));
+const hemiLight = new THREE.HemisphereLight(0xffe8d0, 0x2ecfc4, 1.1);
+scene.add(hemiLight);
 const sun = new THREE.DirectionalLight(0xffd2a0, 1.1);
 sun.position.set(-80, 50, -120);
 scene.add(sun);
-scene.add(new THREE.AmbientLight(0xfff0e8, 0.35));
+const ambLight = new THREE.AmbientLight(0xfff0e8, 0.35);
+scene.add(ambLight);
 
-scene.add(createDuskSky());
+const duskSky = createDuskSky();
+scene.add(duskSky);
 const duskSun = createSun();
 scene.add(duskSun);
 const worldClouds = createClouds(gradientMap);
@@ -670,6 +675,7 @@ function mouseOnWater() {
 
 const seaWorld = createSeaWorld();
 scene.add(seaWorld.root);
+const weatherFx = createWeatherFx(scene);
 
 const coverScene = createCoverScene(gradientMap);
 scene.add(coverScene.root);
@@ -678,7 +684,7 @@ const hubBoatPreview = createHubBoatPreview(scene, gradientMap);
 hubBoatPreview.setVisible(false);
 scene.add(hubIsland.root);
 
-const playVisuals = [water, foam, boat, flotRoot, vRoot, hazards.root, skillVfx.root, seaWorld.root, worldClouds, duskSun, aimRing, bobberMesh, fishLine];
+const playVisuals = [water, foam, boat, flotRoot, vRoot, hazards.root, skillVfx.root, seaWorld.root, worldClouds, duskSun, aimRing, bobberMesh, fishLine, weatherFx.root];
 const duskBits = [];
 scene.traverse((o) => {
   if (o.name === 'duskSky') duskBits.push(o);
@@ -702,6 +708,15 @@ function setWorldMode(mode) {
   if (ui.cover) ui.cover.classList.toggle('hidden', mode !== 'cover');
   if (ui.hud) ui.hud.classList.toggle('hidden', mode !== 'play');
 
+  if (mode === 'cover' || mode === 'hub') {
+    hemiLight.color.setHex(0xffe8d0);
+    hemiLight.groundColor.setHex(0x2ecfc4);
+    hemiLight.intensity = 1.1;
+    sun.color.setHex(0xffd2a0);
+    sun.intensity = 1.1;
+    ambLight.color.setHex(0xfff0e8);
+  }
+
   if (mode === 'cover') {
     scene.background.set(0xb8dff5);
     scene.fog.near = 80;
@@ -713,8 +728,7 @@ function setWorldMode(mode) {
     scene.fog.far = 200;
     scene.fog.color.set(0xc5e8f8);
   } else {
-    scene.fog.near = 120;
-    scene.fog.far = 420;
+    // Play fog/sky come from applyZoneVisual / seaWorld.load biome packs.
   }
 }
 
@@ -1726,7 +1740,7 @@ function finishRun(outcome) {
     ? (success ? '教学关物资不入库 · 仅标记教程完成' : '教学关沉船 · 不写入仓库')
     : success
       ? `鱼获入库 ${fishToStore.length} · 新鱼种 ${runNewFish}`
-      : '沉船未入库活鱼（防刷）';
+      : '沉船：海图碎片 0 · 活鱼不入库';
   const hullNote = lostHull ? ` · ${HULL_NAMES[lostHull] || lostHull}已沉没，需在市集重买` : '';
   const stats = `航行 ${dist} 米 · 改装 ${state.mods} · 击杀 ${state.kills} · 海图碎片 +${gain}${hullNote}
 ${storeNote}`;
@@ -1842,7 +1856,7 @@ function startRun(fromCheckpoint = false) {
 
   const loaded = seaWorld.load(startZone, scene, gradientMap, water);
   seaWorld.scatterProps(vortices, flotsam);
-  tintVortexField(vortices, loaded.water);
+  applyZoneVisual(getZone(0, startZone));
   hazards.spawnScattered({
     count: combatCountForZone(startZone),
     map: loaded,
@@ -1870,13 +1884,23 @@ function startRun(fromCheckpoint = false) {
 }
 
 function applyZoneVisual(z) {
-  const map = getSeaMap(z.id);
-  scene.fog.color.set(map.fog);
-  scene.background.set(map.sky);
-  scene.fog.near = map.feature === 'fog' ? 120 : 220;
-  scene.fog.far = map.feature === 'fog' ? 520 : 980;
-  setWaterColor(water, map.water);
-  tintVortexField(vortices, map.water);
+  const biome = getSeaBiome(z.id);
+  scene.fog.color.setHex(biome.fog);
+  scene.background.setHex(biome.sky);
+  scene.fog.near = biome.fogNear;
+  scene.fog.far = biome.fogFar;
+  setWaterColor(water, biome.water);
+  tintVortexField(vortices, biome.water);
+  hemiLight.color.setHex(biome.hemiSky);
+  hemiLight.groundColor.setHex(biome.hemiGround);
+  hemiLight.intensity = biome.hemiIntensity;
+  sun.color.setHex(biome.sun);
+  sun.intensity = biome.sunIntensity;
+  ambLight.color.setHex(biome.ambient);
+  duskSky.userData.setBiome?.(biome);
+  duskSun.userData.setBiome?.(biome);
+  worldClouds.userData.setBiome?.(biome);
+  weatherFx.setPreset(biome);
   ui.zoneName.textContent = z.name;
 }
 
@@ -2475,6 +2499,11 @@ function tick() {
   if (phase === 'play' || phase === 'run' || state.started) {
     updateWaterFollow(water, t, boat.position);
     seaWorld.updateBeacons(t);
+    seaWorld.updateDecor?.(t);
+    weatherFx.update(dt, boat.position);
+    duskSky.userData.follow?.(boat.position);
+    duskSun.userData.follow?.(boat.position);
+    worldClouds.userData.follow?.(boat.position);
   } else if (phase === 'hub' && hub?.shipUiOpen) {
     const waterFocus = hubBoatPreview.boat.position;
     updateWater(water, t, waterFocus);

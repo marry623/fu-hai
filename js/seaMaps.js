@@ -1,5 +1,6 @@
-/** Five sea maps — large irregular navigable regions + 3 lighthouses each
- *  Rule: every lighthouse is ≥500m from spawn.
+/** Five sea maps — modest 0.6 scale for denser painterly biomes.
+ *  Collision still uses island/reef discs. Shoals are visual-only.
+ *  Gameplay: corrosionMul, feature, spawn kinds/counts, EVAC unchanged.
  */
 
 /** @typedef {{ x:number, z:number }} Pt */
@@ -31,7 +32,7 @@ function makeSea({
   id, name, water, fog, sky, minimap,
   corrosionMul, feature, unlockHint,
   cx, cz, rx, rz, rot = 0, n = 16, jitter = 0.2,
-  lh, reefs, islands, spawns, spawn,
+  lh, reefs, islands, spawns, spawn, shoals,
 }) {
   let navigable = ring(cx, cz, rx, rz, n, jitter);
   if (rot) {
@@ -48,6 +49,7 @@ function makeSea({
     navigable,
     reefs: reefs || [],
     islands: islands || [],
+    shoals: shoals || [],
     lighthouses: lh,
     spawnPoints: spawns,
     spawn,
@@ -97,144 +99,198 @@ export function constrainToPoly(x, z, poly) {
 }
 
 /**
- * Large seas (~1.4–1.8km across). Spawn at south; three lighthouses ≥500m away.
- * Distances checked: hypot(lh - spawn) >= 500 for every entry below.
+ * Seas scaled ~0.6 from the 1.4–1.8km originals. Spawn at south;
+ * lighthouses ~300–650m from spawn. Island/reef collision radii are discs.
  */
 export const SEA_MAPS = [
   makeSea({
     id: 0, name: '珊瑚浅滩',
-    water: 0x3cf5e6, fog: 0xa5d8ff, sky: 0x7dd3fc, minimap: '#0d5a62',
+    water: 0x5fc6cf, fog: 0xa8d6dc, sky: 0xcdeef2, minimap: '#0d5a62',
     corrosionMul: 1, feature: 'none', unlockHint: '初始海域',
-    cx: 0, cz: 620, rx: 780, rz: 720, n: 18, jitter: 0.16,
+    cx: 0, cz: 372, rx: 468, rz: 432, n: 18, jitter: 0.16,
     spawn: { x: 0, z: 0, yaw: 0 },
     lh: [
-      { x: -520, z: 380, id: 'lh0' }, // ~644m
-      { x: 540, z: 420, id: 'lh1' },  // ~684m
-      { x: 30, z: 1050, id: 'lh2' },  // ~1050m
+      { x: -312, z: 228, id: 'lh0' },
+      { x: 324, z: 252, id: 'lh1' },
+      { x: 18, z: 630, id: 'lh2' },
     ],
     reefs: [
-      { x: -180, z: 220, r: 18 }, { x: 220, z: 480, r: 16 }, { x: 40, z: 360, r: 14 },
-      { x: -320, z: 700, r: 20 }, { x: 360, z: 260, r: 15 }, { x: 160, z: 820, r: 17 },
-      { x: -100, z: 560, r: 12 },
+      { x: -108, z: 132, r: 15 }, { x: 132, z: 288, r: 14 }, { x: 24, z: 216, r: 12 },
+      { x: -192, z: 420, r: 17 }, { x: 216, z: 156, r: 13 }, { x: 96, z: 492, r: 14 },
+      { x: -60, z: 336, r: 10 }, { x: 180, z: 216, r: 12 }, { x: -216, z: 288, r: 13 },
+      { x: 48, z: 408, r: 11 },
     ],
     islands: [
-      { x: -140, z: 640, r: 28 }, { x: 280, z: 760, r: 22 }, { x: 80, z: 280, r: 18 },
+      { x: -84, z: 384, r: 24, shape: 'round' },
+      { x: 168, z: 456, r: 19, shape: 'oblong' },
+      { x: 48, z: 168, r: 15, shape: 'kidney' },
+      { x: -240, z: 240, r: 17, shape: 'oblong' },
+      { x: 252, z: 348, r: 15, shape: 'round' },
+      { x: 0, z: 300, r: 14, shape: 'kidney' },
+      { x: 120, z: 120, r: 12, shape: 'round' },
+    ],
+    shoals: [
+      { x: 90, z: 240, rx: 22, rz: 8, yaw: 0.4 },
+      { x: -150, z: 180, rx: 18, rz: 7, yaw: -0.3 },
+      { x: 40, z: 450, rx: 20, rz: 6, yaw: 0.8 },
     ],
     spawns: [
-      { x: -280, z: 300, kind: 'ram' }, { x: 320, z: 280, kind: 'ram' },
-      { x: -160, z: 780, kind: 'ram' }, { x: 200, z: 520, kind: 'ranged' },
-      { x: -420, z: 500, kind: 'ranged' }, { x: 120, z: 200, kind: 'wrap' },
-      { x: 400, z: 700, kind: 'wrap' }, { x: -60, z: 480, kind: 'ram' },
-      { x: 60, z: 600, kind: 'plank' }, { x: 240, z: 360, kind: 'plank' },
-      { x: -360, z: 640, kind: 'plank' }, { x: 100, z: 900, kind: 'ram' },
+      { x: -168, z: 180, kind: 'ram' }, { x: 192, z: 168, kind: 'ram' },
+      { x: -96, z: 468, kind: 'ram' }, { x: 120, z: 312, kind: 'ranged' },
+      { x: -252, z: 300, kind: 'ranged' }, { x: 72, z: 120, kind: 'wrap' },
+      { x: 240, z: 420, kind: 'wrap' }, { x: -36, z: 288, kind: 'ram' },
+      { x: 36, z: 360, kind: 'plank' }, { x: 144, z: 216, kind: 'plank' },
+      { x: -216, z: 384, kind: 'plank' }, { x: 60, z: 540, kind: 'ram' },
     ],
   }),
   makeSea({
     id: 1, name: '缠绕藻林',
-    water: 0x34d399, fog: 0x6ee7b7, sky: 0x86efac, minimap: '#0d4a38',
+    water: 0x3aa878, fog: 0xb6c9a3, sky: 0xd8e2c6, minimap: '#0d4a38',
     corrosionMul: 1.1, feature: 'current', unlockHint: '航行归航解锁',
-    cx: 40, cz: 640, rx: 760, rz: 740, rot: 0.22, n: 17, jitter: 0.18,
-    spawn: { x: 20, z: 10, yaw: 0.1 },
+    cx: 24, cz: 384, rx: 456, rz: 444, rot: 0.22, n: 17, jitter: 0.18,
+    spawn: { x: 12, z: 6, yaw: 0.1 },
     lh: [
-      { x: -480, z: 360, id: 'lh0' }, // ~610m
-      { x: 560, z: 480, id: 'lh1' },  // ~717m
-      { x: 60, z: 1100, id: 'lh2' },  // ~1091m
+      { x: -288, z: 216, id: 'lh0' },
+      { x: 336, z: 288, id: 'lh1' },
+      { x: 36, z: 660, id: 'lh2' },
     ],
     reefs: [
-      { x: 40, z: 300, r: 22 }, { x: -260, z: 580, r: 18 }, { x: 300, z: 420, r: 16 },
-      { x: 180, z: 820, r: 19 }, { x: -400, z: 240, r: 14 }, { x: -80, z: 700, r: 15 },
+      { x: 24, z: 180, r: 19 }, { x: -156, z: 348, r: 15 }, { x: 180, z: 252, r: 14 },
+      { x: 108, z: 492, r: 16 }, { x: -240, z: 144, r: 12 }, { x: -48, z: 420, r: 13 },
+      { x: 90, z: 330, r: 11 }, { x: -120, z: 240, r: 12 },
     ],
     islands: [
-      { x: 200, z: 640, r: 26 }, { x: -200, z: 880, r: 20 }, { x: 80, z: 400, r: 16 },
+      { x: 120, z: 384, r: 22, shape: 'oblong' },
+      { x: -120, z: 528, r: 17, shape: 'round' },
+      { x: 48, z: 240, r: 14, shape: 'kidney' },
+      { x: -216, z: 300, r: 16, shape: 'round' },
+      { x: 216, z: 420, r: 15, shape: 'oblong' },
+      { x: 0, z: 468, r: 13, shape: 'kidney' },
+    ],
+    shoals: [
+      { x: 60, z: 150, rx: 20, rz: 7, yaw: 0.5 },
+      { x: -90, z: 390, rx: 16, rz: 6, yaw: -0.6 },
     ],
     spawns: [
-      { x: -340, z: 340, kind: 'ram' }, { x: 380, z: 360, kind: 'ram' },
-      { x: 80, z: 720, kind: 'ram' }, { x: -200, z: 560, kind: 'ranged' },
-      { x: 360, z: 800, kind: 'ranged' }, { x: 40, z: 240, kind: 'wrap' },
-      { x: 440, z: 560, kind: 'wrap' }, { x: -300, z: 780, kind: 'ram' },
-      { x: 140, z: 480, kind: 'plank' }, { x: -120, z: 640, kind: 'plank' },
-      { x: 220, z: 960, kind: 'ram' },
+      { x: -204, z: 204, kind: 'ram' }, { x: 228, z: 216, kind: 'ram' },
+      { x: 48, z: 432, kind: 'ram' }, { x: -120, z: 336, kind: 'ranged' },
+      { x: 216, z: 480, kind: 'ranged' }, { x: 24, z: 144, kind: 'wrap' },
+      { x: 264, z: 336, kind: 'wrap' }, { x: -180, z: 468, kind: 'ram' },
+      { x: 84, z: 288, kind: 'plank' }, { x: -72, z: 384, kind: 'plank' },
+      { x: 132, z: 576, kind: 'ram' },
     ],
   }),
   makeSea({
     id: 2, name: '沉船雾区',
-    water: 0xd4a017, fog: 0xfde68a, sky: 0xfcd34d, minimap: '#5a4010',
+    water: 0xc4a05a, fog: 0xe7c08a, sky: 0xfbe9c0, minimap: '#8a6020',
     corrosionMul: 1.2, feature: 'fog', unlockHint: '航行归航解锁',
-    cx: -20, cz: 600, rx: 800, rz: 700, rot: -0.18, n: 18, jitter: 0.15,
-    spawn: { x: -10, z: -10, yaw: 0 },
+    cx: -12, cz: 360, rx: 480, rz: 420, rot: -0.18, n: 18, jitter: 0.15,
+    spawn: { x: -6, z: -6, yaw: 0 },
     lh: [
-      { x: -560, z: 340, id: 'lh0' }, // ~645m
-      { x: 520, z: 300, id: 'lh1' },  // ~609m
-      { x: 40, z: 1020, id: 'lh2' },  // ~1031m
+      { x: -336, z: 204, id: 'lh0' },
+      { x: 312, z: 180, id: 'lh1' },
+      { x: 24, z: 612, id: 'lh2' },
     ],
     reefs: [
-      { x: -160, z: 380, r: 24 }, { x: 240, z: 560, r: 18 }, { x: -320, z: 700, r: 16 },
-      { x: 400, z: 780, r: 22 }, { x: 20, z: 200, r: 14 }, { x: 120, z: 880, r: 15 },
+      { x: -96, z: 228, r: 20 }, { x: 144, z: 336, r: 15 }, { x: -192, z: 420, r: 14 },
+      { x: 240, z: 468, r: 19 }, { x: 12, z: 120, r: 12 }, { x: 72, z: 528, r: 13 },
+      { x: -48, z: 300, r: 11 }, { x: 180, z: 216, r: 12 },
     ],
     islands: [
-      { x: -240, z: 540, r: 30 }, { x: 300, z: 460, r: 22 }, { x: -40, z: 760, r: 18 },
+      { x: -144, z: 324, r: 26, shape: 'oblong' },
+      { x: 180, z: 276, r: 19, shape: 'round' },
+      { x: -24, z: 456, r: 15, shape: 'kidney' },
+      { x: 96, z: 168, r: 16, shape: 'round' },
+      { x: -240, z: 216, r: 17, shape: 'kidney' },
+      { x: 216, z: 390, r: 14, shape: 'oblong' },
+      { x: 36, z: 360, r: 18, shape: 'round' },
+    ],
+    shoals: [
+      { x: 48, z: 210, rx: 24, rz: 8, yaw: 0.35 },
+      { x: -120, z: 150, rx: 18, rz: 7, yaw: -0.5 },
+      { x: 150, z: 480, rx: 20, rz: 6, yaw: 0.9 },
     ],
     spawns: [
-      { x: -380, z: 280, kind: 'ram' }, { x: 320, z: 240, kind: 'ram' },
-      { x: 20, z: 700, kind: 'ram' }, { x: -160, z: 900, kind: 'ranged' },
-      { x: 380, z: 560, kind: 'ranged' }, { x: 120, z: 380, kind: 'wrap' },
-      { x: -420, z: 620, kind: 'wrap' }, { x: 200, z: 820, kind: 'ram' },
-      { x: -80, z: 480, kind: 'plank' }, { x: 260, z: 360, kind: 'plank' },
-      { x: -200, z: 280, kind: 'plank' },
+      { x: -228, z: 168, kind: 'ram' }, { x: 192, z: 144, kind: 'ram' },
+      { x: 12, z: 420, kind: 'ram' }, { x: -96, z: 540, kind: 'ranged' },
+      { x: 228, z: 336, kind: 'ranged' }, { x: 72, z: 228, kind: 'wrap' },
+      { x: -252, z: 372, kind: 'wrap' }, { x: 120, z: 492, kind: 'ram' },
+      { x: -48, z: 288, kind: 'plank' }, { x: 156, z: 216, kind: 'plank' },
+      { x: -120, z: 168, kind: 'plank' },
     ],
   }),
   makeSea({
     id: 3, name: '雷暴裂口',
-    water: 0x6366f1, fog: 0x8b5cf6, sky: 0xa78bfa, minimap: '#2a1a4a',
+    water: 0x241e50, fog: 0x1a1628, sky: 0x0e0c18, minimap: '#1a1238',
     corrosionMul: 1.4, feature: 'lightning', unlockHint: '航行归航解锁',
-    cx: 0, cz: 660, rx: 740, rz: 780, rot: 0.35, n: 16, jitter: 0.2,
-    spawn: { x: 0, z: 5, yaw: 0 },
+    cx: 0, cz: 396, rx: 444, rz: 468, rot: 0.35, n: 16, jitter: 0.2,
+    spawn: { x: 0, z: 3, yaw: 0 },
     lh: [
-      { x: -460, z: 520, id: 'lh0' }, // ~695m
-      { x: 500, z: 480, id: 'lh1' },  // ~694m
-      { x: -20, z: 1120, id: 'lh2' }, // ~1115m
+      { x: -276, z: 312, id: 'lh0' },
+      { x: 300, z: 288, id: 'lh1' },
+      { x: -12, z: 672, id: 'lh2' },
     ],
     reefs: [
-      { x: 80, z: 380, r: 20 }, { x: -300, z: 400, r: 18 }, { x: 320, z: 780, r: 24 },
-      { x: -160, z: 880, r: 16 }, { x: 200, z: 240, r: 15 }, { x: -40, z: 600, r: 14 },
+      { x: 48, z: 228, r: 17 }, { x: -180, z: 240, r: 15 }, { x: 192, z: 468, r: 20 },
+      { x: -96, z: 528, r: 14 }, { x: 120, z: 144, r: 13 }, { x: -24, z: 360, r: 12 },
+      { x: 84, z: 330, r: 11 }, { x: -150, z: 390, r: 13 },
     ],
     islands: [
-      { x: 40, z: 720, r: 26 }, { x: -360, z: 760, r: 20 }, { x: 280, z: 540, r: 17 },
+      { x: 24, z: 432, r: 22, shape: 'kidney' },
+      { x: -216, z: 456, r: 17, shape: 'oblong' },
+      { x: 168, z: 324, r: 14, shape: 'round' },
+      { x: 90, z: 180, r: 15, shape: 'round' },
+      { x: -120, z: 300, r: 16, shape: 'oblong' },
+      { x: 36, z: 540, r: 13, shape: 'kidney' },
+    ],
+    shoals: [
+      { x: -60, z: 180, rx: 16, rz: 6, yaw: 0.2 },
+      { x: 120, z: 420, rx: 14, rz: 5, yaw: -0.4 },
     ],
     spawns: [
-      { x: -260, z: 420, kind: 'ram' }, { x: 340, z: 400, kind: 'ram' },
-      { x: 40, z: 960, kind: 'ram' }, { x: -380, z: 700, kind: 'ranged' },
-      { x: 300, z: 700, kind: 'ranged' }, { x: 20, z: 300, kind: 'wrap' },
-      { x: 240, z: 560, kind: 'wrap' }, { x: -200, z: 600, kind: 'ram' },
-      { x: 120, z: 680, kind: 'plank' }, { x: -120, z: 360, kind: 'plank' },
-      { x: 60, z: 820, kind: 'ram' },
+      { x: -156, z: 252, kind: 'ram' }, { x: 204, z: 240, kind: 'ram' },
+      { x: 24, z: 576, kind: 'ram' }, { x: -228, z: 420, kind: 'ranged' },
+      { x: 180, z: 420, kind: 'ranged' }, { x: 12, z: 180, kind: 'wrap' },
+      { x: 144, z: 336, kind: 'wrap' }, { x: -120, z: 360, kind: 'ram' },
+      { x: 72, z: 408, kind: 'plank' }, { x: -72, z: 216, kind: 'plank' },
+      { x: 36, z: 492, kind: 'ram' },
     ],
   }),
   makeSea({
     id: 4, name: '熔岩海沟',
-    water: 0xb91c1c, fog: 0x7f1d1d, sky: 0xf87171, minimap: '#4a1010',
+    water: 0x4a1818, fog: 0x1a0e10, sky: 0x1a0f10, minimap: '#4a1010',
     corrosionMul: 3, feature: 'heat', unlockHint: '航行归航解锁',
-    cx: 30, cz: 630, rx: 770, rz: 730, rot: -0.28, n: 17, jitter: 0.17,
-    spawn: { x: 15, z: 0, yaw: -0.1 },
+    cx: 18, cz: 378, rx: 462, rz: 438, rot: -0.28, n: 17, jitter: 0.17,
+    spawn: { x: 9, z: 0, yaw: -0.1 },
     lh: [
-      { x: -500, z: 400, id: 'lh0' }, // ~647m
-      { x: 540, z: 460, id: 'lh1' },  // ~699m
-      { x: 40, z: 1080, id: 'lh2' },  // ~1080m
+      { x: -300, z: 240, id: 'lh0' },
+      { x: 324, z: 276, id: 'lh1' },
+      { x: 24, z: 648, id: 'lh2' },
     ],
     reefs: [
-      { x: -120, z: 340, r: 24 }, { x: 280, z: 540, r: 20 }, { x: -340, z: 700, r: 18 },
-      { x: 160, z: 880, r: 17 }, { x: 400, z: 280, r: 16 }, { x: -40, z: 580, r: 14 },
+      { x: -72, z: 204, r: 20 }, { x: 168, z: 324, r: 17 }, { x: -204, z: 420, r: 15 },
+      { x: 96, z: 528, r: 14 }, { x: 240, z: 168, r: 14 }, { x: -24, z: 348, r: 12 },
+      { x: 60, z: 270, r: 11 }, { x: -150, z: 300, r: 13 },
     ],
     islands: [
-      { x: -200, z: 580, r: 28 }, { x: 340, z: 740, r: 22 }, { x: 80, z: 420, r: 18 },
+      { x: -120, z: 348, r: 24, shape: 'oblong' },
+      { x: 204, z: 444, r: 19, shape: 'kidney' },
+      { x: 48, z: 252, r: 15, shape: 'round' },
+      { x: -216, z: 216, r: 16, shape: 'round' },
+      { x: 132, z: 180, r: 14, shape: 'oblong' },
+      { x: 0, z: 480, r: 17, shape: 'kidney' },
+    ],
+    shoals: [
+      { x: 30, z: 150, rx: 18, rz: 7, yaw: 0.55 },
+      { x: -90, z: 420, rx: 16, rz: 6, yaw: -0.2 },
     ],
     spawns: [
-      { x: -300, z: 300, kind: 'ram' }, { x: 380, z: 360, kind: 'ram' },
-      { x: 20, z: 800, kind: 'ram' }, { x: -240, z: 900, kind: 'ranged' },
-      { x: 320, z: 680, kind: 'ranged' }, { x: 100, z: 260, kind: 'wrap' },
-      { x: -420, z: 540, kind: 'wrap' }, { x: 200, z: 480, kind: 'ram' },
-      { x: -40, z: 560, kind: 'plank' }, { x: 240, z: 320, kind: 'plank' },
-      { x: -100, z: 720, kind: 'plank' },
+      { x: -180, z: 180, kind: 'ram' }, { x: 228, z: 216, kind: 'ram' },
+      { x: 12, z: 480, kind: 'ram' }, { x: -144, z: 540, kind: 'ranged' },
+      { x: 192, z: 408, kind: 'ranged' }, { x: 60, z: 156, kind: 'wrap' },
+      { x: -252, z: 324, kind: 'wrap' }, { x: 120, z: 288, kind: 'ram' },
+      { x: -24, z: 336, kind: 'plank' }, { x: 144, z: 192, kind: 'plank' },
+      { x: -60, z: 432, kind: 'plank' },
     ],
   }),
 ];
@@ -259,7 +315,8 @@ export const TUTORIAL_MAP = makeSea({
   spawn: { x: 0, z: 10, yaw: 0 },
   lh: [{ x: 0, z: 72, id: 'tut-lh' }],
   reefs: [],
-  islands: [{ x: -42, z: 48, r: 10 }],
+  islands: [{ x: -42, z: 48, r: 10, shape: 'round' }],
+  shoals: [{ x: 28, z: 36, rx: 12, rz: 5, yaw: 0.4 }],
   spawns: [],
 });
 
