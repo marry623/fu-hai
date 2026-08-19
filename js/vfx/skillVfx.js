@@ -12,7 +12,7 @@ import { spawnVoid } from './spawnVoid.js?v=30a';
 import { spawnPhoenix } from './spawnPhoenix.js?v=30a';
 import { spawnSingularity } from './spawnSingularity.js?v=30a';
 import { spawnWorldroot } from './spawnWorldroot.js?v=30a';
-import { spawnBeam } from './spawnBeam.js?v=30b';
+import { spawnBeam } from './spawnBeam.js?v=31s';
 import { spawnSnare } from './spawnSnare.js?v=30a';
 import { spawnGlacier } from './spawnGlacier.js?v=30a';
 

@@ -160,9 +160,10 @@ export function spawnBeam(scene, target, opts = {}) {
   light.position.copy(bEnd).lerp(bStart, 0.15);
   scene.add(light);
 
-    let beamTicks = 0;
+  let age = 0;
+  let beamTicks = 0;
 
-    function update(dt) {
+  function update(dt) {
     age += dt;
     const phase = age < chargeT ? 'charge'
       : age < chargeT + fireT ? 'fire'

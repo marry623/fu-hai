@@ -1,6 +1,6 @@
 /** Meta progression via localStorage — hub / warehouse / codex / zones */
 
-import { getFishDef, shopBuyCost, BAIT_KINDS } from './fishCatalog.js?v=31g';
+import { getFishDef, shopBuyCost, BAIT_KINDS } from './fishCatalog.js?v=31u';
 
 const KEY = 'fuhai_meta_v1';
 
@@ -396,26 +396,26 @@ export const SHOP_HULLS = [
 ];
 
 export const SHOP_SUPPLIES = [
-  { id: 'baitCrude', zone: 'bait', name: '粗饵', cost: 12, amount: 4, tone: '#8aa090', desc: '刷食物、省钱。×4 入仓。抛竿 −1，不改抽率。' },
-  { id: 'baitFresh', zone: 'bait', name: '鲜饵', cost: 20, amount: 3, tone: '#4ecdc4', desc: '略抬中星。×3 入仓。一星 −8，二星 +5，三星 +3。' },
-  { id: 'baitScale', zone: 'bait', name: '亮鳞饵', cost: 50, amount: 3, tone: '#d4c060', desc: '浅图仍无传说。×3 入仓。一星拨给三、四星；有五星池才给五星。' },
-  { id: 'baitAbyss', zone: 'bait', name: '深渊饵', cost: 90, amount: 2, tone: '#6a40a0', desc: '浅四图仍无五/六星。×2 入仓。四、五星大涨；海沟隐藏 2→6。' },
+  { id: 'baitCrude', zone: 'bait', name: '粗饵', cost: 12, amount: 4, tone: '#8aa090', desc: '星级权重不变。抛竿耗 1。×4 入仓。' },
+  { id: 'baitFresh', zone: 'bait', name: '鲜饵', cost: 20, amount: 3, tone: '#4ecdc4', desc: '抛竿耗 1。×3 入仓。权重 ★−8 / ★★+5 / ★★★+3。本图没有的星仍为 0。' },
+  { id: 'baitScale', zone: 'bait', name: '亮鳞饵', cost: 50, amount: 3, tone: '#d4c060', desc: '抛竿耗 1。×3 入仓。权重 ★−16 / ★★−4 / ★★★+2 / ★★★★+8 / 五星+6 / 隐藏+4。未解锁星的加分拨到本图最高的 2–4 星。' },
+  { id: 'baitAbyss', zone: 'bait', name: '深渊饵', cost: 90, amount: 2, tone: '#6a40a0', desc: '抛竿耗 1。×2 入仓。权重 ★−18 / ★★−10 / ★★★0 / ★★★★+10 / 五星+14 / 隐藏+4。未解锁星的加分拨到本图最高的 2–4 星。' },
   { id: 'plank', zone: 'repair', name: '木板', cost: 40, amount: 1, tone: '#c4a06a', desc: '占背包 1 格。×1 入仓。R +15 耐久。' },
   { id: 'repair', zone: 'repair', name: '修补剂', cost: 60, amount: 1, tone: '#6a9ac4', desc: '可与龙骨膏同带。×1 入仓。+25 耐久。' },
   { id: 'paste', zone: 'repair', name: '龙骨膏', cost: 110, amount: 1, tone: '#c45c1a', desc: '大修。×1 入仓。+45 耐久。' },
 ];
 
 export const SHOP_WEAPONS = [
-  { id: 'skillFrost', name: '霜矛', cost: 0, tone: '#b8e8ff', desc: '出航自带。路径短晕。近处冻断缠绕。' },
-  { id: 'skillStorm', name: '雷矛', cost: 0, tone: '#7ad8ff', desc: '出航自带。电弧穿刺，最多两只。' },
-  { id: 'skillMeteor', name: '陨石', cost: 0, tone: '#ff6030', desc: '出航自带。范围击杀并解缠。' },
-  { id: 'skillVoid', name: '虚空裂缝', cost: 80, tone: '#66e0ff', desc: '一线裂空割伤。' },
-  { id: 'skillPhoenix', name: '炎凤', cost: 90, tone: '#ff7a20', desc: '火鸟俯冲，解缠。' },
-  { id: 'skillSingularity', name: '引力奇点', cost: 110, tone: '#a060ff', desc: '圈内吸积击杀。' },
-  { id: 'skillWorldroot', name: '根茎绽放', cost: 90, tone: '#5adf40', desc: '水面生树，定身击杀。' },
-  { id: 'skillBeam', name: '光束炮', cost: 120, tone: '#7ab8ff', desc: '持续光束灼穿。' },
-  { id: 'skillSnare', name: '电磁陷阱', cost: 85, tone: '#8a7cff', desc: '电弧囚笼滞留。' },
-  { id: 'skillGlacier', name: '冰封王冠', cost: 130, tone: '#c8f0ff', desc: '环刃冰墙，冻结解缠。' },
+  { id: 'skillFrost', name: '霜矛', cost: 0, tone: '#b8e8ff', desc: '' },
+  { id: 'skillStorm', name: '雷矛', cost: 0, tone: '#7ad8ff', desc: '' },
+  { id: 'skillMeteor', name: '陨石', cost: 0, tone: '#ff6030', desc: '' },
+  { id: 'skillVoid', name: '虚空裂缝', cost: 80, tone: '#66e0ff', desc: '' },
+  { id: 'skillPhoenix', name: '炎凤', cost: 90, tone: '#ff7a20', desc: '' },
+  { id: 'skillSingularity', name: '引力奇点', cost: 110, tone: '#a060ff', desc: '' },
+  { id: 'skillWorldroot', name: '根茎绽放', cost: 90, tone: '#5adf40', desc: '' },
+  { id: 'skillBeam', name: '光束炮', cost: 120, tone: '#7ab8ff', desc: '' },
+  { id: 'skillSnare', name: '电磁陷阱', cost: 85, tone: '#8a7cff', desc: '' },
+  { id: 'skillGlacier', name: '冰封王冠', cost: 130, tone: '#c8f0ff', desc: '' },
 ];
 
 export const FREE_SKILLS = ['skillFrost', 'skillStorm', 'skillMeteor'];
@@ -659,6 +659,38 @@ export function scaledSkillCard(baseCard, shopId, level) {
     stun: row.stun?.[i] ?? baseCard.stun,
   };
 }
+
+const SKILL_SHOP_BLURB = {
+  skillFrost: { range: 24, line: '直线冻结并可斩缠绕', extra: (row) => '冻结 ' + row.stun.join('/') + ' 秒' },
+  skillStorm: { range: 26, pierce: 2, line: '直线穿刺并斩缠绕' },
+  skillMeteor: { range: 16, line: '落点爆炸并解缠' },
+  skillVoid: { range: 22, pierce: 2, line: '直线穿刺并斩缠绕' },
+  skillPhoenix: { range: 26, pierce: 2, line: '直线穿刺并解缠' },
+  skillSingularity: { range: 20, line: '落点爆炸并推开缠绕' },
+  skillWorldroot: { range: 20, radius: 4, line: '落点爆炸，最近目标定身 2.4 秒' },
+  skillBeam: { range: 28, pierce: 4, line: '直线灼穿并斩缠绕' },
+  skillSnare: { range: 18, line: '落点范围爆炸' },
+  skillGlacier: { range: 18, radius: 5, line: '落点爆炸并解缠，圈内冻结 1.8 秒' },
+};
+
+export function skillShopDesc(shopId) {
+  const item = SHOP_WEAPONS.find((w) => w.id === shopId);
+  const vfx = skillShopToVfx(shopId);
+  const row = SKILL_LEVEL_STATS[vfx];
+  const b = SKILL_SHOP_BLURB[shopId] || { range: 20, line: '技能' };
+  const prefix = item && item.cost <= 0 ? '出航自带。' : '';
+  const bits = [];
+  if (row && row.dmg) bits.push('伤害 ' + row.dmg.join('/'));
+  if (row && row.cd) bits.push('冷却 ' + row.cd.join('/') + ' 秒');
+  bits.push('射程 ' + b.range);
+  if (row && row.radius) bits.push('半径 ' + row.radius.join('/'));
+  else if (b.radius) bits.push('半径 ' + b.radius);
+  if (b.pierce) bits.push('穿刺 ' + b.pierce);
+  if (typeof b.extra === 'function' && row) bits.push(b.extra(row));
+  return prefix + b.line + '。数字为 1/2/3 级。' + bits.join(' · ') + '。';
+}
+
+for (const w of SHOP_WEAPONS) w.desc = skillShopDesc(w.id);
 
 export function fishmongerGreenMul(meta) {
   const lv = talentLevel(meta, 'fishmongerEye');

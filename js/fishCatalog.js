@@ -27,10 +27,10 @@ export const BAIT_DELTAS = {
 };
 
 export const BAIT_KINDS = {
-  crude: { id: 'crude', name: '粗饵', key: 'baitCrude', desc: '刷食物、省钱。抛竿 −1，不改抽率。' },
-  fresh: { id: 'fresh', name: '鲜饵', key: 'baitFresh', desc: '略抬中星。一星 −8，二星 +5，三星 +3。' },
-  scale: { id: 'scale', name: '亮鳞饵', key: 'baitScale', desc: '浅图仍无传说。一星拨给三、四星；有五星池才给五星。' },
-  abyss: { id: 'abyss', name: '深渊饵', key: 'baitAbyss', desc: '浅四图仍无五/六星。四、五星大涨；海沟隐藏 2→6。' },
+  crude: { id: 'crude', name: '粗饵', key: 'baitCrude', desc: '星级权重不变。抛竿耗 1。' },
+  fresh: { id: 'fresh', name: '鲜饵', key: 'baitFresh', desc: '抛竿耗 1。权重 ★−8 / ★★+5 / ★★★+3。本图没有的星仍为 0。' },
+  scale: { id: 'scale', name: '亮鳞饵', key: 'baitScale', desc: '抛竿耗 1。权重 ★−16 / ★★−4 / ★★★+2 / ★★★★+8 / 五星+6 / 隐藏+4。未解锁星的加分拨到本图最高的 2–4 星。' },
+  abyss: { id: 'abyss', name: '深渊饵', key: 'baitAbyss', desc: '抛竿耗 1。权重 ★−18 / ★★−10 / ★★★0 / ★★★★+10 / 五星+14 / 隐藏+4。未解锁星的加分拨到本图最高的 2–4 星。' },
 };
 
 export function zoneRarityWeights(zoneIndex, baitKind = 'crude') {

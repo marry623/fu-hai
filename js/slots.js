@@ -1,4 +1,4 @@
-import { getFishDef, activeCombos, RARITY, ADJACENCY } from './fishCatalog.js?v=31g';
+import { getFishDef, activeCombos, RARITY, ADJACENCY } from './fishCatalog.js?v=31u';
 import { createFishMesh, setFishVitalityVisual, animateFishMesh } from './fishMeshes.js?v=31c';
 
 export const SLOT_LABELS = {
@@ -138,6 +138,7 @@ export function computeBonuses(slotsState) {
     const s = slotsState[slot];
     if (!s) continue;
     const def = getFishDef(s.defId);
+    if (!def) continue;
     const em = effectMultiplier(slotsState, slot);
     const sm = sideEffectMul(slotsState, slot);
     if (def.effect?.autoThrust) b.autoThrust += def.effect.autoThrust * em;

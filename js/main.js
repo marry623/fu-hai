@@ -17,19 +17,19 @@ import { createHazards } from './hazards.js?v=31c';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot,
-} from './slots.js?v=31c';
-import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS } from './fishCatalog.js?v=31g';
+} from './slots.js?v=31r';
+import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS } from './fishCatalog.js?v=31u';
 import { createFishMesh } from './fishMeshes.js?v=31c';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=31c';
-import { getSeaMap, EVAC_HOLD } from './seaMaps.js?v=31g';
-import { getZone } from './zones.js?v=30h';
+import { getSeaMap, EVAC_HOLD } from './seaMaps.js?v=31r';
+import { getZone } from './zones.js?v=31r';
 import {
   loadMeta, settleRun, hullMaxForBoat, thrustMulForBoat, hasWeaponUnlock,
   discoverFish, discoverMonster, syncLoadoutSuppliesFromWarehouse, consumeLoadoutOnDepart,
   loadoutSuppliesPacked, clampBoatId, HULL_NAMES, equippedSkills, skillShopToVfx,
   skillLevel, scaledSkillCard, fishmongerGreenMul, ghostWakeCorrMul, talentLevel,
-} from './meta.js?v=31h';
+} from './meta.js?v=31u';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=31h';
 import { createHub } from './hub.js?v=31n';
 import { createCoverScene } from './coverScene.js?v=28m';
@@ -40,8 +40,8 @@ import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=31g';
-import { createSkillVfx, SKILL_CARDS } from './vfx/skillVfx.js?v=31o';
-import { renderManualHtml } from './hubManual.js?v=31n';
+import { createSkillVfx, SKILL_CARDS } from './vfx/skillVfx.js?v=31u';
+import { renderManualHtml } from './hubManual.js?v=31t';
 import * as sfx from './audio.js?v=29y';
 
 const canvas = document.getElementById('c');
@@ -984,6 +984,11 @@ function applyDamage(amount, reason, quiet = false) {
 }
 
 function updateHp() {
+  if (!Number.isFinite(hull.durability) || !Number.isFinite(hull.maxDurability) || hull.maxDurability <= 0) {
+    const max = Number.isFinite(hull.maxDurability) && hull.maxDurability > 0 ? hull.maxDurability : 100;
+    hull.durability = max;
+    hull.maxDurability = max;
+  }
   ui.hpFill.style.width = `${(hull.durability / hull.maxDurability) * 100}%`;
   ui.hpText.textContent = String(Math.round(hull.durability));
 }
@@ -1371,7 +1376,7 @@ function renderBackpack() {
     const baitKey = BAIT_KINDS[state.inventory.baitKind]?.key || 'baitFresh';
     const baitName = BAIT_KINDS[state.inventory.baitKind]?.name || '鱼饵';
     const supplies = [
-      { id: 'bait', portraitId: baitKey, name: baitName, count: state.inventory.bait, color: 0x7dffc0,         desc: tut.active ? '练习湾饵无限。' : `${baitName}：抛竿消耗。高级饵只改本图已有星级的权重。` },
+      { id: 'bait', portraitId: baitKey, name: baitName, count: state.inventory.bait, color: 0x7dffc0,         desc: tut.active ? '练习湾饵无限，不消耗。' : (BAIT_KINDS[state.inventory.baitKind]?.desc || '抛竿耗 1。') },
       { id: 'plank', name: '木板', count: state.inventory.plank, color: 0xc48a4a, desc: 'R +15 耐久。占背包 1 格。' },
       { id: 'repair', name: '修补剂', count: state.inventory.repair, color: 0xffd24a, desc: '+25 耐久。可与龙骨膏同带。' },
       { id: 'paste', name: '龙骨膏', count: state.inventory.paste || 0, color: 0xc45c1a, desc: '+45 耐久。大修。' },
@@ -1505,7 +1510,7 @@ function renderBackpackDetail() {
       bait: {
         name: BAIT_KINDS[state.inventory.baitKind]?.name || '鱼饵',
         color: 0x7dffc0,
-        desc: tut.active ? '练习湾饵无限。' : '抛竿消耗。饵种只改本图已有星级的权重，不会钓出本图没有的五星 / 六星。',
+        desc: tut.active ? '练习湾饵无限，不消耗。' : (BAIT_KINDS[state.inventory.baitKind]?.desc || '抛竿耗 1。'),
         count: tut.active ? '∞' : state.inventory.bait,
       },
       plank: { name: '木板', color: 0xc48a4a, desc: 'R +15 耐久。占背包 1 格。', count: state.inventory.plank },
@@ -2375,10 +2380,11 @@ function tick() {
     const zone = getZone(state.runDistance, startZone);
     state.zone = zone.id;
 
-    let corrMul = zone.corrosionMul * b.corrosionMul;
+    let corrMul = (zone.corrosionMul ?? 1) * (b.corrosionMul ?? 1);
     if (meta.unlocks.ghostWake) corrMul *= ghostWakeCorrMul(meta);
     if (slotHas('magmaMaw')) corrMul *= 1.18;
     if (now() < legendFx.heatPumpUntil) corrMul *= 1.7;
+    if (!Number.isFinite(corrMul)) corrMul = 1;
     // simulate corrosion rates via scaled dt
     const sailing = phys.sailing;
     const before = hull.durability;
@@ -2391,10 +2397,13 @@ function tick() {
     let y = BOAT_WATERLINE_Y + Math.sin(t * 2 + boat.userData.bobPhase) * 0.08;
     if (now() < state.jumpUntil) y += Math.sin((1 - (state.jumpUntil - now())) * Math.PI) * 2.8;
     boat.position.set(phys.x, y, phys.z);
+    const roll = Number.isFinite(hull.durability) && Number.isFinite(hull.maxDurability) && hull.maxDurability > 0
+      ? (1 - hull.durability / hull.maxDurability) * 0.15
+      : 0;
     boat.rotation.set(
       0,
       phys.yaw + Math.PI,
-      (1 - hull.durability / hull.maxDurability) * 0.15
+      roll
         + (monsterFx.tiltAmt || 0) * Math.sin((monsterFx.tiltUntil - now()) * 6)
         + (now() < monsterFx.shakeUntil ? Math.sin(t * 22) * 0.18 : 0)
     );

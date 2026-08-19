@@ -106,7 +106,7 @@ export const SEA_MAPS = [
   makeSea({
     id: 0, name: '珊瑚浅滩',
     water: 0x5fc6cf, fog: 0xa8d6dc, sky: 0xcdeef2, minimap: '#0d5a62',
-    unlockHint: '初始海域',
+    corrosionMul: 1, feature: 'none', unlockHint: '初始海域',
     cx: 0, cz: 372, rx: 468, rz: 432, n: 18, jitter: 0.16,
     spawn: { x: 0, z: 0, yaw: 0 },
     lh: [

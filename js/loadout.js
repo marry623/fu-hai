@@ -1,7 +1,7 @@
 /** Apply persisted loadout into a fresh run state */
 
-import { getFishDef } from './fishCatalog.js?v=31g';
-import { equipFish, SLOT_ORDER } from './slots.js';
+import { getFishDef } from './fishCatalog.js?v=31u';
+import { equipFish, SLOT_ORDER } from './slots.js?v=31r';
 
 const RUN_START_BAIT = 20;
 

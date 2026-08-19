@@ -1,8 +1,8 @@
 /** Hub UI — backpack desk; 整备=3D船, 出港=海域地图, 仓库=格子 */
 
-import { ZONES } from './zones.js?v=29m';
-import { SLOT_ORDER, SLOT_LABELS } from './slots.js?v=31c';
-import { getFishDef, FISH_CATALOG, RARITY, listShopBuyFishIds, shopBuyCost, BAIT_KINDS, rarityStars } from './fishCatalog.js?v=31g';
+import { ZONES } from './zones.js?v=31r';
+import { SLOT_ORDER, SLOT_LABELS } from './slots.js?v=31r';
+import { getFishDef, FISH_CATALOG, RARITY, listShopBuyFishIds, shopBuyCost, BAIT_KINDS, rarityStars } from './fishCatalog.js?v=31u';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=31c';
 import { listMonsterIds, getMonsterDef } from './monsterCatalog.js?v=31g';
@@ -40,9 +40,9 @@ import {
   unpackSupply,
   LOADOUT_BAG_SIZE,
   ZONE_UNLOCK_COST,
-} from './meta.js?v=31n';
+} from './meta.js?v=31u';
 import { HUB_SPOTS } from './hubIsland.js?v=31q';
-import { renderManualHtml } from './hubManual.js?v=31n';
+import { renderManualHtml } from './hubManual.js?v=31t';
 
 const TAB_TITLES = {
   prep: '整备',

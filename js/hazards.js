@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
-import { pointInPoly, EVAC_RADIUS, EVAC_HOLD } from './seaMaps.js?v=31g';
+import { pointInPoly, EVAC_RADIUS, EVAC_HOLD } from './seaMaps.js?v=31r';
 import { pickMonsterForZone, getMonsterDef, monstersForZone, monsterHp, hullTouchDamage, hullShotDamage, wrapDps, wrapCountForZone } from './monsterCatalog.js?v=31g';
 import { createCombatMonster, createMonsterMesh, syncHpBar } from './monsterMeshes.js?v=30c';
 
