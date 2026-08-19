@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createToonGradient } from './stylekit.js';
-import { createItemMesh } from './itemMeshes.js?v=29r';
+import { createItemMesh } from './itemMeshes.js?v=31c';
 
 /** Offscreen portraits for shop / backpack non-fish items. */
 const PORTRAIT_PX = 256;
@@ -39,7 +39,7 @@ function ensure() {
  */
 export function getItemPortrait(itemId) {
   const id = itemId || 'plank';
-  const key = `${id}@v3`;
+  const key = `${id}@v4`;
   if (cache.has(key)) return cache.get(key);
 
   ensure();

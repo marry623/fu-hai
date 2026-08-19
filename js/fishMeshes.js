@@ -45,7 +45,22 @@ const C = {
   obsidianHeart: 0x2a1028,
   abyssShell: 0x3a2060,
   food: 0x4ecdc4,
+  foodHeal10: 0x7ad4a0,
+  foodHaste: 0xe8d060,
+  foodHeal30: 0x3aa0c8,
   glue: 0xffe066,
+  dullSnout: 0xc8b090,
+  shortSword: 0x6a7a8a,
+  paddleWheel: 0x5a9aaa,
+  gillDrum: 0xd08070,
+  needleMouth: 0x7a8a6a,
+  spikeScale: 0x3a6a50,
+  thinShell: 0xc8c0b0,
+  grouper: 0x6a7058,
+  mossCoat: 0x4a7a50,
+  clothFin: 0x8aa0c8,
+  facelessFang: 0x2a1810,
+  corpseSpear: 0x3a3048,
 };
 
 function mat(color, gm) {
@@ -602,9 +617,10 @@ const BUILDERS = {
     eyePair(g, gm, 0.22, 0.08, 0.22, 0.05);
   },
 
-  food(g, gm) {
-    fishBody(g, gm, C.food, { len: 0.8, h: 0.38, w: 0.35 });
-    dorsal(g, gm, 0x3aad9a, 0, 0.32, 0.25);
+  food(g, gm, tint) {
+    const col = tint ?? C.food;
+    fishBody(g, gm, col, { len: 0.8, h: 0.38, w: 0.35 });
+    dorsal(g, gm, tint ? col : 0x3aad9a, 0, 0.32, 0.25);
     eyePair(g, gm, 0.25, 0.05, 0.18, 0.05);
   },
 
@@ -615,16 +631,185 @@ const BUILDERS = {
     add(g, blob, 1.15);
     eyePair(g, gm, 0.25, 0.05, 0.18, 0.05);
   },
+
+  dullSnout(g, gm) {
+    fishBody(g, gm, C.dullSnout, { len: 0.85, h: 0.48, w: 0.42, nose: 0 });
+    const snout = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.22, 0.28), mat(0xa89070, gm));
+    snout.position.set(0.42, 0.02, 0);
+    add(g, snout, 1.12);
+    dorsal(g, gm, 0xb0a088, 0, 0.34, 0.22);
+    eyePair(g, gm, 0.22, 0.1, 0.22, 0.055);
+  },
+
+  shortSword(g, gm) {
+    fishBody(g, gm, C.shortSword, { len: 0.95, h: 0.42, w: 0.34, nose: 0 });
+    const blade = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.42, 5), mat(0xc8d0d8, gm));
+    blade.rotation.z = -Math.PI / 2;
+    blade.position.x = 0.58;
+    add(g, blade, 1.15);
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.22), mat(0x4a5560, gm));
+    guard.position.x = 0.38;
+    add(g, guard, 1.18);
+    dorsal(g, gm, C.shortSword, 0, 0.3, 0.22);
+    eyePair(g, gm, 0.22, 0.06, 0.18, 0.05);
+  },
+
+  paddleWheel(g, gm) {
+    fishBody(g, gm, C.paddleWheel, { len: 0.75, h: 0.38, w: 0.32, nose: 0.18 });
+    const wheels = new THREE.Group();
+    for (const side of [-1, 1]) {
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.1, 6), mat(0x3a6a78, gm));
+      hub.rotation.x = Math.PI / 2;
+      hub.position.set(0.05, -0.02, side * 0.32);
+      add(wheels, hub, 1.15);
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.08), mat(0x8ec0c8, gm));
+        blade.position.set(0.05 + Math.cos(a) * 0.16, Math.sin(a) * 0.16, side * 0.32);
+        blade.rotation.z = a;
+        add(wheels, blade, 1.2);
+      }
+    }
+    g.add(wheels);
+    g.userData.spinPart = wheels;
+    eyePair(g, gm, 0.28, 0.06, 0.16, 0.045);
+  },
+
+  gillDrum(g, gm) {
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.42, 8), mat(C.gillDrum, gm));
+    drum.rotation.z = Math.PI / 2;
+    add(g, drum, 1.08);
+    for (let i = 0; i < 4; i++) {
+      const slit = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.02), mat(0x6a4038, gm));
+      slit.position.set(0.08, 0.02, 0.3 - i * 0.06);
+      add(g, slit, 1.2);
+    }
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.04, 5, 10), mat(0xe8c0a0, gm));
+    rim.rotation.y = Math.PI / 2;
+    rim.position.x = 0.2;
+    add(g, rim, 1.12);
+    eyePair(g, gm, 0.18, 0.12, 0.22, 0.05);
+  },
+
+  needleMouth(g, gm) {
+    fishBody(g, gm, C.needleMouth, { len: 0.7, h: 0.28, w: 0.22, nose: 0 });
+    const needle = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.85, 5), mat(0xc8d0b8, gm));
+    needle.rotation.z = -Math.PI / 2;
+    needle.position.x = 0.7;
+    add(g, needle, 1.15);
+    dorsal(g, gm, 0x5a6a50, -0.05, 0.22, 0.18);
+    eyePair(g, gm, 0.18, 0.04, 0.12, 0.04);
+  },
+
+  spikeScale(g, gm) {
+    fishBody(g, gm, C.spikeScale, { len: 0.95, h: 0.36, w: 0.32, nose: 0.22 });
+    for (let i = 0; i < 5; i++) {
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.2), mat(i % 2 ? 0x2a5040 : 0x4a8060, gm));
+      plate.position.set(-0.15 + i * 0.14, 0.12, 0.12);
+      plate.rotation.z = -0.2;
+      add(g, plate, 1.18);
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.16, 4), mat(0xd8e0d0, gm));
+      sp.position.set(-0.15 + i * 0.14, 0.22, 0.12);
+      add(g, sp, 1.25);
+    }
+    eyePair(g, gm, 0.28, 0.05, 0.16, 0.045);
+  },
+
+  thinShell(g, gm) {
+    const disc = new THREE.Mesh(new THREE.SphereGeometry(0.48, 6, 4), mat(C.thinShell, gm));
+    disc.scale.set(1.2, 0.28, 1.15);
+    add(g, disc, 1.06);
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.03, 4, 10), mat(0xa09888, gm));
+    lip.rotation.x = Math.PI / 2;
+    lip.position.y = 0.04;
+    add(g, lip, 1.18);
+    eyePair(g, gm, 0.28, 0.08, 0.22, 0.04);
+  },
+
+  grouper(g, gm) {
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 6, 5), mat(C.grouper, gm));
+    body.scale.set(1.15, 0.95, 0.85);
+    add(g, body, 1.08);
+    const maw = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.3), mat(0x4a4838, gm));
+    maw.position.set(0.42, -0.06, 0);
+    add(g, maw, 1.12);
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.28), mat(0x8a8870, gm));
+    lip.position.set(0.54, 0.04, 0);
+    add(g, lip, 1.18);
+    dorsal(g, gm, 0x585848, -0.05, 0.42, 0.28);
+    eyePair(g, gm, 0.22, 0.14, 0.28, 0.06);
+  },
+
+  mossCoat(g, gm) {
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.12, 0.5), mat(0x3a5a40, gm));
+    plate.position.y = -0.08;
+    add(g, plate, 1.08);
+    for (let i = 0; i < 7; i++) {
+      const clump = new THREE.Mesh(new THREE.SphereGeometry(0.1 + (i % 3) * 0.03, 5, 4), mat(i % 2 ? C.mossCoat : 0x6a9a58, gm));
+      clump.position.set(-0.28 + (i % 4) * 0.18, 0.02 + (i % 2) * 0.06, ((i % 3) - 1) * 0.14);
+      add(g, clump, 1.15);
+    }
+    eyePair(g, gm, 0.28, 0.08, 0.16, 0.04);
+  },
+
+  clothFin(g, gm) {
+    fishBody(g, gm, C.clothFin, { len: 0.9, h: 0.3, w: 0.26, nose: 0.2 });
+    const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.42, 0.04), mat(0xd8e4f0, gm));
+    cloth.position.set(0.02, 0.38, 0);
+    add(g, cloth, 1.1);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 5), mat(0x8a7a60, gm));
+    mast.position.set(-0.18, 0.28, 0);
+    add(g, mast, 1.18);
+    eyePair(g, gm, 0.26, 0.04, 0.14, 0.04);
+  },
+
+  facelessFang(g, gm) {
+    fishBody(g, gm, C.facelessFang, { len: 1.05, h: 0.4, w: 0.36, nose: 0 });
+    const mask = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.32, 0.3), mat(0x1a1008, gm));
+    mask.position.set(0.38, 0.04, 0);
+    add(g, mask, 1.1);
+    for (let i = 0; i < 6; i++) {
+      const fang = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.18, 4), mat(0xe8dcc8, gm));
+      fang.position.set(0.52, -0.02 + (i % 2 ? 0.08 : -0.1), ((i % 3) - 1) * 0.08);
+      fang.rotation.z = -Math.PI / 2;
+      add(g, fang, 1.25);
+    }
+    dorsal(g, gm, 0x3a2018, 0, 0.34, 0.28);
+  },
+
+  corpseSpear(g, gm) {
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 1.15, 5), mat(C.corpseSpear, gm));
+    shaft.rotation.z = Math.PI / 2;
+    add(g, shaft, 1.08);
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.38, 5), mat(0x5a4868, gm));
+    head.rotation.z = -Math.PI / 2;
+    head.position.x = 0.68;
+    add(g, head, 1.12);
+    for (const side of [-1, 1]) {
+      const barb = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.16, 4), mat(0x2a2030, gm));
+      barb.position.set(0.52, side * 0.1, 0);
+      barb.rotation.z = side * 0.7 - Math.PI / 2;
+      add(g, barb, 1.2);
+    }
+    const wrap = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.025, 4, 8), mat(0x6a5040, gm));
+    wrap.rotation.y = Math.PI / 2;
+    wrap.position.x = 0.15;
+    add(g, wrap, 1.18);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 5, 4), mat(0x88ffaa, gm));
+    eye.position.set(0.22, 0.08, 0.08);
+    add(g, eye, 1.25);
+  },
 };
 
 /**
  * Low-poly fish matching the concept sheet — readable silhouette per species.
+ * @param {number|null} [tint] optional body tint (food variants)
  */
-export function createFishMesh(fishId, gradientMap, scale = 1) {
+export function createFishMesh(fishId, gradientMap, scale = 1, tint = null) {
   const g = new THREE.Group();
   g.userData.fishId = fishId;
   const builder = BUILDERS[fishId] || BUILDERS.food;
-  builder(g, gradientMap);
+  builder(g, gradientMap, tint);
   const world = scale * 1.32;
   g.scale.setScalar(world);
   g.userData.baseScale = world;

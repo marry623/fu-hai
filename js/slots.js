@@ -1,5 +1,5 @@
-import { getFishDef, activeCombos, RARITY, ADJACENCY } from './fishCatalog.js?v=29q';
-import { createFishMesh, setFishVitalityVisual, animateFishMesh } from './fishMeshes.js?v=29q';
+import { getFishDef, activeCombos, RARITY, ADJACENCY } from './fishCatalog.js?v=31g';
+import { createFishMesh, setFishVitalityVisual, animateFishMesh } from './fishMeshes.js?v=31c';
 
 export const SLOT_LABELS = {
   bow: '船头', stern: '船尾', sideL: '左舷', sideR: '右舷', keel: '船底', sail: '船帆',
@@ -28,7 +28,7 @@ export function equipFish(boat, slotsState, fishItem, preferredSlot, gradientMap
   };
   boat.userData.slots[useSlot] = slotsState[useSlot];
 
-  const mesh = createFishMesh(fishItem.defId, gradientMap, 0.85);
+  const mesh = createFishMesh(fishItem.defId, gradientMap, 0.85, fishItem.defId === 'food' ? fishItem.color : null);
   orientForSlot(mesh, useSlot);
   boat.userData.mounts[useSlot].add(mesh);
   boat.userData.mounts[useSlot].userData.fishMesh = mesh;
@@ -119,6 +119,12 @@ export function computeBonuses(slotsState) {
     accelMul: 1,
     block: 0,
     hasInk: false,
+    shotDmg: 10,
+    shotCd: 1.2,
+    shotRange: 8,
+    hasRam: false,
+    ramDmg: 12,
+    blockFrac: 0,
     hasBounce: false,
     hasPuffer: false,
     hasSpiral: false,
@@ -137,15 +143,27 @@ export function computeBonuses(slotsState) {
     if (def.effect?.autoThrust) b.autoThrust += def.effect.autoThrust * em;
     if (def.effect?.ramMul) b.ramMul *= 1 + (def.effect.ramMul - 1) * em;
     if (def.effect?.corrosionMul) b.corrosionMul *= def.effect.corrosionMul * em + (1 - em);
-    if (def.effect?.block) b.block += Math.floor(def.effect.block * em);
-    if (def.effect?.autoShot) b.hasInk = true;
+    if (def.effect?.block) {
+      if (def.effect.block >= 1) b.block += Math.floor(def.effect.block * em);
+      else b.blockFrac = Math.max(b.blockFrac, def.effect.block * em);
+    }
+    if (def.effect?.autoShot) {
+      b.hasInk = true;
+      b.shotDmg = def.effect.shotDmg || 10;
+      b.shotCd = def.effect.shotCd || 1.2;
+      b.shotRange = def.effect.range || 8;
+    }
+    if (def.effect?.ramMul || def.effect?.ramDmg) {
+      b.hasRam = true;
+      b.ramDmg = def.effect.ramDmg || 12;
+    }
     if (def.effect?.jump) b.hasBounce = true;
     if (def.side?.speedMul) b.speedMul *= Math.pow(def.side.speedMul, sm > 1 ? 1.5 : 1);
     if (def.side?.turnMul) b.turnMul *= def.side.turnMul;
     if (def.side?.weight) b.thrustMul /= def.side.weight;
     if (def.side?.frictionDps) b.frictionDps = (b.frictionDps || 0) + def.side.frictionDps * sm;
     if (def.side?.accelMul) b.accelMul *= def.side.accelMul;
-    if (s.defId === 'puffer') b.hasPuffer = true;
+    if (b.hasRam) b.hasPuffer = true;
     if (s.defId === 'spiral') b.hasSpiral = true;
     if (s.defId === 'sailfish') b.hasSailfish = true;
     if (s.defId === 'radar') b.hasRadar = true;
@@ -166,7 +184,7 @@ export function syncDeckFish(boat, fishHold, gradientMap) {
   const hold = boat.userData.cargoHold;
   while (hold.children.length) hold.remove(hold.children[0]);
   fishHold.slice(0, 8).forEach((f, i) => {
-    const m = createFishMesh(f.defId, gradientMap, 0.45);
+    const m = createFishMesh(f.defId, gradientMap, 0.45, f.defId === 'food' ? f.color : null);
     m.position.set(((i % 3) - 1) * 0.55, Math.floor(i / 3) * 0.35, (Math.floor(i / 3) % 2) * 0.2);
     m.rotation.y = i * 0.4;
     hold.add(m);

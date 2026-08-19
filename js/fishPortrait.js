@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createToonGradient } from './stylekit.js';
-import { createFishMesh } from './fishMeshes.js?v=29q';
+import { createFishMesh } from './fishMeshes.js?v=31c';
+import { foodEatKey, foodEatColor } from './fishCatalog.js?v=31g';
 
 /** One shared portrait size — CSS scales for thumb vs detail. */
 const PORTRAIT_PX = 256;
@@ -35,13 +36,20 @@ function ensure() {
   gradientMap = createToonGradient();
 }
 
+function portraitCacheKey(defId, fish) {
+  const id = defId || fish?.defId || 'food';
+  if (id === 'food') return `food:${foodEatKey(fish?.eat)}@v5`;
+  return `${id}@v5`;
+}
+
 /**
  * @param {string} defId
+ * @param {object} [fish] caught fish (food variants need eat/color)
  * @returns {string} data URL (always PORTRAIT_PX)
  */
-export function getFishPortrait(defId) {
-  const id = defId || 'food';
-  const key = `${id}@v4`;
+export function getFishPortrait(defId, fish) {
+  const id = defId || fish?.defId || 'food';
+  const key = portraitCacheKey(id, fish);
   if (cache.has(key)) return cache.get(key);
 
   ensure();
@@ -50,7 +58,8 @@ export function getFishPortrait(defId) {
   renderer.setViewport(0, 0, PORTRAIT_PX, PORTRAIT_PX);
   renderer.setScissorTest(false);
 
-  const mesh = createFishMesh(id, gradientMap, 1);
+  const foodTint = id === 'food' ? (fish?.color || foodEatColor(fish?.eat)) : null;
+  const mesh = createFishMesh(id, gradientMap, 1, foodTint);
   mesh.position.set(0, 0, 0);
   // Fish length is along +X; camera looks from +Z → side profile.
   // Slight yaw/pitch for a readable 3/4 side view (not head-on).

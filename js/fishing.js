@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { addOutline, toonMat, hash2 } from './stylekit.js';
-import { pickFishForZone, qteForFish } from './fishCatalog.js?v=30f';
+import { pickFishForZone, qteForFish } from './fishCatalog.js?v=31g';
 import { zoneIndexFromDistance as zDist } from './zones.js';
 
 /** Dense fish schools across a large sea */
@@ -200,10 +200,10 @@ export function createFishingController(hooks) {
     st.greenWidth = Math.max(0.12, st.greenWidth * factor);
   }
 
-  function tryCast(hasBait, runDistance, greenBonus = 1, startZone = 0, aimX = 0, aimZ = 0) {
+  function tryCast(hasBait, runDistance, greenBonus = 1, startZone = 0, aimX = 0, aimZ = 0, baitKind = 'crude') {
     if (st.phase !== 'idle') return false;
     st.depthZone = zDist(runDistance, startZone);
-    const fish = pickFishForZone(st.depthZone);
+    const fish = pickFishForZone(st.depthZone, baitKind);
     st.pendingFish = fish;
     const q = qteForFish(fish.defId);
     st.greenWidth = Math.min(0.85, q.green * greenBonus);

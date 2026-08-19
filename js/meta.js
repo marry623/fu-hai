@@ -1,5 +1,7 @@
 /** Meta progression via localStorage — hub / warehouse / codex / zones */
 
+import { getFishDef, shopBuyCost, BAIT_KINDS } from './fishCatalog.js?v=31g';
+
 const KEY = 'fuhai_meta_v1';
 
 const EMPTY_SLOTS = () => ({
@@ -37,31 +39,136 @@ const DEFAULT = {
     cursedBoat: false,
     fishmongerEye: false,
     ghostWake: false,
-    weaponHarpoon: true,
-    weaponKnife: false,
-    weaponSling: false,
   },
   bestDistance: 0,
   codex: {},
   monsterCodex: {},
   warehouse: {
     fish: [
-      { defId: 'food', name: '食物鱼', rarity: 1, category: 'food', color: 0x4ecdc4, vitality: 100, slot: null },
-      { defId: 'food', name: '食物鱼', rarity: 1, category: 'food', color: 0x4ecdc4, vitality: 100, slot: null },
+      { defId: 'food', name: '食物鱼', rarity: 1, category: 'food', color: 0x4ecdc4, vitality: 100, slot: null, eat: { heal: 20 } },
+      { defId: 'food', name: '食物鱼', rarity: 1, category: 'food', color: 0x4ecdc4, vitality: 100, slot: null, eat: { heal: 20 } },
     ],
-    supplies: { bait: 6, plank: 2, repair: 2 },
+    supplies: { baitCrude: 0, baitFresh: 3, baitScale: 0, baitAbyss: 0, plank: 1, repair: 1, paste: 0 },
   },
   loadout: {
     boatId: 'raft',
     slots: EMPTY_SLOTS(),
     cargo: [],
-    supplies: { bait: 3, plank: 1, repair: 1 },
+    supplies: {
+      bag: ['baitFresh', 'baitFresh', 'baitFresh', 'plank', 'repair', null, null, null],
+      baitKind: 'fresh',
+    },
     skills: ['skillFrost', 'skillStorm', 'skillMeteor'],
   },
+  skillLevels: { skillFrost: 1, skillStorm: 1, skillMeteor: 1 },
+  talentLevels: {},
   unlockedZones: [0],
   tutorialDone: false,
   hullRepair: 100, // prep-time hull % stored as absolute max fill preference
 };
+
+function emptySupplies() {
+  return { baitCrude: 0, baitFresh: 0, baitScale: 0, baitAbyss: 0, plank: 0, repair: 0, paste: 0 };
+}
+
+function normalizeSupplies(raw = {}) {
+  const s = { ...emptySupplies(), ...(raw || {}) };
+  if ((raw.bait | 0) > 0 && !(raw.baitFresh | 0) && !(raw.baitCrude | 0)) {
+    s.baitFresh = raw.bait | 0;
+  }
+  delete s.bait;
+  return s;
+}
+
+export const LOADOUT_BAG_SIZE = 8;
+export const LOADOUT_STACK_MAX = 50;
+export const RUN_START_BAIT = 20;
+
+function emptyBag() {
+  return Array(LOADOUT_BAG_SIZE).fill(null);
+}
+
+function isSupplyKey(key) {
+  return key === 'plank' || key === 'repair' || key === 'paste' || !!supplyKindFromKey(key);
+}
+
+function bagSlotKey(slot) {
+  if (!slot) return null;
+  if (typeof slot === 'string') return isSupplyKey(slot) ? slot : null;
+  return isSupplyKey(slot.key) ? slot.key : null;
+}
+
+function bagSlotCount(slot) {
+  if (!slot) return 0;
+  if (typeof slot === 'string') return 1;
+  const n = slot.n | 0;
+  return n > 0 ? n : 1;
+}
+
+function compactLoadoutBag(rawList) {
+  const bag = emptyBag();
+  for (const slot of rawList || []) {
+    const key = bagSlotKey(slot);
+    if (!key) continue;
+    let left = Math.min(LOADOUT_STACK_MAX * LOADOUT_BAG_SIZE, bagSlotCount(slot));
+    while (left > 0) {
+      let i = bag.findIndex((s) => s && s.key === key && s.n < LOADOUT_STACK_MAX);
+      if (i < 0) i = bag.findIndex((s) => !s);
+      if (i < 0) break;
+      if (!bag[i]) bag[i] = { key, n: 0 };
+      const take = Math.min(left, LOADOUT_STACK_MAX - bag[i].n);
+      bag[i].n += take;
+      left -= take;
+    }
+  }
+  return bag;
+}
+
+export function tallyLoadoutBag(bag) {
+  let bait = 0;
+  let plank = 0;
+  let repair = 0;
+  let paste = 0;
+  let baitKind = 'fresh';
+  for (const slot of bag || []) {
+    const key = bagSlotKey(slot);
+    if (!key) continue;
+    const n = bagSlotCount(slot);
+    const kind = supplyKindFromKey(key);
+    if (kind) {
+      bait += n;
+      baitKind = kind;
+    } else if (key === 'plank') plank += n;
+    else if (key === 'repair') repair += n;
+    else if (key === 'paste') paste += n;
+  }
+  return { bait, plank, repair, paste, baitKind };
+}
+
+function normalizeLoadoutSupplies(raw = {}) {
+  const preferred = BAIT_KINDS[raw.baitKind] ? raw.baitKind : 'fresh';
+  let bag;
+  if (Array.isArray(raw.bag)) {
+    bag = compactLoadoutBag(raw.bag);
+  } else {
+    const units = [];
+    const baitKey = BAIT_KINDS[preferred].key;
+    for (let n = 0; n < (raw.bait | 0); n++) units.push(baitKey);
+    for (let n = 0; n < (raw.plank | 0); n++) units.push('plank');
+    for (let n = 0; n < (raw.repair | 0); n++) units.push('repair');
+    for (let n = 0; n < (raw.paste | 0); n++) units.push('paste');
+    bag = compactLoadoutBag(units);
+  }
+  const t = tallyLoadoutBag(bag);
+  return {
+    bag,
+    baitKind: t.bait ? t.baitKind : preferred,
+    bait: t.bait,
+    plank: t.plank,
+    repair: t.repair,
+    paste: t.paste,
+  };
+}
 
 export function emptySlots() {
   return EMPTY_SLOTS();
@@ -94,11 +201,7 @@ function normalizeMeta(data) {
     monsterCodex: { ...(data.monsterCodex || {}) },
     warehouse: {
       fish: Array.isArray(data.warehouse?.fish) ? data.warehouse.fish : [],
-      supplies: {
-        bait: data.warehouse?.supplies?.bait ?? DEFAULT.warehouse.supplies.bait,
-        plank: data.warehouse?.supplies?.plank ?? DEFAULT.warehouse.supplies.plank,
-        repair: data.warehouse?.supplies?.repair ?? DEFAULT.warehouse.supplies.repair,
-      },
+      supplies: normalizeSupplies(data.warehouse?.supplies),
     },
     loadout: {
       boatId: (() => {
@@ -108,13 +211,11 @@ function normalizeMeta(data) {
       })(),
       slots: { ...EMPTY_SLOTS(), ...(data.loadout?.slots || {}) },
       cargo: Array.isArray(data.loadout?.cargo) ? data.loadout.cargo : [],
-      supplies: {
-        bait: data.loadout?.supplies?.bait ?? 3,
-        plank: data.loadout?.supplies?.plank ?? 1,
-        repair: data.loadout?.supplies?.repair ?? 1,
-      },
+      supplies: normalizeLoadoutSupplies(data.loadout?.supplies),
       skills: Array.isArray(data.loadout?.skills) ? data.loadout.skills : [],
     },
+    skillLevels: { skillFrost: 1, skillStorm: 1, skillMeteor: 1, ...(data.skillLevels || {}) },
+    talentLevels: { ...(data.talentLevels || {}) },
     unlockedZones: Array.isArray(data.unlockedZones) && data.unlockedZones.length
       ? [...new Set(data.unlockedZones.filter((z) => (z | 0) >= 0))].sort((a, b) => a - b)
       : [0],
@@ -126,6 +227,9 @@ function normalizeMeta(data) {
   }
   m.loadout.boatId = clampBoatId(m.unlocks, m.loadout.boatId);
   m.loadout.skills = normalizeSkills(m.unlocks, m.loadout.skills);
+  delete m.unlocks.weaponHarpoon;
+  delete m.unlocks.weaponKnife;
+  delete m.unlocks.weaponSling;
   return m;
 }
 
@@ -236,9 +340,21 @@ export function settleRun(meta, {
   }
 
   if (success && suppliesToStore) {
-    m.warehouse.supplies.bait += suppliesToStore.bait || 0;
-    m.warehouse.supplies.plank += suppliesToStore.plank || 0;
-    m.warehouse.supplies.repair += suppliesToStore.repair || 0;
+    const w = normalizeSupplies(m.warehouse.supplies);
+    if (Array.isArray(suppliesToStore.baitBag) && suppliesToStore.baitBag.length) {
+      for (const kind of suppliesToStore.baitBag) {
+        const key = BAIT_KINDS[kind]?.key;
+        if (key) w[key] = (w[key] | 0) + 1;
+      }
+    } else {
+      const kind = BAIT_KINDS[suppliesToStore.baitKind] ? suppliesToStore.baitKind : 'fresh';
+      const baitKey = BAIT_KINDS[kind].key;
+      w[baitKey] = (w[baitKey] | 0) + (suppliesToStore.bait | 0);
+    }
+    w.plank = (w.plank | 0) + (suppliesToStore.plank | 0);
+    w.repair = (w.repair | 0) + (suppliesToStore.repair | 0);
+    w.paste = (w.paste | 0) + (suppliesToStore.paste | 0);
+    m.warehouse.supplies = w;
   }
 
   // Unlock next zone by distance milestones OR successful return from current sea
@@ -269,33 +385,37 @@ export const SHOP_TABS = [
 /** Sell price in fragments by rarity — side income, not better than a good return. */
 export function fishSellPrice(fish) {
   if (!fish) return 0;
-  if (fish.defId === 'food' || fish.category === 'food') return 10;
-  const table = { 1: 10, 2: 20, 3: 40, 4: 70, 5: 120 };
+  if (fish.defId === 'food' || fish.defId === 'glue' || fish.category === 'food') return 10;
+  const table = { 1: 10, 2: 20, 3: 40, 4: 70, 5: 120, 6: 200 };
   return table[fish.rarity] ?? 10;
 }
 
 export const SHOP_HULLS = [
-  { id: 'heavyRaft', name: '重筏', cost: 180, tone: '#3a6aaa', desc: '中阶 · 耐久 120 · 推力 −15%。买的是一艘在港船，沉船后丢失，需重买。木筏始终免费。' },
-  { id: 'chargeBoat', name: '冲锋船', cost: 280, tone: '#6a2a8a', desc: '高阶 · 耐久 95 · 推力 +40%。沉船后丢失，需重买。' },
+  { id: 'heavyRaft', name: '重筏', cost: 180, tone: '#3a6aaa', desc: '中阶。更耐，更钝。沉船丢失，需重买。耐久 120 · 推力 ×0.85。' },
+  { id: 'chargeBoat', name: '冲锋船', cost: 280, tone: '#6a2a8a', desc: '高阶。更快更脆。沉船丢失，需重买。耐久 95 · 推力 ×1.40。' },
 ];
 
 export const SHOP_SUPPLIES = [
-  { id: 'bait', name: '鱼饵', cost: 20, amount: 3, tone: '#4ecdc4', desc: '购买 ×3，放入仓库。出港最多带 3。' },
-  { id: 'plank', name: '木板', cost: 40, amount: 1, tone: '#c4a06a', desc: '购买 ×1，放入仓库。出港最多带 1。' },
-  { id: 'repair', name: '修补剂', cost: 60, amount: 1, tone: '#6a9ac4', desc: '购买 ×1，放入仓库。出港最多带 1。' },
+  { id: 'baitCrude', zone: 'bait', name: '粗饵', cost: 12, amount: 4, tone: '#8aa090', desc: '刷食物、省钱。×4 入仓。抛竿 −1，不改抽率。' },
+  { id: 'baitFresh', zone: 'bait', name: '鲜饵', cost: 20, amount: 3, tone: '#4ecdc4', desc: '略抬中星。×3 入仓。一星 −8，二星 +5，三星 +3。' },
+  { id: 'baitScale', zone: 'bait', name: '亮鳞饵', cost: 50, amount: 3, tone: '#d4c060', desc: '浅图仍无传说。×3 入仓。一星拨给三、四星；有五星池才给五星。' },
+  { id: 'baitAbyss', zone: 'bait', name: '深渊饵', cost: 90, amount: 2, tone: '#6a40a0', desc: '浅四图仍无五/六星。×2 入仓。四、五星大涨；海沟隐藏 2→6。' },
+  { id: 'plank', zone: 'repair', name: '木板', cost: 40, amount: 1, tone: '#c4a06a', desc: '占背包 1 格。×1 入仓。R +15 耐久。' },
+  { id: 'repair', zone: 'repair', name: '修补剂', cost: 60, amount: 1, tone: '#6a9ac4', desc: '可与龙骨膏同带。×1 入仓。+25 耐久。' },
+  { id: 'paste', zone: 'repair', name: '龙骨膏', cost: 110, amount: 1, tone: '#c45c1a', desc: '大修。×1 入仓。+45 耐久。' },
 ];
 
 export const SHOP_WEAPONS = [
-  { id: 'skillFrost', name: '霜矛', cost: 0, tone: '#b8e8ff', desc: '出航自带 · 直线冰晶，路径短晕，近处冻断缠绕' },
-  { id: 'skillStorm', name: '雷矛', cost: 0, tone: '#7ad8ff', desc: '出航自带 · 电弧穿刺，穿过最多两只' },
-  { id: 'skillMeteor', name: '陨石', cost: 0, tone: '#ff6030', desc: '出航自带 · 抛物砸落，范围击杀并解缠' },
-  { id: 'skillVoid', name: '虚空裂缝', cost: 80, tone: '#66e0ff', desc: '学会 · 一线裂空，暗核青边，路径割伤' },
-  { id: 'skillPhoenix', name: '炎凤', cost: 90, tone: '#ff7a20', desc: '学会 · 火鸟俯冲，撞击烧蚀并解缠' },
-  { id: 'skillSingularity', name: '引力奇点', cost: 110, tone: '#a060ff', desc: '学会 · 圈内吸积塌缩，范围击杀' },
-  { id: 'skillWorldroot', name: '根茎绽放', cost: 90, tone: '#5adf40', desc: '学会 · 水面生树，圈内定身击杀' },
-  { id: 'skillBeam', name: '光束炮', cost: 120, tone: '#7ab8ff', desc: '学会 · 持续光束，直线灼穿' },
-  { id: 'skillSnare', name: '电磁陷阱', cost: 85, tone: '#8a7cff', desc: '学会 · 电弧囚笼，圈内滞留击杀' },
-  { id: 'skillGlacier', name: '冰封王冠', cost: 130, tone: '#c8f0ff', desc: '学会 · 环刃冰墙，圈内冻结解缠' },
+  { id: 'skillFrost', name: '霜矛', cost: 0, tone: '#b8e8ff', desc: '出航自带。路径短晕。近处冻断缠绕。' },
+  { id: 'skillStorm', name: '雷矛', cost: 0, tone: '#7ad8ff', desc: '出航自带。电弧穿刺，最多两只。' },
+  { id: 'skillMeteor', name: '陨石', cost: 0, tone: '#ff6030', desc: '出航自带。范围击杀并解缠。' },
+  { id: 'skillVoid', name: '虚空裂缝', cost: 80, tone: '#66e0ff', desc: '一线裂空割伤。' },
+  { id: 'skillPhoenix', name: '炎凤', cost: 90, tone: '#ff7a20', desc: '火鸟俯冲，解缠。' },
+  { id: 'skillSingularity', name: '引力奇点', cost: 110, tone: '#a060ff', desc: '圈内吸积击杀。' },
+  { id: 'skillWorldroot', name: '根茎绽放', cost: 90, tone: '#5adf40', desc: '水面生树，定身击杀。' },
+  { id: 'skillBeam', name: '光束炮', cost: 120, tone: '#7ab8ff', desc: '持续光束灼穿。' },
+  { id: 'skillSnare', name: '电磁陷阱', cost: 85, tone: '#8a7cff', desc: '电弧囚笼滞留。' },
+  { id: 'skillGlacier', name: '冰封王冠', cost: 130, tone: '#c8f0ff', desc: '环刃冰墙，冻结解缠。' },
 ];
 
 export const FREE_SKILLS = ['skillFrost', 'skillStorm', 'skillMeteor'];
@@ -370,9 +490,9 @@ export function cycleSkillSlot(meta, slotIndex) {
 }
 
 export const SHOP_TALENTS = [
-  { id: 'fishmongerEye', name: '鱼贩子的眼睛', cost: 160, tone: '#c45c1a', desc: '永久 · 钓鱼绿区判定 +20%' },
-  { id: 'cursedBoat', name: '怪谈低语', cost: 180, tone: '#6a2a8a', desc: '永久 · 每次出港随机获得一条怪鱼' },
-  { id: 'ghostWake', name: '鬼影航迹', cost: 140, tone: '#3a5a7a', desc: '永久 · 船体腐蚀减约 18%' },
+  { id: 'fishmongerEye', name: '鱼贩子的眼睛', cost: 160, tone: '#c45c1a', desc: '永久。钓鱼绿区 +20% / +32% / +45%。' },
+  { id: 'cursedBoat', name: '怪谈低语', cost: 180, tone: '#6a2a8a', desc: '永久。每航次随机一条怪鱼。升级不另写数字。' },
+  { id: 'ghostWake', name: '鬼影航迹', cost: 140, tone: '#3a5a7a', desc: '永久。腐蚀 ×0.82 / ×0.70 / ×0.58。' },
 ];
 
 /** Flat unlock catalog (hull / weapon / talent) */
@@ -402,6 +522,12 @@ export function tryUnlock(meta, shopId) {
     ...meta,
     unlocks: { ...meta.unlocks, [shopId]: true },
     fragments: meta.fragments - item.cost,
+    talentLevels: SHOP_TALENTS.some((t) => t.id === shopId)
+      ? { ...(meta.talentLevels || {}), [shopId]: Math.max(1, meta.talentLevels?.[shopId] | 0) }
+      : meta.talentLevels,
+    skillLevels: SHOP_WEAPONS.some((w) => w.id === shopId)
+      ? { ...(meta.skillLevels || {}), [shopId]: Math.max(1, meta.skillLevels?.[shopId] | 0) }
+      : meta.skillLevels,
     loadout: CONSUMABLE_HULLS.includes(shopId)
       ? { ...meta.loadout, boatId: shopId }
       : meta.loadout,
@@ -416,7 +542,7 @@ export function buySupply(meta, supplyId) {
   const item = SHOP_SUPPLIES.find((s) => s.id === supplyId);
   if (!item) return { ok: false, meta, msg: '无效物资' };
   if (meta.fragments < item.cost) return { ok: false, meta, msg: '海图碎片不足' };
-  const supplies = { ...(meta.warehouse?.supplies || { bait: 0, plank: 0, repair: 0 }) };
+  const supplies = normalizeSupplies(meta.warehouse?.supplies);
   supplies[item.id] = (supplies[item.id] || 0) + item.amount;
   const m = {
     ...meta,
@@ -425,6 +551,204 @@ export function buySupply(meta, supplyId) {
   };
   saveMeta(m);
   return { ok: true, meta: m, msg: `购入 ${item.name} ×${item.amount}` };
+}
+
+export function buyWarehouseFish(meta, defId) {
+  const def = getFishDef(defId);
+  const cost = shopBuyCost(def);
+  if (!cost || def.rarity > 3) return { ok: false, meta, msg: '此鱼不可购' };
+  if (meta.fragments < cost) return { ok: false, meta, msg: '海图碎片不足' };
+  const item = {
+    defId: def.id,
+    name: def.name,
+    rarity: def.rarity,
+    category: def.category,
+    color: def.id === 'food' ? 0x4ecdc4 : def.color,
+    vitality: 100,
+    slot: def.slot,
+    eat: def.eat || (def.id === 'food' ? { heal: 20 } : null),
+  };
+  const m = {
+    ...meta,
+    fragments: meta.fragments - cost,
+    warehouse: { ...meta.warehouse, fish: [...(meta.warehouse?.fish || []), item] },
+  };
+  saveMeta(m);
+  return { ok: true, meta: m, msg: `购入 ${def.name} −${cost}` };
+}
+
+export function skillLevel(meta, shopId) {
+  if (!ownsSkill(meta?.unlocks, shopId)) return 0;
+  const n = meta?.skillLevels?.[shopId] | 0;
+  return Math.max(1, Math.min(3, n || 1));
+}
+
+export function talentLevel(meta, id) {
+  if (!meta?.unlocks?.[id]) return 0;
+  const n = meta?.talentLevels?.[id] | 0;
+  return Math.max(1, Math.min(3, n || 1));
+}
+
+export function skillUpgradeCost(shopId, fromLevel) {
+  const free = FREE_SKILLS.includes(shopId);
+  if (fromLevel === 1) return free ? 40 : 70;
+  if (fromLevel === 2) return free ? 80 : 120;
+  return 0;
+}
+
+export function talentUpgradeCost(fromLevel) {
+  if (fromLevel === 1) return 90;
+  if (fromLevel === 2) return 140;
+  return 0;
+}
+
+export function upgradeSkill(meta, shopId) {
+  if (!ownsSkill(meta.unlocks, shopId)) return { ok: false, meta, msg: '尚未学会' };
+  const lv = skillLevel(meta, shopId);
+  if (lv >= 3) return { ok: false, meta, msg: '已满级' };
+  const cost = skillUpgradeCost(shopId, lv);
+  if (meta.fragments < cost) return { ok: false, meta, msg: '海图碎片不足' };
+  const m = {
+    ...meta,
+    fragments: meta.fragments - cost,
+    skillLevels: { ...(meta.skillLevels || {}), [shopId]: lv + 1 },
+  };
+  saveMeta(m);
+  return { ok: true, meta: m, msg: `${SHOP_WEAPONS.find((w) => w.id === shopId)?.name || '技能'} → ${lv + 1} 级` };
+}
+
+export function upgradeTalent(meta, id) {
+  if (!meta.unlocks?.[id]) return { ok: false, meta, msg: '尚未学会' };
+  const lv = talentLevel(meta, id);
+  if (lv >= 3) return { ok: false, meta, msg: '已满级' };
+  const cost = talentUpgradeCost(lv);
+  if (meta.fragments < cost) return { ok: false, meta, msg: '海图碎片不足' };
+  const m = {
+    ...meta,
+    fragments: meta.fragments - cost,
+    talentLevels: { ...(meta.talentLevels || {}), [id]: lv + 1 },
+  };
+  saveMeta(m);
+  return { ok: true, meta: m, msg: `${SHOP_TALENTS.find((t) => t.id === id)?.name || '天赋'} → ${lv + 1} 级` };
+}
+
+export const SKILL_LEVEL_STATS = {
+  ice: { dmg: [16, 22, 29], cd: [1.2, 1.1, 1.0], stun: [1.6, 1.9, 2.2] },
+  thunder: { dmg: [28, 39, 50], cd: [1.5, 1.4, 1.3] },
+  meteor: { dmg: [40, 56, 72], cd: [3.5, 3.25, 3.0], radius: [5.5, 6.25, 7] },
+  void: { dmg: [26, 36, 47], cd: [2.8, 2.6, 2.4] },
+  phoenix: { dmg: [32, 45, 58], cd: [3.2, 2.95, 2.7] },
+  singularity: { dmg: [38, 53, 68], cd: [5.0, 4.6, 4.2], radius: [5, 5.75, 6.5] },
+  worldroot: { dmg: [20, 28, 36], cd: [4.2, 3.9, 3.6] },
+  beam: { dmg: [22, 31, 40], cd: [4.5, 4.15, 3.8] },
+  snare: { dmg: [18, 25, 32], cd: [3.8, 3.5, 3.2], radius: [4, 4.5, 5] },
+  glacier: { dmg: [16, 22, 29], cd: [5.5, 5.1, 4.7] },
+};
+
+export function scaledSkillCard(baseCard, shopId, level) {
+  const vfx = skillShopToVfx(shopId);
+  const row = SKILL_LEVEL_STATS[vfx];
+  const i = Math.max(0, Math.min(2, (level | 0) - 1));
+  if (!baseCard) return baseCard;
+  if (!row) return { ...baseCard };
+  return {
+    ...baseCard,
+    dmg: row.dmg?.[i] ?? baseCard.dmg,
+    cd: row.cd?.[i] ?? baseCard.cd,
+    radius: row.radius?.[i] ?? baseCard.radius,
+    stun: row.stun?.[i] ?? baseCard.stun,
+  };
+}
+
+export function fishmongerGreenMul(meta) {
+  const lv = talentLevel(meta, 'fishmongerEye');
+  return [1, 1.2, 1.32, 1.45][lv] || 1;
+}
+
+export function ghostWakeCorrMul(meta) {
+  const lv = talentLevel(meta, 'ghostWake');
+  return [1, 0.82, 0.7, 0.58][lv] || 1;
+}
+
+export function baitStock(supplies, kind) {
+  const key = BAIT_KINDS[kind]?.key;
+  if (!key) return 0;
+  return normalizeSupplies(supplies)[key] | 0;
+}
+
+export function totalBait(supplies) {
+  const s = normalizeSupplies(supplies);
+  return (s.baitCrude | 0) + (s.baitFresh | 0) + (s.baitScale | 0) + (s.baitAbyss | 0);
+}
+
+export function setLoadoutBaitKind(meta, kind) {
+  if (!BAIT_KINDS[kind]) return meta;
+  return saveLoadout(meta, {
+    ...meta.loadout,
+    supplies: { ...normalizeLoadoutSupplies(meta.loadout?.supplies), baitKind: kind },
+  });
+}
+
+export function loadoutSuppliesPacked(raw) {
+  const s = normalizeLoadoutSupplies(raw);
+  return (s.bag || []).some(Boolean);
+}
+
+function supplyKindFromKey(key) {
+  return Object.keys(BAIT_KINDS).find((k) => BAIT_KINDS[k].key === key) || null;
+}
+
+export function packSupply(meta, key) {
+  const w = normalizeSupplies(meta.warehouse?.supplies);
+  const lo = normalizeLoadoutSupplies(meta.loadout?.supplies);
+  if (!isSupplyKey(key)) return { ok: false, meta, msg: '\u65e0\u6548\u7269\u8d44' };
+  if ((w[key] | 0) <= 0) return { ok: false, meta, msg: '\u4ed3\u5e93\u6ca1\u6709' };
+  let idx = lo.bag.findIndex((slot) => slot && slot.key === key && slot.n < LOADOUT_STACK_MAX);
+  if (idx < 0) idx = lo.bag.findIndex((slot) => !slot);
+  if (idx < 0) return { ok: false, meta, msg: '\u80cc\u5305\u5df2\u6ee1\uff088\u683c\uff09' };
+  w[key] -= 1;
+  if (!lo.bag[idx]) lo.bag[idx] = { key, n: 0 };
+  lo.bag[idx].n += 1;
+  const next = normalizeLoadoutSupplies({ bag: lo.bag, baitKind: lo.baitKind });
+  const m = {
+    ...meta,
+    warehouse: { ...meta.warehouse, supplies: w },
+    loadout: { ...meta.loadout, supplies: next },
+  };
+  saveMeta(m);
+  return { ok: true, meta: m, msg: '\u5df2\u88c5\u5165\u80cc\u5305' };
+}
+
+export function unpackSupply(meta, keyOrIndex) {
+  const w = normalizeSupplies(meta.warehouse?.supplies);
+  const lo = normalizeLoadoutSupplies(meta.loadout?.supplies);
+  let idx = -1;
+  if (typeof keyOrIndex === 'number' || /^\d+$/.test(String(keyOrIndex))) {
+    idx = Number(keyOrIndex);
+    if (idx < 0 || idx >= LOADOUT_BAG_SIZE || !lo.bag[idx]) {
+      return { ok: false, meta, msg: '\u8be5\u683c\u662f\u7a7a\u7684' };
+    }
+  } else {
+    idx = -1;
+    for (let i = lo.bag.length - 1; i >= 0; i--) {
+      if (lo.bag[i] && lo.bag[i].key === keyOrIndex) { idx = i; break; }
+    }
+    if (idx < 0) return { ok: false, meta, msg: '\u80cc\u5305\u6ca1\u6709' };
+  }
+  const slot = lo.bag[idx];
+  const key = bagSlotKey(slot);
+  if (!isSupplyKey(key)) return { ok: false, meta, msg: '\u65e0\u6548\u7269\u8d44' };
+  w[key] = (w[key] | 0) + 1;
+  if (bagSlotCount(slot) <= 1) lo.bag[idx] = null;
+  else lo.bag[idx] = { key, n: bagSlotCount(slot) - 1 };
+  const next = normalizeLoadoutSupplies({ bag: lo.bag, baitKind: lo.baitKind });
+  const m = {
+    ...meta,
+    warehouse: { ...meta.warehouse, supplies: w },
+    loadout: { ...meta.loadout, supplies: next },
+  };
+  saveMeta(m);
+  return { ok: true, meta: m, msg: '\u5df2\u653e\u56de\u4ed3\u5e93' };
 }
 
 export function sellWarehouseFish(meta, warehouseIndex) {
@@ -574,23 +898,36 @@ export function unequipToWarehouse(meta, slot) {
 
 /** Pull supplies from warehouse into loadout for departure */
 export function syncLoadoutSuppliesFromWarehouse(meta) {
-  const w = meta.warehouse.supplies;
-  const take = {
-    bait: Math.min(3, w.bait || 0),
-    plank: Math.min(1, w.plank || 0),
-    repair: Math.min(1, w.repair || 0),
-  };
+  const w = normalizeSupplies(meta.warehouse.supplies);
+  const lo = normalizeLoadoutSupplies(meta.loadout?.supplies);
+  const preferred = BAIT_KINDS[lo.baitKind] ? lo.baitKind : 'fresh';
+  const order = [
+    BAIT_KINDS[preferred].key,
+    ...Object.keys(BAIT_KINDS).filter((k) => k !== preferred).map((k) => BAIT_KINDS[k].key),
+    'plank',
+    'repair',
+    'paste',
+  ];
+  for (let i = 0; i < LOADOUT_BAG_SIZE; i++) {
+    const key = order.find((k) => (w[k] | 0) > 0);
+    if (!key) break;
+    let slot = lo.bag.find((s) => s && s.key === key && s.n < LOADOUT_STACK_MAX);
+    if (!slot) {
+      const empty = lo.bag.findIndex((s) => !s);
+      if (empty < 0) break;
+      lo.bag[empty] = { key, n: 0 };
+      slot = lo.bag[empty];
+    }
+    const take = Math.min(w[key] | 0, LOADOUT_STACK_MAX - slot.n);
+    if (take <= 0) continue;
+    slot.n += take;
+    w[key] -= take;
+  }
+  const next = normalizeLoadoutSupplies({ bag: lo.bag, baitKind: preferred });
   const m = {
     ...meta,
-    warehouse: {
-      ...meta.warehouse,
-      supplies: {
-        bait: (w.bait || 0) - take.bait,
-        plank: (w.plank || 0) - take.plank,
-        repair: (w.repair || 0) - take.repair,
-      },
-    },
-    loadout: { ...meta.loadout, supplies: take },
+    warehouse: { ...meta.warehouse, supplies: w },
+    loadout: { ...meta.loadout, supplies: next },
   };
   saveMeta(m);
   return m;
@@ -598,13 +935,14 @@ export function syncLoadoutSuppliesFromWarehouse(meta) {
 
 /** After fish are applied to the run, clear loadout so they are not duplicated */
 export function consumeLoadoutOnDepart(meta) {
+  const kind = BAIT_KINDS[meta.loadout?.supplies?.baitKind] ? meta.loadout.supplies.baitKind : 'fresh';
   const m = {
     ...meta,
     loadout: {
       ...meta.loadout,
       slots: emptySlots(),
       cargo: [],
-      supplies: { bait: 0, plank: 0, repair: 0 },
+      supplies: normalizeLoadoutSupplies({ bag: emptyBag(), baitKind: kind }),
     },
   };
   saveMeta(m);

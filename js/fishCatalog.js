@@ -6,16 +6,52 @@ export const RARITY = {
   3: { stars: 3, label: '史诗', cycle: 0.7, green: 0.25, hits: 3, decayPerMin: 3 },
   4: { stars: 4, label: '史诗+', cycle: 0.68, green: 0.20, hits: 4, decayPerMin: 2.5 },
   5: { stars: 5, label: '传说', cycle: 0.68, green: 0.20, hits: 5, decayPerMin: 1.5 },
+  6: { stars: 6, label: '隐藏六星', cycle: 0.50, green: 0.12, hits: 6, decayPerMin: 1.0 },
 };
 
-/** Zone rarity weights: [★, ★★, ★★★, ★★★★, ★★★★★] — shallow seas have 0 legend weight */
+/** Zone rarity weights: [★, ★★, ★★★, ★★★★, ★★★★★, 隐藏] — locked tiers stay 0 */
 export const ZONE_RARITY_WEIGHTS = [
-  [70, 25, 4, 1, 0],   // 0 浅滩
-  [55, 32, 11, 2, 0],  // 1 藻林
-  [40, 35, 20, 5, 0],  // 2 雾区
-  [22, 28, 26, 16, 8], // 3 裂口
-  [12, 22, 30, 21, 15], // 4 海沟
+  [78, 18, 3, 1, 0, 0],   // 0 浅滩
+  [64, 26, 8, 2, 0, 0],   // 1 藻林
+  [50, 32, 13, 5, 0, 0],  // 2 雾区
+  [34, 30, 20, 12, 4, 0], // 3 裂口
+  [24, 30, 22, 14, 8, 2], // 4 海沟
 ];
+
+/** Additive bait deltas; locked (base 0) tiers stay 0 and leftover dumps onto highest unlocked 2–4★ */
+export const BAIT_DELTAS = {
+  crude: [0, 0, 0, 0, 0, 0],
+  fresh: [-8, 5, 3, 0, 0, 0],
+  scale: [-16, -4, 2, 8, 6, 4],
+  abyss: [-18, -10, 0, 10, 14, 4],
+};
+
+export const BAIT_KINDS = {
+  crude: { id: 'crude', name: '粗饵', key: 'baitCrude', desc: '刷食物、省钱。抛竿 −1，不改抽率。' },
+  fresh: { id: 'fresh', name: '鲜饵', key: 'baitFresh', desc: '略抬中星。一星 −8，二星 +5，三星 +3。' },
+  scale: { id: 'scale', name: '亮鳞饵', key: 'baitScale', desc: '浅图仍无传说。一星拨给三、四星；有五星池才给五星。' },
+  abyss: { id: 'abyss', name: '深渊饵', key: 'baitAbyss', desc: '浅四图仍无五/六星。四、五星大涨；海沟隐藏 2→6。' },
+};
+
+export function zoneRarityWeights(zoneIndex, baitKind = 'crude') {
+  const zi = Math.max(0, Math.min(zoneIndex | 0, ZONE_RARITY_WEIGHTS.length - 1));
+  const base = ZONE_RARITY_WEIGHTS[zi];
+  const d = BAIT_DELTAS[baitKind] || BAIT_DELTAS.crude;
+  const w = base.map((v, i) => (v <= 0 ? 0 : Math.max(0, v + (d[i] || 0))));
+  let leftover = 0;
+  for (let i = 0; i < 6; i++) {
+    if (base[i] <= 0 && (d[i] || 0) > 0) leftover += d[i];
+  }
+  if (leftover) {
+    for (let i = 3; i >= 1; i--) {
+      if (base[i] > 0) {
+        w[i] += leftover;
+        break;
+      }
+    }
+  }
+  return w;
+}
 
 /** Map-locked ★★★★★ pools — only rolled when pickRarityTier returns 5 */
 export const ZONE_LEGEND_POOLS = {
@@ -23,131 +59,211 @@ export const ZONE_LEGEND_POOLS = {
   4: ['magmaMaw', 'heatPump', 'tarWhip', 'obsidianHeart', 'abyssShell'],
 };
 
+export const ZONE_HIDDEN_POOLS = {
+  4: ['facelessFang', 'corpseSpear'],
+};
+
 export const FISH_CATALOG = {
-  // Food / special
-  food: { id: 'food', name: '食物鱼', slot: null, rarity: 1, color: 0x4ecdc4, category: 'food', desc: '吃掉 +20耐久 或 +10s加速' },
-  glue: { id: 'glue', name: '胶水鱼', slot: null, rarity: 1, color: 0xffe066, category: 'food', desc: '修船 +15耐久' },
+  food: {
+    id: 'food', name: '食物鱼', slot: null, rarity: 1, color: 0x4ecdc4, category: 'food',
+    desc: '吃掉：回 10 / 20 / 30 耐久，或短加速。',
+    eat: { heal: 20 },
+  },
+  glue: { id: 'glue', name: '胶水鱼', slot: null, rarity: 1, color: 0xffe066, category: 'food',
+    desc: '修船 +15 耐久。', eat: { heal: 15, glue: true } },
 
-  // Bow ★~★★★★★
+  dullSnout: { id: 'dullSnout', name: '钝吻', slot: 'bow', rarity: 1, color: 0xc8b090, category: 'weapon',
+    desc: '船头钝击，略增撞击。',
+    effect: { ramMul: 1.15, ramDmg: 8 }, side: {} },
   puffer: { id: 'puffer', name: '刺豚', slot: 'bow', rarity: 1, color: 0xd4a574, category: 'weapon',
-    effect: { ramMul: 1.5 }, side: { speedMul: 0.85, turnMul: 1.3 } },
+    desc: '刺多、船变钝，掉头快。',
+    effect: { ramMul: 1.5, ramDmg: 12 }, side: { speedMul: 0.85, turnMul: 1.3 } },
+  shortSword: { id: 'shortSword', name: '短剑', slot: 'bow', rarity: 2, color: 0x6a7a8a, category: 'weapon',
+    desc: '短突进，瞬间不好转向。',
+    effect: { dash: 3, ramDmg: 16 }, side: { lockSteer: 0.3 } },
   swordfish: { id: 'swordfish', name: '剑鱼', slot: 'bow', rarity: 2, color: 0x3a5a7a, category: 'weapon',
-    effect: { dash: 5 }, side: { lockSteer: 0.5 } },
+    desc: '更长突进，锁舵更久。',
+    effect: { dash: 5, ramDmg: 22 }, side: { lockSteer: 0.5 } },
   icefish: { id: 'icefish', name: '冰鱼', slot: 'bow', rarity: 3, color: 0xb8e8ff, category: 'weapon',
-    effect: { freeze: 3 }, side: { slip: true } },
+    desc: '撞冻结怪，船会打滑。',
+    effect: { freeze: 1.5, ramDmg: 14 }, side: { slip: true } },
   dragonhead: { id: 'dragonhead', name: '龙首鱼', slot: 'bow', rarity: 4, color: 0x9aa4b2, category: 'weapon',
-    effect: { shockwave: true, cd: 15, iFrame: 3 }, side: {} },
+    desc: '船头放冲击波。',
+    effect: { shockwave: true, shockDmg: 36, cd: 15, iFrame: 3 }, side: {} },
 
-  // Stern
-  spiral: { id: 'spiral', name: '螺旋鱼', slot: 'stern', rarity: 1, color: 0x2a8a8a, category: 'engine',
+  paddleWheel: { id: 'paddleWheel', name: '水轮', slot: 'stern', rarity: 1, color: 0x5a9aaa, category: 'engine',
+    desc: '慢慢自己推。',
+    effect: { autoThrust: 3 }, side: {} },
+  spiral: { id: 'spiral', name: '螺旋鱼', slot: 'stern', rarity: 2, color: 0x2a8a8a, category: 'engine',
+    desc: '推得快，底磨。',
     effect: { autoThrust: 7 }, side: { frictionDps: 2 / 60 } },
+  gillDrum: { id: 'gillDrum', name: '鼓鳃', slot: 'stern', rarity: 2, color: 0xd08070, category: 'engine',
+    desc: '猛蹬一下。',
+    effect: { burst: 1 }, side: { blur: 0.35 } },
   octopus: { id: 'octopus', name: '章鱼', slot: 'stern', rarity: 2, color: 0xc45a5a, category: 'engine',
+    desc: '猛蹬两下。',
     effect: { burst: 2 }, side: { blur: 0.8 } },
   jellyfish: { id: 'jellyfish', name: '水母', slot: 'stern', rarity: 3, color: 0x8ec8e8, category: 'engine',
-    effect: { hover: 5 }, side: { noPaddle: true } },
+    desc: '漂住，不用划。',
+    effect: { hover: 3 }, side: { noPaddle: true } },
   voidEel: { id: 'voidEel', name: '虚空鳗', slot: 'stern', rarity: 4, color: 0x4a2a6a, category: 'engine',
+    desc: '短时间穿模。',
     effect: { phase: 3 }, side: {} },
 
-  // Side L weapon
+  needleMouth: { id: 'needleMouth', name: '针口', slot: 'sideL', rarity: 1, color: 0x7a8a6a, category: 'weapon',
+    desc: '慢射小弹。',
+    effect: { autoShot: true, shotDmg: 6, shotCd: 1.6, range: 7 }, side: {} },
   ink: { id: 'ink', name: '喷墨鱼', slot: 'sideL', rarity: 1, color: 0x5a4a6a, category: 'weapon',
-    effect: { autoShot: true, range: 8 }, side: { reloadEvery: 10 } },
+    desc: '要装填墨水。',
+    effect: { autoShot: true, shotDmg: 10, shotCd: 1.2, range: 8 }, side: { reloadEvery: 10 } },
+  spikeScale: { id: 'spikeScale', name: '刺鳞', slot: 'sideL', rarity: 2, color: 0x3a6a50, category: 'weapon',
+    desc: '伤害更高的自动射击。',
+    effect: { autoShot: true, shotDmg: 14, shotCd: 1.4, range: 8 }, side: {} },
   crab: { id: 'crab', name: '螃蟹', slot: 'sideL', rarity: 2, color: 0xe03030, category: 'weapon',
-    effect: { grab: true }, side: { shake: true } },
+    desc: '钳住近怪。',
+    effect: { grab: true, grabDmg: 24 }, side: { shake: true } },
   seaSnake: { id: 'seaSnake', name: '海蛇', slot: 'sideL', rarity: 3, color: 0x6ab0d4, category: 'weapon',
-    effect: { whip: true }, side: { recovery: 1 } },
+    desc: '抽一下要休息一会儿。',
+    effect: { whip: true, whipDmg: 30 }, side: { recovery: 1 } },
   lobster: { id: 'lobster', name: '巨钳龙虾', slot: 'sideL', rarity: 4, color: 0xb02020, category: 'weapon',
-    effect: { chargeCrush: 2 }, side: {} },
+    desc: '蓄满再碾。',
+    effect: { chargeCrush: 2, crushDmg: 42 }, side: {} },
 
-  // Side R defense
+  thinShell: { id: 'thinShell', name: '薄壳', slot: 'sideR', rarity: 1, color: 0xc8c0b0, category: 'defense',
+    desc: '一点点挡。',
+    effect: { block: 0.5 }, side: {} },
   shell: { id: 'shell', name: '贝壳鱼', slot: 'sideR', rarity: 1, color: 0xa88868, category: 'defense',
+    desc: '更挡，船沉。',
     effect: { block: 1 }, side: { weight: 1.15 } },
+  grouper: { id: 'grouper', name: '石斑', slot: 'sideR', rarity: 2, color: 0x6a7058, category: 'defense',
+    desc: '更沉。',
+    effect: { block: 1 }, side: { weight: 1.28 } },
   stingray: { id: 'stingray', name: '刺鳐', slot: 'sideR', rarity: 2, color: 0x4a4a5a, category: 'defense',
+    desc: '挨打回敬一半。',
     effect: { reflect: 0.5, cd: 3 }, side: {} },
   coral: { id: 'coral', name: '珊瑚虫', slot: 'sideR', rarity: 3, color: 0xe05030, category: 'defense',
+    desc: '短时砌墙，船慢。',
     effect: { wallHits: 3, wallTime: 5 }, side: { speedMul: 0.8 } },
   mirrorJelly: { id: 'mirrorJelly', name: '镜面水母', slot: 'sideR', rarity: 4, color: 0xd8eef8, category: 'defense',
+    desc: '弹回去。',
     effect: { reflectRanged: true }, side: {} },
 
-  // Keel
-  barnacle: { id: 'barnacle', name: '藤壶', slot: 'keel', rarity: 1, color: 0x8a8a8a, category: 'utility',
+  mossCoat: { id: 'mossCoat', name: '苔衣', slot: 'keel', rarity: 1, color: 0x4a7a50, category: 'utility',
+    desc: '略抗锈。',
+    effect: { corrosionMul: 0.85 }, side: {} },
+  barnacle: { id: 'barnacle', name: '藤壶', slot: 'keel', rarity: 2, color: 0x8a8a8a, category: 'utility',
+    desc: '很抗锈，起步慢。',
     effect: { corrosionMul: 0.6 }, side: { accelMul: 0.8 } },
   bounce: { id: 'bounce', name: '弹跳鱼', slot: 'keel', rarity: 2, color: 0x3a7ac8, category: 'utility',
+    desc: '能跳，可能掉槽。',
     effect: { jump: true }, side: { loosenChance: 0.1 } },
   dive: { id: 'dive', name: '潜游鱼', slot: 'keel', rarity: 3, color: 0x2a5a9a, category: 'utility',
+    desc: '潜一下躲视线。',
     effect: { dive: 3 }, side: { hideSurface: true } },
   leyline: { id: 'leyline', name: '地脉鱼', slot: 'keel', rarity: 4, color: 0x4a3a28, category: 'utility',
+    desc: '震怪也震货。',
     effect: { quake: true }, side: { scatterLoot: true } },
 
-  // Sail
+  clothFin: { id: 'clothFin', name: '布鳍', slot: 'sail', rarity: 1, color: 0x8aa0c8, category: 'sense',
+    desc: '顺风快一点。',
+    effect: { tailwind: 1.12 }, side: { headwind: 0.94 } },
   sailfish: { id: 'sailfish', name: '旗鱼', slot: 'sail', rarity: 1, color: 0x2a4a8a, category: 'sense',
+    desc: '顺风更快，逆风更惨。',
     effect: { tailwind: 1.3 }, side: { headwind: 0.85 } },
   radar: { id: 'radar', name: '雷达鱼', slot: 'sail', rarity: 2, color: 0x5a6a50, category: 'sense',
+    desc: '看远处，别吵到怪。',
     effect: { scan: 30 }, side: { wakeSleepers: true } },
   storm: { id: 'storm', name: '风暴鱼', slot: 'sail', rarity: 3, color: 0x2a3a6a, category: 'sense',
+    desc: '借风暴，看不清。',
     effect: { storm: 5 }, side: { blur: 0.5 } },
   chrono: { id: 'chrono', name: '时序鱼', slot: 'sail', rarity: 4, color: 0xd4a020, category: 'sense',
+    desc: '短时放慢四周。',
     effect: { slowMo: 3 }, side: {} },
 
-  // ★★★★★ 雷暴裂口（锁图）
   thunderCore: { id: 'thunderCore', name: '雷核鱼', slot: 'bow', rarity: 5, color: 0x7ad8ff, category: 'weapon',
-    desc: '击杀后链式雷击跳到附近第二只并短晕',
-    effect: { chainZap: true }, side: { chainCd: true } },
+    desc: '裂口传说。链式雷。',
+    effect: { chainZap: true, chainDmg: 30 }, side: { chainCd: true } },
   magAnchor: { id: 'magAnchor', name: '磁锚鳗', slot: 'stern', rarity: 5, color: 0x3a6a9a, category: 'engine',
-    desc: '周期性弹开近处缠绕与漂浮物',
+    desc: '裂口传说，清近身。',
     effect: { shoveWrap: true }, side: { hitch: true } },
   voltSpine: { id: 'voltSpine', name: '电棘', slot: 'sideL', rarity: 5, color: 0xc8f060, category: 'weapon',
-    desc: '充能直线穿刺，穿过最多两只',
-    effect: { pierce: 2 }, side: { chargeGap: true } },
+    desc: '裂口传说。直线穿。',
+    effect: { pierce: 2, pierceDmg: 34 }, side: { chargeGap: true } },
   ionVeil: { id: 'ionVeil', name: '离子膜', slot: 'sideR', rarity: 5, color: 0xa8fff0, category: 'defense',
-    desc: '下一次船体伤害转为短加速（该次不掉耐久）',
+    desc: '裂口传说。化伤为速。',
     effect: { convertHit: true }, side: { rearmCd: true } },
   flashSail: { id: 'flashSail', name: '闪回帆', slot: 'sail', rarity: 5, color: 0xe8d060, category: 'sense',
-    desc: 'Q：瞬移回约 2 秒前的位置，随后短暂迷航',
+    desc: '裂口传说。闪回去。',
     effect: { rewind: 2 }, side: { disorient: true } },
 
-  // ★★★★★ 熔岩海沟（锁图）
   magmaMaw: { id: 'magmaMaw', name: '熔喉鱼', slot: 'bow', rarity: 5, color: 0xff6030, category: 'weapon',
-    desc: '身后灼热航迹，驱散并减速追船怪',
-    effect: { heatTrail: true }, side: { selfCorrosion: true } },
+    desc: '海沟传说。航迹驱怪。',
+    effect: { heatTrail: true, trailDps: 8 }, side: { selfCorrosion: true } },
   heatPump: { id: 'heatPump', name: '热泵鱼', slot: 'stern', rarity: 5, color: 0xe04820, category: 'engine',
-    desc: '受伤转化为短推力；加速期间腐蚀加快',
+    desc: '海沟传说，痛了就冲。',
     effect: { painThrust: true }, side: { heatCorrosion: true } },
   tarWhip: { id: 'tarWhip', name: '焦油鞭', slot: 'sideL', rarity: 5, color: 0x2a1810, category: 'weapon',
-    desc: '根须定身最近一只怪；定身期间船体略慢',
-    effect: { root: true }, side: { drag: true } },
+    desc: '海沟传说。根须锁。',
+    effect: { root: true, rootDmg: 18 }, side: { drag: true } },
   obsidianHeart: { id: 'obsidianHeart', name: '黑曜心', slot: 'sideR', rarity: 5, color: 0x1a0a18, category: 'defense',
-    desc: '吸收伤害，满额范围爆发；爆完短暂破防',
+    desc: '海沟传说。存再炸。',
     effect: { storeBurst: true }, side: { breakArmor: true } },
   abyssShell: { id: 'abyssShell', name: '沉渊壳', slot: 'keel', rarity: 5, color: 0x3a2060, category: 'utility',
-    desc: '每航次一次免疫海沟虫秒杀与强控',
+    desc: '海沟传说。保命一次。',
     effect: { onceImmunity: true }, side: { spent: true } },
+
+  facelessFang: { id: 'facelessFang', name: '无面齿', slot: 'bow', rarity: 6, color: 0x2a1810, category: 'weapon',
+    desc: '仅海沟隐藏。',
+    effect: { shockwave: true, shockDmg: 55, freeze: 0.8, cd: 8, iFrame: 1, ramDmg: 55 }, side: {} },
+  corpseSpear: { id: 'corpseSpear', name: '沉尸矛', slot: 'sideL', rarity: 6, color: 0x3a3048, category: 'weapon',
+    desc: '仅海沟隐藏。',
+    effect: { pierce: 3, pierceDmg: 48, chargeCrush: 1.8 }, side: {} },
 };
 
 const SLOT_POOLS = {
-  bow: ['puffer', 'swordfish', 'icefish', 'dragonhead'],
-  stern: ['spiral', 'octopus', 'jellyfish', 'voidEel'],
-  sideL: ['ink', 'crab', 'seaSnake', 'lobster'],
-  sideR: ['shell', 'stingray', 'coral', 'mirrorJelly'],
-  keel: ['barnacle', 'bounce', 'dive', 'leyline'],
-  sail: ['sailfish', 'radar', 'storm', 'chrono'],
+  bow: ['dullSnout', 'puffer', 'shortSword', 'swordfish', 'icefish', 'dragonhead'],
+  stern: ['paddleWheel', 'spiral', 'gillDrum', 'octopus', 'jellyfish', 'voidEel'],
+  sideL: ['needleMouth', 'ink', 'spikeScale', 'crab', 'seaSnake', 'lobster'],
+  sideR: ['thinShell', 'shell', 'grouper', 'stingray', 'coral', 'mirrorJelly'],
+  keel: ['mossCoat', 'barnacle', 'bounce', 'dive', 'leyline'],
+  sail: ['clothFin', 'sailfish', 'radar', 'storm', 'chrono'],
 };
 
-const FOOD_POOL = ['food', 'food', 'food', 'glue'];
+/** snack weights 4 / 2 / 2 / 1, glue ~ 1/4 of snack pile */
+const FOOD_ROLLS = [
+  { w: 4, eat: { heal: 10 } },
+  { w: 2, eat: { heal: 20 } },
+  { w: 2, eat: { haste: 10 } },
+  { w: 1, eat: { heal: 30 } },
+];
 
 export function getFishDef(id) {
   return FISH_CATALOG[id] || FISH_CATALOG.food;
 }
 
-/** All catalog ids in stable order */
 export function listFishIds() {
   return Object.keys(FISH_CATALOG);
 }
 
-function pickRarityTier(zoneIndex) {
-  const zi = Math.max(0, Math.min(zoneIndex | 0, ZONE_RARITY_WEIGHTS.length - 1));
-  const w = ZONE_RARITY_WEIGHTS[zi];
-  const map = [1, 2, 3, 4, 5];
-  const total = w.reduce((a, b) => a + b, 0);
+export function shopBuyCost(def) {
+  if (!def) return 0;
+  if (def.rarity === 1) return 12;
+  if (def.rarity === 2) return 25;
+  if (def.rarity === 3) return 50;
+  return 0;
+}
+
+export function listShopBuyFishIds() {
+  return Object.keys(FISH_CATALOG).filter((id) => {
+    const d = FISH_CATALOG[id];
+    return d.rarity >= 1 && d.rarity <= 3;
+  });
+}
+
+function pickRarityTier(zoneIndex, baitKind = 'crude') {
+  const w = zoneRarityWeights(zoneIndex, baitKind);
+  const map = [1, 2, 3, 4, 5, 6];
+  const total = w.reduce((a, b) => a + b, 0) || 1;
   let r = Math.random() * total;
   for (let i = 0; i < w.length; i++) {
     r -= w[i];
@@ -156,15 +272,31 @@ function pickRarityTier(zoneIndex) {
   return 1;
 }
 
-export function pickFishForZone(zoneIndex) {
+function rollFoodEat() {
+  const total = FOOD_ROLLS.reduce((a, x) => a + x.w, 0);
+  let r = Math.random() * total;
+  for (const row of FOOD_ROLLS) {
+    r -= row.w;
+    if (r <= 0) return { ...row.eat };
+  }
+  return { heal: 10 };
+}
+
+export function pickFishForZone(zoneIndex, baitKind = 'crude') {
   const zi = Math.max(0, zoneIndex | 0);
-  // 35% food in shallow, less deeper
   const foodChance = Math.max(0.12, 0.4 - zi * 0.06);
   if (Math.random() < foodChance) {
-    const id = FOOD_POOL[Math.floor(Math.random() * FOOD_POOL.length)];
-    return makeCaught(id);
+    if (Math.random() < 0.2) return makeCaught('glue');
+    return makeCaught('food', { eat: rollFoodEat() });
   }
-  let rarity = pickRarityTier(zi);
+  let rarity = pickRarityTier(zi, baitKind);
+  if (rarity === 6) {
+    const pool = ZONE_HIDDEN_POOLS[zi] || [];
+    if (pool.length) {
+      return makeCaught(pool[Math.floor(Math.random() * pool.length)]);
+    }
+    rarity = 5;
+  }
   if (rarity === 5) {
     const pool = ZONE_LEGEND_POOLS[zi] || [];
     if (pool.length) {
@@ -180,8 +312,27 @@ export function pickFishForZone(zoneIndex) {
   return makeCaught(id);
 }
 
-function makeCaught(id) {
+export function foodEatKey(eat) {
+  if (!eat) return 'h20';
+  if (eat.glue) return 'glue';
+  if ((eat.haste | 0) > 0) return `haste${eat.haste | 0}`;
+  if ((eat.heal | 0) > 0) return `h${eat.heal | 0}`;
+  return 'h20';
+}
+
+export function foodEatColor(eat) {
+  if (!eat) return 0x4ecdc4;
+  if (eat.glue) return 0xffe066;
+  if ((eat.haste | 0) > 0) return 0xe8d060;
+  const h = eat.heal | 0;
+  if (h === 10) return 0x7ad4a0;
+  if (h === 30) return 0x3aa0c8;
+  return 0x4ecdc4;
+}
+
+function makeCaught(id, extra = {}) {
   const def = getFishDef(id);
+  const eat = extra.eat || def.eat || null;
   return {
     kind: 'fish',
     defId: id,
@@ -189,8 +340,9 @@ function makeCaught(id) {
     slot: def.slot,
     category: def.category,
     rarity: def.rarity,
-    color: def.color,
+    color: id === 'food' ? foodEatColor(eat) : def.color,
     vitality: 100,
+    eat,
   };
 }
 
@@ -201,11 +353,16 @@ export function qteForFish(defId) {
     cycle: r.cycle,
     green: r.green,
     hits: r.hits,
-    speed: 1 / r.cycle, // pointer full traverse per cycle (0→1→0 roughly)
+    speed: 1 / r.cycle,
   };
 }
 
-/** Adjacent pairs for synergy */
+export function rarityStars(rarity) {
+  const n = Math.max(1, Math.min(6, rarity | 0));
+  if (n >= 6) return '隐藏六星';
+  return '★'.repeat(n);
+}
+
 export const ADJACENCY = {
   bow: ['sail', 'sideL', 'sideR', 'keel'],
   stern: ['keel', 'sideL', 'sideR'],
@@ -228,6 +385,7 @@ export const COMBOS = [
   { id: 'dragonquake', name: '龙震', needs: [['dragonhead', 'leyline']], bonus: { megaShock: true } },
   { id: 'thundercall', name: '雷回', needs: [['thunderCore', 'flashSail']], bonus: { chainBonus: true } },
   { id: 'magmaabyss', name: '熔核沉渊', needs: [['magmaMaw', 'abyssShell']], bonus: { corrosionMul: 0.85 } },
+  { id: 'tideCorpse', name: '尸潮', needs: [['facelessFang', 'corpseSpear']], bonus: { spearReady: true } },
 ];
 
 export function activeCombos(slotsState) {

@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
-import { resolveMonsterId, monsterHp } from './monsterCatalog.js?v=30b';
+import { resolveMonsterId, monsterHp } from './monsterCatalog.js?v=31g';
 
 function addPart(g, mesh, outlineScale = 1.08) {
   g.add(mesh);

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>浮骸 · 海上肉鸽</title>
-  <link rel="stylesheet" href="css/style.css?v=30d" />
+  <link rel="stylesheet" href="css/style.css?v=31m" />
 </head>
 <body>
   <div id="game-root">
@@ -217,13 +217,29 @@
         <div class="cover-tutorial-card">
           <h2>操作说明</h2>
           <ul>
-            <li><b>A / D</b> — 转向 · 双击更灵敏</li>
-            <li><b>空格</b> — 抛竿钓鱼</li>
-            <li><b>E</b> — 打捞漂浮物 · <b>Tab</b> 打开背包</li>
-            <li>把<strong>浮漂</strong>靠近水圈更容易咬钩</li>
-            <li>基地可配装、整备仓库、解锁船型与海域</li>
-            <li><b>M</b> — 打开海图</li>
+            <li><b>A / D</b> 划桨，同时按住直行</li>
+            <li><b>空格</b> 钓鱼 · <b>E</b> 打捞 · <b>Tab</b> 背包</li>
+            <li><b>1 / 2 / 3</b> 技能，鼠标选中海面再左键</li>
+            <li><b>M</b> 海图 · 灯塔绿圈停 5 秒归航</li>
+            <li>基地：整备、仓库、商店、图鉴</li>
           </ul>
+          <div class="cover-manual">
+            <h3>目标</h3>
+            <p>出港进一张海图，钓鱼改装、打怪、打捞，开到灯塔停 5 秒归航。</p>
+            <p>沉船：本航次鱼和物资不入库。重筏 / 冲锋船沉了要重买。</p>
+            <p>练习湾：安全教学。完成只标记教程已完成，物资无法带出。</p>
+            <h3>基地</h3>
+            <p>港口选出港海域。整备绑鱼到 6 个船槽，有 8 格物品背包。</p>
+            <p>仓库存货、投喂。市集卖鱼、买饵/修理、船体、技能牌、天赋。图鉴记载遇到的鱼和怪物。</p>
+            <h3>航行</h3>
+            <p>船体一直在被腐蚀。藻林有横推洋流。海沟腐蚀 ×3。岛和礁挡住船，浅滩可开过去。耐久到 0 沉船。</p>
+            <h3>钓鱼 / 打捞 / 改装 / 战斗</h3>
+            <p>靠近水圈空格抛竿，指针停绿区再空格。抛竿耗 1 饵（练习湾无限）。高级饵只改本图已有星级权重。</p>
+            <p>E 捡木桶 / 箱子 / 漂流瓶。可能给木板、饵、修理剂，也可能炸 20 耐久。</p>
+            <p>6 槽每种鱼只进一个槽。出航带 3 张技能：1 / 2 / 3 选牌，鼠标选中海面，左键释放。</p>
+            <h3>经济</h3>
+            <p>货币是海图碎片。成功归航给 40 + 航程/15 + 击杀/3×10 + 新鱼种×10。商店可买 1–3 星鱼。藻林 5 · 雾区 12 · 裂口 20 · 海沟 30 碎片解锁。浅滩免费。初始 40 碎片。</p>
+          </div>
           <button type="button" id="btn-tutorial-close" class="cover-btn">知道了</button>
         </div>
       </div>
@@ -240,7 +256,7 @@
           <span>最远 <strong id="hub-best">0m</strong></span>
         </div>
       </header>
-      <p class="hub-island-hint">点击建筑进入功能 · 港口出港 · 船坞整备 · 市集商店 · 展馆图鉴</p>
+      <p class="hub-island-hint">点击建筑进入功能 · 港口出港 · 船坞整备 · 市集商店 · 展馆图鉴 · 封面有完整操作说明</p>
       <div id="hub-markers" class="hub-markers"></div>
       <div id="hub-drawer" class="hub-drawer hidden">
         <div class="hub-drawer-card hub-bp-shell">
@@ -359,8 +375,8 @@
     window.addEventListener('unhandledrejection', (e) => show(e.reason && e.reason.stack || e.reason));
     const fileHint = '请勿直接双击 index.html。运行项目里的 play.bat，或打开 http://127.0.0.1:8787/\nChrome 在 file:// 下无法加载 ES 模块。';
     const urls = location.protocol === 'file:'
-      ? ['./js/main.js', './js/main.js?v=30h']
-      : ['./js/main.js?v=30h'];
+      ? ['./js/main.js', './js/main.js?v=31m']
+      : ['./js/main.js?v=31m'];
     if (location.protocol === 'file:') show(fileHint);
     let last = null;
     let ok = false;

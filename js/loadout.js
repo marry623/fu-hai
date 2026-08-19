@@ -1,7 +1,17 @@
 /** Apply persisted loadout into a fresh run state */
 
-import { getFishDef } from './fishCatalog.js';
+import { getFishDef } from './fishCatalog.js?v=31g';
 import { equipFish, SLOT_ORDER } from './slots.js';
+
+const RUN_START_BAIT = 20;
+
+function baitKindFromKey(key) {
+  if (key === 'baitCrude') return 'crude';
+  if (key === 'baitFresh') return 'fresh';
+  if (key === 'baitScale') return 'scale';
+  if (key === 'baitAbyss') return 'abyss';
+  return null;
+}
 
 /**
  * Apply meta.loadout onto boat + mutable run state.
@@ -9,10 +19,32 @@ import { equipFish, SLOT_ORDER } from './slots.js';
  */
 export function applyLoadoutToRun(boat, state, meta, gradientMap) {
   const lo = meta.loadout || {};
+  const bag = Array.isArray(lo.supplies?.bag) ? lo.supplies.bag : [];
+  const baitBag = [];
+  let plank = 0;
+  let repair = 0;
+  let paste = 0;
+  for (const slot of bag) {
+    if (!slot) continue;
+    const key = typeof slot === 'string' ? slot : slot.key;
+    const n = typeof slot === 'string' ? 1 : Math.max(1, slot.n | 0);
+    const kind = baitKindFromKey(key);
+    if (kind) {
+      for (let i = 0; i < n; i++) baitBag.push(kind);
+    } else if (key === 'plank') plank += n;
+    else if (key === 'repair') repair += n;
+    else if (key === 'paste') paste += n;
+  }
+  const giftKind = 'crude';
+  for (let i = 0; i < RUN_START_BAIT; i++) baitBag.push(giftKind);
+
   state.inventory = {
-    bait: lo.supplies?.bait ?? 3,
-    plank: lo.supplies?.plank ?? 1,
-    repair: lo.supplies?.repair ?? 1,
+    baitBag,
+    bait: baitBag.length,
+    baitKind: baitBag[0] || giftKind,
+    plank,
+    repair,
+    paste,
   };
 
   // Clear mounts
@@ -34,6 +66,7 @@ export function applyLoadoutToRun(boat, state, meta, gradientMap) {
       color: f.color ?? getFishDef(f.defId).color,
       slot: getFishDef(f.defId).slot,
       vitality: f.vitality ?? 100,
+      eat: f.eat || null,
     };
     equipFish(boat, state.slots, item, slot, gradientMap);
   }
@@ -47,6 +80,7 @@ export function applyLoadoutToRun(boat, state, meta, gradientMap) {
     color: f.color ?? getFishDef(f.defId).color,
     slot: getFishDef(f.defId).slot,
     vitality: f.vitality ?? 100,
+    eat: f.eat || null,
   }));
 
   let equipped = 0;
@@ -59,7 +93,7 @@ export function applyLoadoutToRun(boat, state, meta, gradientMap) {
   if (state.fishHold.length === 0 && equipped === 0) {
     state.fishHold.push({
       kind: 'fish', defId: 'food', name: '食物鱼', rarity: 1,
-      category: 'food', color: 0x4ecdc4, vitality: 100, slot: null,
+      category: 'food', color: 0x4ecdc4, vitality: 100, slot: null, eat: { heal: 20 },
     });
   }
 }

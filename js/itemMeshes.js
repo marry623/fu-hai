@@ -15,18 +15,11 @@ function add(g, mesh, outline = 1.1) {
   return mesh;
 }
 
-function wrapBand(g, gm, y, r = 0.12, color = 0xe8dcc0) {
-  const band = new THREE.Mesh(new THREE.TorusGeometry(r, 0.028, 5, 8), mat(color, gm));
-  band.rotation.x = Math.PI / 2;
-  band.position.y = y;
-  add(g, band, 1.15);
-}
-
 /** —— Supplies —— */
-function meshBait(gm) {
+function meshBait(gm, palette = {}) {
   const g = new THREE.Group();
-  const worm = mat(0x4a9a5a, gm);
-  const hook = mat(0x9aa4b2, gm);
+  const worm = mat(palette.worm ?? 0x4a9a5a, gm);
+  const hook = mat(palette.hook ?? 0x9aa4b2, gm);
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.55, 3, 6), worm);
   body.rotation.z = 0.5;
   body.position.set(0.05, 0.05, 0);
@@ -58,11 +51,11 @@ function meshPlank(gm) {
   return g;
 }
 
-function meshRepair(gm) {
+function meshRepair(gm, liquidHex = 0xffd24a, glassHex = 0x6a9ac4) {
   const g = new THREE.Group();
-  const glass = mat(0x6a9ac4, gm, { transparent: true, opacity: 0.72 });
+  const glass = mat(glassHex, gm, { transparent: true, opacity: 0.72 });
   const cork = mat(0xc4a06a, gm);
-  const liquid = mat(0xffd24a, gm);
+  const liquid = mat(liquidHex, gm);
   const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.55, 6), glass);
   bottle.position.y = 0.1;
   add(g, bottle, 1.1);
@@ -79,97 +72,8 @@ function meshRepair(gm) {
   return g;
 }
 
-/** —— Weapons (ref: fish spear / knife / sling) —— */
-function meshHarpoon(gm) {
-  const g = new THREE.Group();
-  const wood = mat(0x6a4a2a, gm);
-  const metal = mat(0xb8c0c8, gm);
-  const wrap = mat(0xe8dcc0, gm);
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 1.55, 6), wood);
-  shaft.rotation.z = Math.PI / 2;
-  add(g, shaft);
-  wrapBand(g, gm, 0, 0.07, 0xe8dcc0);
-  const wrapMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.14, 6), wrap);
-  wrapMesh.rotation.z = Math.PI / 2;
-  wrapMesh.position.x = 0.45;
-  add(g, wrapMesh, 1.12);
-  const wrap2 = wrapMesh.clone();
-  wrap2.position.x = -0.55;
-  add(g, wrap2, 1.12);
-  const head = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.32, 5), metal);
-  head.rotation.z = -Math.PI / 2;
-  head.position.x = 0.88;
-  add(g, head, 1.15);
-  for (const side of [-1, 1]) {
-    const barb = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.18, 4), metal);
-    barb.rotation.set(0, 0, side * 0.9 - Math.PI / 2);
-    barb.position.set(0.72, side * 0.1, 0);
-    add(g, barb, 1.18);
-  }
-  const pommel = new THREE.Mesh(new THREE.OctahedronGeometry(0.08, 0), metal);
-  pommel.position.x = -0.82;
-  add(g, pommel, 1.2);
-  g.rotation.set(0.2, 0.4, 0.15);
-  return g;
-}
-
-function meshKnife(gm) {
-  const g = new THREE.Group();
-  const wood = mat(0x6a4a2a, gm);
-  const metal = mat(0xb8c0c8, gm);
-  const guard = mat(0xd4c4a0, gm);
-  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.22, 0.06, 1, 1, 1), metal);
-  blade.position.set(0.28, 0.05, 0);
-  blade.scale.set(1, 1, 1);
-  add(g, blade, 1.1);
-  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.28, 5), metal);
-  tip.rotation.z = -Math.PI / 2;
-  tip.position.set(0.68, 0.05, 0);
-  tip.scale.set(1, 0.55, 0.35);
-  add(g, tip, 1.12);
-  const cross = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 0.1), guard);
-  cross.position.set(0.02, 0.04, 0);
-  add(g, cross, 1.12);
-  for (let i = 0; i < 3; i++) {
-    const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.075, 0.12, 6), wood);
-    seg.rotation.z = Math.PI / 2;
-    seg.position.set(-0.12 - i * 0.12, 0.04, 0);
-    add(g, seg, 1.1);
-  }
-  const pommel = new THREE.Mesh(new THREE.OctahedronGeometry(0.09, 0), metal);
-  pommel.position.set(-0.48, 0.04, 0);
-  add(g, pommel, 1.18);
-  g.rotation.set(0.15, -0.5, 0.35);
-  return g;
-}
-
-function meshSling(gm) {
-  const g = new THREE.Group();
-  const wood = mat(0x6a4a2a, gm);
-  const wrap = mat(0xe8dcc0, gm);
-  const stone = mat(0x9aa0a8, gm);
-  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.55, 6), wood);
-  handle.position.y = -0.15;
-  add(g, handle);
-  for (const side of [-1, 1]) {
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.42, 6), wood);
-    arm.rotation.z = side * 0.55;
-    arm.position.set(side * 0.16, 0.28, 0);
-    add(g, arm);
-    const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.1, 6), wrap);
-    tip.rotation.z = side * 0.55;
-    tip.position.set(side * 0.28, 0.44, 0);
-    add(g, tip, 1.15);
-  }
-  const pouch = new THREE.Mesh(new THREE.SphereGeometry(0.12, 5, 4), wrap);
-  pouch.scale.set(1.2, 0.7, 0.9);
-  pouch.position.set(0, 0.22, 0.12);
-  add(g, pouch, 1.12);
-  const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.1, 0), stone);
-  rock.position.set(0, 0.24, 0.14);
-  add(g, rock, 1.15);
-  g.rotation.set(0.1, 0.35, -0.1);
-  return g;
+function meshPaste(gm) {
+  return meshRepair(gm, 0xc45c1a, 0x8a5040);
 }
 
 /** —— Hulls (图2: 低阶木筏 / 中阶重筏 / 高阶冲锋船) —— */
@@ -513,9 +417,14 @@ function meshSkillGlacier(gm) {
 }
 
 const BUILDERS = {
-  bait: meshBait,
+  bait: (gm) => meshBait(gm, { worm: 0x4a9a5a, hook: 0x9aa4b2 }),
+  baitCrude: (gm) => meshBait(gm, { worm: 0x8aa090, hook: 0x7a6a58 }),
+  baitFresh: (gm) => meshBait(gm, { worm: 0x3aa89a, hook: 0x9aa4b2 }),
+  baitScale: (gm) => meshBait(gm, { worm: 0xd4c060, hook: 0xc8b070 }),
+  baitAbyss: (gm) => meshBait(gm, { worm: 0x6a40a0, hook: 0x3a2060 }),
   plank: meshPlank,
   repair: meshRepair,
+  paste: meshPaste,
   skillFrost: meshSkillFrost,
   skillStorm: meshSkillStorm,
   skillMeteor: meshSkillMeteor,
@@ -526,9 +435,6 @@ const BUILDERS = {
   skillBeam: meshSkillBeam,
   skillSnare: meshSkillSnare,
   skillGlacier: meshSkillGlacier,
-  weaponHarpoon: meshSkillFrost,
-  weaponKnife: meshSkillStorm,
-  weaponSling: meshSkillMeteor,
   raft: meshRaft,
   heavyRaft: meshHeavyRaft,
   chargeBoat: meshChargeBoat,

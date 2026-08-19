@@ -106,7 +106,7 @@ export const SEA_MAPS = [
   makeSea({
     id: 0, name: '珊瑚浅滩',
     water: 0x5fc6cf, fog: 0xa8d6dc, sky: 0xcdeef2, minimap: '#0d5a62',
-    corrosionMul: 1, feature: 'none', unlockHint: '初始海域',
+    unlockHint: '初始海域',
     cx: 0, cz: 372, rx: 468, rz: 432, n: 18, jitter: 0.16,
     spawn: { x: 0, z: 0, yaw: 0 },
     lh: [
@@ -146,7 +146,7 @@ export const SEA_MAPS = [
   makeSea({
     id: 1, name: '缠绕藻林',
     water: 0x3aa878, fog: 0xb6c9a3, sky: 0xd8e2c6, minimap: '#0d4a38',
-    corrosionMul: 1.1, feature: 'current', unlockHint: '航行归航解锁',
+    corrosionMul: 1.1, feature: 'current', unlockHint: '水流会推船',
     cx: 24, cz: 384, rx: 456, rz: 444, rot: 0.22, n: 17, jitter: 0.18,
     spawn: { x: 12, z: 6, yaw: 0.1 },
     lh: [
@@ -183,7 +183,7 @@ export const SEA_MAPS = [
   makeSea({
     id: 2, name: '沉船雾区',
     water: 0xc4a05a, fog: 0xe7c08a, sky: 0xfbe9c0, minimap: '#8a6020',
-    corrosionMul: 1.2, feature: 'fog', unlockHint: '航行归航解锁',
+    corrosionMul: 1.2, feature: 'fog', unlockHint: '能见度低',
     cx: -12, cz: 360, rx: 480, rz: 420, rot: -0.18, n: 18, jitter: 0.15,
     spawn: { x: -6, z: -6, yaw: 0 },
     lh: [
@@ -222,7 +222,7 @@ export const SEA_MAPS = [
   makeSea({
     id: 3, name: '雷暴裂口',
     water: 0x241e50, fog: 0x1a1628, sky: 0x0e0c18, minimap: '#1a1238',
-    corrosionMul: 1.4, feature: 'lightning', unlockHint: '航行归航解锁',
+    corrosionMul: 1.4, feature: 'lightning', unlockHint: '雨与闪光',
     cx: 0, cz: 396, rx: 444, rz: 468, rot: 0.35, n: 16, jitter: 0.2,
     spawn: { x: 0, z: 3, yaw: 0 },
     lh: [
@@ -259,7 +259,7 @@ export const SEA_MAPS = [
   makeSea({
     id: 4, name: '熔岩海沟',
     water: 0x4a1818, fog: 0x1a0e10, sky: 0x1a0f10, minimap: '#4a1010',
-    corrosionMul: 3, feature: 'heat', unlockHint: '航行归航解锁',
+    corrosionMul: 3, feature: 'heat', unlockHint: '腐蚀极快',
     cx: 18, cz: 378, rx: 462, rz: 438, rot: -0.28, n: 17, jitter: 0.17,
     spawn: { x: 9, z: 0, yaw: -0.1 },
     lh: [
@@ -305,7 +305,7 @@ export const TUTORIAL_MAP = makeSea({
   minimap: '#1a6a72',
   corrosionMul: 0,
   feature: 'tutorial',
-  unlockHint: '新手安全教学',
+  unlockHint: '安全教学',
   cx: 0,
   cz: 70,
   rx: 135,

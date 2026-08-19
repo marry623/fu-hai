@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
-import { getSeaMap, constrainToPoly, pointInPoly, EVAC_RADIUS } from './seaMaps.js?v=30h';
+import { getSeaMap, constrainToPoly, pointInPoly, EVAC_RADIUS } from './seaMaps.js?v=31g';
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { scatterBiomeDecor, updateBiomeDecor, jitterRockCluster } from './biomeDecor.js?v=30h';
 

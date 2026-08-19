@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
-import { pointInPoly, EVAC_RADIUS, EVAC_HOLD } from './seaMaps.js?v=29m';
-import { pickMonsterForZone, getMonsterDef, monstersForZone, monsterHp, hullTouchDamage, hullShotDamage, wrapDps, wrapCountForZone } from './monsterCatalog.js?v=30b';
+import { pointInPoly, EVAC_RADIUS, EVAC_HOLD } from './seaMaps.js?v=31g';
+import { pickMonsterForZone, getMonsterDef, monstersForZone, monsterHp, hullTouchDamage, hullShotDamage, wrapDps, wrapCountForZone } from './monsterCatalog.js?v=31g';
 import { createCombatMonster, createMonsterMesh, syncHpBar } from './monsterMeshes.js?v=30c';
 
 export { createMonsterMesh, EVAC_RADIUS, EVAC_HOLD };
@@ -643,7 +643,7 @@ export function createHazards(gradientMap, scene) {
         for (const e of enemies) {
           if (!e.visible) continue;
           if (Math.hypot(s.mesh.position.x - e.position.x, s.mesh.position.z - e.position.z) < 2.2) {
-            damageEnemy(e, 10, opts.onKill);
+            damageEnemy(e, s.dmg || 10, opts.onKill);
             s.life = 0;
             break;
           }
@@ -737,7 +737,7 @@ export function createHazards(gradientMap, scene) {
     });
   }
 
-  function shootInk(from, target, gm) {
+  function shootInk(from, target, gm, dmg = 10) {
     if (!target) return;
     const dx = target.position.x - from.x;
     const dz = target.position.z - from.z;
@@ -746,7 +746,7 @@ export function createHazards(gradientMap, scene) {
     mesh.position.set(from.x, 0.7, from.z);
     root.add(mesh);
     addOutline(mesh, 1.15);
-    inkShots.push({ mesh, life: 1.6, vx: (dx / len) * 28, vz: (dz / len) * 28 });
+    inkShots.push({ mesh, life: 1.6, vx: (dx / len) * 28, vz: (dz / len) * 28, dmg });
   }
 
   function nearestEnemy(pos, max = 40) {

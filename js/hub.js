@@ -1,11 +1,11 @@
 /** Hub UI — backpack desk; 整备=3D船, 出港=海域地图, 仓库=格子 */
 
 import { ZONES } from './zones.js?v=29m';
-import { SLOT_ORDER, SLOT_LABELS } from './slots.js';
-import { getFishDef, FISH_CATALOG, RARITY } from './fishCatalog.js?v=29q';
-import { getFishPortrait } from './fishPortrait.js?v=29q';
-import { getItemPortrait } from './itemPortrait.js?v=29r';
-import { listMonsterIds, getMonsterDef } from './monsterCatalog.js?v=30b';
+import { SLOT_ORDER, SLOT_LABELS } from './slots.js?v=31c';
+import { getFishDef, FISH_CATALOG, RARITY, listShopBuyFishIds, shopBuyCost, BAIT_KINDS, rarityStars } from './fishCatalog.js?v=31g';
+import { getFishPortrait } from './fishPortrait.js?v=31c';
+import { getItemPortrait } from './itemPortrait.js?v=31c';
+import { listMonsterIds, getMonsterDef } from './monsterCatalog.js?v=31g';
 import { getMonsterPortrait } from './monsterPortrait.js?v=29p';
 import {
   SHOP_TABS,
@@ -17,6 +17,13 @@ import {
   fishSellPrice,
   tryUnlock,
   buySupply,
+  buyWarehouseFish,
+  upgradeSkill,
+  upgradeTalent,
+  skillLevel,
+  talentLevel,
+  skillUpgradeCost,
+  talentUpgradeCost,
   sellWarehouseFish,
   hubFeedFish,
   equipFromWarehouse,
@@ -26,7 +33,14 @@ import {
   saveLoadout,
   equippedSkills,
   cycleSkillSlot,
-} from './meta.js?v=29s';
+  totalBait,
+  baitStock,
+  setLoadoutBaitKind,
+  packSupply,
+  unpackSupply,
+  LOADOUT_BAG_SIZE,
+  ZONE_UNLOCK_COST,
+} from './meta.js?v=31h';
 import { HUB_SPOTS } from './hubIsland.js?v=23h';
 
 const TAB_TITLES = {
@@ -40,11 +54,11 @@ const TAB_TITLES = {
 const SHIP_TABS = new Set(['prep', 'warehouse', 'depart']);
 const CLIP_KEYS = ['prep', 'warehouse', 'depart', 'shop', 'codex'];
 const FEATURE_LABELS = {
-  none: '平静海域',
-  current: '洋流缠绕',
-  fog: '浓雾迷航',
-  lightning: '雷暴裂隙',
-  heat: '熔岩热流',
+  none: '初始海域',
+  current: '水流会推船',
+  fog: '能见度低',
+  lightning: '雨与闪光',
+  heat: '腐蚀极快',
   tutorial: '安全教学',
 };
 
@@ -122,6 +136,8 @@ export function createHub(deps) {
   let codexTab = 'fish';
   let selectedMonsterId = null;
   let shopTab = 'sell';
+  let shopSupplyZone = 'bait';
+  let warehouseTab = 'fish';
   let shopDetail = null;
 
   if (els.markers) {
@@ -264,13 +280,36 @@ export function createHub(deps) {
     if (els.drawerBest) els.drawerBest.textContent = `${meta.bestDistance || 0}m`;
 
     renderDepartSummary(meta);
-    renderPrepBackpack(meta);
+    ensureWarehouseChrome();
+    renderLoadoutBackpack(meta, els.backpack);
+    renderLoadoutBackpack(meta, document.getElementById('hub-wh-backpack'));
     renderZones(meta);
     renderCargo(meta);
     renderWarehouse(meta);
     renderShop(meta);
     renderCodex(meta);
     if (drawerOpen && tab === 'prep') renderCallouts(meta);
+  }
+
+  function ensureWarehouseChrome() {
+    if (els.warehouseStage && !els.warehouseStage.querySelector('#hub-wh-tabs') && els.warehouse) {
+      const nav = document.createElement('div');
+      nav.id = 'hub-wh-tabs';
+      nav.className = 'hub-shop-tabs';
+      els.warehouseStage.insertBefore(nav, els.warehouse);
+    }
+    const panel = els.clipPanels.warehouse;
+    if (panel && !panel.querySelector('#hub-wh-backpack')) {
+      panel.replaceChildren();
+      const h = document.createElement('h3');
+      h.className = 'hub-clip-h';
+      h.textContent = '携带背包';
+      const list = document.createElement('div');
+      list.id = 'hub-wh-backpack';
+      list.className = 'hub-backpack-list';
+      list.setAttribute('aria-label', '携带物资与改装');
+      panel.append(h, list);
+    }
   }
 
   function renderCallouts(meta) {
@@ -295,7 +334,7 @@ export function createHub(deps) {
       if (!f?.defId) return;
       try {
         const img = document.createElement('img');
-        img.src = getFishPortrait(f.defId);
+        img.src = getFishPortrait(f.defId, f);
         img.alt = '';
         img.draggable = false;
         face.replaceChildren(img);
@@ -369,31 +408,46 @@ export function createHub(deps) {
     `;
   }
 
-  function renderPrepBackpack(meta) {
-    if (!els.backpack) return;
-    const slots = meta.loadout?.slots || {};
-    const s = meta.warehouse?.supplies || {};
-    const cargo = meta.loadout?.cargo || [];
+  function fishFaceHtml(f, fallback = '?') {
+    if (!f?.defId) return `<span class="hub-bp-q">${fallback}</span>`;
+    try {
+      return `<img src="${getFishPortrait(f.defId, f)}" alt="" draggable="false" />`;
+    } catch (_) {
+      return `<span class="hub-bp-q">${fallback}</span>`;
+    }
+  }
 
-    const supplyDefs = [
-      { key: 'bait', label: '鱼饵', n: s.bait || 0 },
-      { key: 'plank', label: '木板', n: s.plank || 0 },
-      { key: 'repair', label: '修补剂', n: s.repair || 0 },
-    ];
+  function renderLoadoutBackpack(meta, root) {
+    if (!root) return;
+    const slots = meta.loadout?.slots || {};
+    const lo = meta.loadout?.supplies || {};
+    const bag = Array.isArray(lo.bag) ? lo.bag : [];
+    const cargo = meta.loadout?.cargo || [];
+    const labels = {
+      baitCrude: BAIT_KINDS.crude.name,
+      baitFresh: BAIT_KINDS.fresh.name,
+      baitScale: BAIT_KINDS.scale.name,
+      baitAbyss: BAIT_KINDS.abyss.name,
+      plank: '木板',
+      repair: '修补剂',
+      paste: '龙骨膏',
+    };
+
     const supplyCards = [];
-    for (let i = 0; i < 6; i++) {
-      const row = supplyDefs[i];
-      if (row) {
-        const take = row.key === 'bait' ? Math.min(3, row.n) : Math.min(1, row.n);
+    for (let i = 0; i < LOADOUT_BAG_SIZE; i++) {
+      const slot = bag[i];
+      const key = slot && (typeof slot === 'string' ? slot : slot.key);
+      const n = slot ? (typeof slot === 'string' ? 1 : Math.max(1, slot.n | 0)) : 0;
+      if (key) {
         let face = '<span class="hub-bp-q">?</span>';
         try {
-          face = `<img src="${getItemPortrait(row.key)}" alt="" draggable="false" />`;
+          face = `<img src="${getItemPortrait(key)}" alt="" draggable="false" />`;
         } catch (_) { /* keep ? */ }
         supplyCards.push(`
-          <div class="hub-bp-card" data-kind="supply">
+          <button type="button" class="hub-bp-card" data-kind="supply" data-unpack="${i}">
             <div class="hub-bp-card-face">${face}</div>
-            <div class="hub-bp-card-cap">${row.label}<span>×${row.n} · 带${take}</span></div>
-          </div>`);
+            <div class="hub-bp-card-cap">${labels[key] || key}<span>×${n} · 卸</span></div>
+          </button>`);
       } else {
         supplyCards.push(`
           <div class="hub-bp-card empty" data-kind="supply">
@@ -405,57 +459,12 @@ export function createHub(deps) {
 
     const modCards = SLOT_ORDER.map((slot, idx) => {
       const f = slots[slot];
-      let face = '<span class="hub-bp-q">?</span>';
-      if (f?.defId) {
-        try {
-          face = `<img src="${getFishPortrait(f.defId)}" alt="" draggable="false" />`;
-        } catch (_) {
-          face = '<span class="hub-bp-q">鱼</span>';
-        }
-      }
       return `
         <div class="hub-bp-card${f ? '' : ' empty'}" data-kind="slot">
-          <div class="hub-bp-card-face">${face}</div>
+          <div class="hub-bp-card-face">${fishFaceHtml(f, '鱼')}</div>
           <div class="hub-bp-card-cap">${idx + 1}. ${SLOT_LABELS[slot]}<span>${f ? f.name : '空'}</span></div>
         </div>`;
     }).join('');
-
-    const weapons = [];
-    for (const slot of SLOT_ORDER) {
-      const f = slots[slot];
-      if (!f?.defId) continue;
-      try {
-        const def = getFishDef(f.defId);
-        if (def?.category === 'weapon') weapons.push({ ...f, from: 'slot' });
-      } catch (_) { /* skip */ }
-    }
-    cargo.forEach((f, i) => {
-      try {
-        const def = getFishDef(f.defId);
-        if (def?.category === 'weapon') weapons.push({ ...f, from: 'cargo', cargoIndex: i });
-      } catch (_) { /* skip */ }
-    });
-    const weaponCards = [];
-    for (let i = 0; i < 3; i++) {
-      const f = weapons[i];
-      if (f) {
-        let face = '<span class="hub-bp-q">武</span>';
-        try {
-          face = `<img src="${getFishPortrait(f.defId)}" alt="" draggable="false" />`;
-        } catch (_) { /* keep */ }
-        weaponCards.push(`
-          <div class="hub-bp-card" data-kind="weapon">
-            <div class="hub-bp-card-face">${face}</div>
-            <div class="hub-bp-card-cap">${f.name}<span>武器</span></div>
-          </div>`);
-      } else {
-        weaponCards.push(`
-          <div class="hub-bp-card empty" data-kind="weapon">
-            <div class="hub-bp-card-face"><span class="hub-bp-q">?</span></div>
-            <div class="hub-bp-card-cap">${i + 1}. 武器<span>空</span></div>
-          </div>`);
-      }
-    }
 
     const equipped = equippedSkills(meta);
     const skillSlotCards = equipped.map((sid, i) => {
@@ -472,6 +481,24 @@ export function createHub(deps) {
         </button>`;
     });
 
+    const cargoCards = [];
+    for (let i = 0; i < 8; i++) {
+      const f = cargo[i];
+      if (f) {
+        cargoCards.push(`
+          <button type="button" class="hub-bp-card" data-kind="cargo" data-uncargo="${i}">
+            <div class="hub-bp-card-face">${fishFaceHtml(f, '鱼')}</div>
+            <div class="hub-bp-card-cap">${f.name}<span>卸</span></div>
+          </button>`);
+      } else {
+        cargoCards.push(`
+          <div class="hub-bp-card empty" data-kind="cargo">
+            <div class="hub-bp-card-face"><span class="hub-bp-q">?</span></div>
+            <div class="hub-bp-card-cap">携带<span>空</span></div>
+          </div>`);
+      }
+    }
+
     const boats = [
       { id: 'raft', name: '木筏', need: true },
       { id: 'heavyRaft', name: '重筏', need: !!meta.unlocks.heavyRaft },
@@ -483,19 +510,19 @@ export function createHub(deps) {
         data-boat="${b.id}" ${b.need ? '' : 'disabled'}>${b.name}${b.need ? '' : ' ·需买'}</button>
     `).join('');
 
-    els.backpack.innerHTML = `
+    root.innerHTML = `
       <h3 class="hub-clip-h">船型</h3>
-      <div class="hub-boats hub-prep-boats" id="hub-prep-boats">${boatBtns}</div>
+      <div class="hub-boats hub-prep-boats">${boatBtns}</div>
       <p class="hub-bp-sec">物资</p>
       <div class="hub-bp-grid">${supplyCards.join('')}</div>
       <p class="hub-bp-sec">改装</p>
       <div class="hub-bp-grid">${modCards}</div>
       <p class="hub-bp-sec">技能牌 · 点按切换</p>
       <div class="hub-bp-grid">${skillSlotCards.join('')}</div>
-      <p class="hub-bp-sec">武器</p>
-      <div class="hub-bp-grid">${weaponCards.join('')}</div>`;
+      <p class="hub-bp-sec">携带</p>
+      <div class="hub-bp-grid">${cargoCards.join('')}</div>`;
 
-    els.backpack.querySelectorAll('[data-boat]').forEach((btn) => {
+    root.querySelectorAll('[data-boat]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = btn.dataset.boat;
         deps.setBoat(id);
@@ -506,12 +533,26 @@ export function createHub(deps) {
         refreshCenter();
       });
     });
-    els.backpack.querySelectorAll('[data-skill-slot]').forEach((btn) => {
+    root.querySelectorAll('[data-skill-slot]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const slot = Number(btn.dataset.skillSlot);
         const m = cycleSkillSlot(deps.getMeta(), slot);
         deps.setMeta(m);
         render();
+      });
+    });
+    root.querySelectorAll('[data-unpack]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const r = unpackSupply(deps.getMeta(), btn.dataset.unpack);
+        deps.toast(r.msg);
+        if (r.ok) { deps.setMeta(r.meta); render(); }
+      });
+    });
+    root.querySelectorAll('[data-uncargo]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const r = returnCargoToWarehouse(deps.getMeta(), Number(btn.dataset.uncargo));
+        deps.toast(r.ok ? '已放回仓库' : (r.msg || '失败'));
+        if (r.ok) { deps.setMeta(r.meta); render(); }
       });
     });
   }
@@ -536,7 +577,9 @@ export function createHub(deps) {
           <strong><span class="hub-zone-swatch" style="background:${z.color || '#2ec4b6'}"></span>${z.name}</strong>
           <span>${unlocked
             ? (FEATURE_LABELS[z.feature] || z.unlockHint || '可出航')
-            : (z.unlockHint || '航行归航解锁')}</span>
+            : (z.id > 0 && ZONE_UNLOCK_COST[z.id]
+              ? `${ZONE_UNLOCK_COST[z.id]} 碎片解锁`
+              : (z.unlockHint || '航行归航解锁'))}</span>
         </button>
       </div>`;
     }).join('');
@@ -580,22 +623,72 @@ export function createHub(deps) {
 
   function renderWarehouse(meta) {
     if (!els.warehouse) return;
-    const fish = meta.warehouse?.fish || [];
-    const boundSlots = meta.loadout?.slots || {};
-    if (!fish.length) {
-      els.warehouse.innerHTML = '';
-      for (let i = 0; i < 20; i++) {
-        els.warehouse.innerHTML += `<button type="button" class="bp-cell empty"><div class="bp-polaroid"><div class="bp-thumb"></div><div class="bp-cell-name">—</div></div></button>`;
-      }
+    const emptyWarehouseCell = (actCount) => {
+      const spacers = Array.from({ length: actCount }, () =>
+        '<span class="bp-btn dim hub-wh-act-spacer" aria-hidden="true">&nbsp;</span>'
+      ).join('');
+      return `<button type="button" class="bp-cell empty"><span class="bp-tape top"></span><div class="bp-polaroid"><div class="bp-thumb"></div><div class="bp-cell-name">—</div><div class="bp-rarity-bar r1"></div><div class="hub-wh-acts-inline">${spacers}</div></div></button>`;
+    };
+    const nav = els.warehouseStage?.querySelector('#hub-wh-tabs');
+    if (nav) {
+      nav.innerHTML = [
+        { id: 'bait', name: '鱼饵' },
+        { id: 'repair', name: '修补' },
+        { id: 'fish', name: '鱼类' },
+      ].map((z) => `<button type="button" class="hub-shop-tab${warehouseTab === z.id ? ' active' : ''}" data-wh-tab="${z.id}">${z.name}</button>`).join('');
+      nav.querySelectorAll('[data-wh-tab]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          warehouseTab = btn.dataset.whTab;
+          render();
+        });
+      });
+    }
+
+    if (warehouseTab === 'bait' || warehouseTab === 'repair') {
+      const stock = meta.warehouse?.supplies || {};
+      const items = SHOP_SUPPLIES.filter((s) => s.zone === warehouseTab);
+      const cells = items.map((item) => {
+        const n = stock[item.id] | 0;
+        let thumb = '';
+        try {
+          thumb = `<img class="bp-thumb-fish" src="${getItemPortrait(item.id)}" alt="" draggable="false" />`;
+        } catch (_) {
+          thumb = `<div class="bp-thumb-blob" style="background:${item.tone || '#4a90a4'}"></div>`;
+        }
+        return `<div class="bp-cell hub-wh-cell">
+          <span class="bp-tape top"></span>
+          <div class="bp-polaroid">
+            <div class="bp-thumb">${thumb}</div>
+            <div class="bp-cell-name">${item.name}</div>
+            <div class="bp-rarity-bar r1"></div>
+            <div class="hub-wh-acts-inline">
+              <button type="button" class="bp-btn dim" data-pack="${item.id}" ${n ? '' : 'disabled'}>装 ×${n}</button>
+            </div>
+          </div>
+        </div>`;
+      });
+      while (cells.length < 20) cells.push(emptyWarehouseCell(1));
+      els.warehouse.innerHTML = cells.join('');
+      els.warehouse.querySelectorAll('[data-pack]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const r = packSupply(deps.getMeta(), btn.dataset.pack);
+          deps.toast(r.msg);
+          if (r.ok) { deps.setMeta(r.meta); render(); }
+        });
+      });
       return;
     }
+
+    const fish = meta.warehouse?.fish || [];
+    const boundSlots = meta.loadout?.slots || {};
     const cells = fish.map((f, i) => {
       const def = getFishDef(f.defId);
       const slot = def.slot;
       const occupied = !!(slot && boundSlots[slot]?.defId);
       let thumb = '';
       try {
-        thumb = `<img class="bp-thumb-fish" src="${getFishPortrait(f.defId)}" alt="" draggable="false" />`;
+        thumb = `<img class="bp-thumb-fish" src="${getFishPortrait(f.defId, f)}" alt="" draggable="false" />`;
       } catch (_) {
         thumb = `<div class="bp-thumb-blob" style="background:#4a90a4"></div>`;
       }
@@ -604,23 +697,21 @@ export function createHub(deps) {
         : '';
       return `<div class="bp-cell hub-wh-cell" data-wh="${i}">
         <span class="bp-tape top"></span>
-        ${badge}
         <div class="bp-polaroid">
+          ${badge}
           <div class="bp-thumb">${thumb}</div>
           <div class="bp-cell-name">${f.name}</div>
           <div class="bp-rarity-bar r${def.rarity || 1}"></div>
-        </div>
-        <span class="bp-tape bot"></span>
-        <div class="hub-wh-acts-inline">
-          ${slot ? `<button type="button" class="bp-btn dim" data-eq="${i}" data-slot="${slot}">绑</button>` : ''}
-          <button type="button" class="bp-btn dim" data-cargo="${i}">带</button>
-          <button type="button" class="bp-btn dim" data-feed="${i}">喂</button>
+          <div class="hub-wh-acts-inline">
+            ${slot ? `<button type="button" class="bp-btn dim" data-eq="${i}" data-slot="${slot}">绑</button>` : ''}
+            <button type="button" class="bp-btn dim" data-cargo="${i}">带</button>
+            <button type="button" class="bp-btn dim" data-feed="${i}">喂</button>
+            ${slot ? '' : '<span class="bp-btn dim hub-wh-act-spacer" aria-hidden="true">&nbsp;</span>'}
+          </div>
         </div>
       </div>`;
     });
-    while (cells.length < 20) {
-      cells.push(`<button type="button" class="bp-cell empty"><div class="bp-polaroid"><div class="bp-thumb"></div><div class="bp-cell-name">—</div></div></button>`);
-    }
+    while (cells.length < 20) cells.push(emptyWarehouseCell(3));
     els.warehouse.innerHTML = cells.join('');
 
     els.warehouse.querySelectorAll('[data-eq]').forEach((btn) => {
@@ -653,11 +744,25 @@ export function createHub(deps) {
     if (!els.supplies) return;
     const s = meta.warehouse?.supplies || {};
     const lo = meta.loadout?.supplies || {};
+    const kind = lo.baitKind || 'fresh';
+    const kindName = BAIT_KINDS[kind]?.name || '鲜饵';
+    const nKind = baitStock(s, kind);
     els.supplies.innerHTML = `
-      <p>仓库：饵 ${s.bait || 0} · 木板 ${s.plank || 0} · 修补剂 ${s.repair || 0}</p>
-      <p>出港自动带：饵 ${Math.min(3, s.bait || 0)} · 木板 ${Math.min(1, s.plank || 0)} · 修补 ${Math.min(1, s.repair || 0)}</p>
-      <p class="muted">预设携带：饵 ${lo.bait ?? 0} · 木板 ${lo.plank ?? 0} · 修补 ${lo.repair ?? 0}</p>
+      <p>仓库：${BAIT_KINDS.crude.name} ${s.baitCrude || 0} · ${BAIT_KINDS.fresh.name} ${s.baitFresh || s.bait || 0} · ${BAIT_KINDS.scale.name} ${s.baitScale || 0} · ${BAIT_KINDS.abyss.name} ${s.baitAbyss || 0}</p>
+      <p>修补：木板 ${s.plank || 0} · 剂 ${s.repair || 0} · 膏 ${s.paste || 0} · 饵合计 ${totalBait(s)}</p>
+      <p>出港带：${kindName} ${Math.min(3, nKind)} · 木板 ${Math.min(1, s.plank || 0)} · ${s.paste ? '膏' : '剂'} ${Math.min(1, (s.paste || s.repair || 0))}</p>
+      <p class="muted">点下方饵种可设为本航携带种类。剂和膏出港只带一种。</p>
+      <p>${Object.keys(BAIT_KINDS).map((k) =>
+        `<button type="button" class="hub-shop-tab${kind === k ? ' active' : ''}" data-bait-kind="${k}">${BAIT_KINDS[k].name}</button>`
+      ).join(' ')}</p>
     `;
+    els.supplies.querySelectorAll('[data-bait-kind]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const m = setLoadoutBaitKind(deps.getMeta(), btn.dataset.baitKind);
+        deps.setMeta(m);
+        render();
+      });
+    });
   }
 
   function shopCardHtml({ key, title, sub, tone, owned, disabled, faceHtml, itemId }) {
@@ -686,11 +791,11 @@ export function createHub(deps) {
     if (!panel) return;
     const tabMeta = SHOP_TABS.find((t) => t.id === shopTab);
     const blurb = {
-      sell: '先点鱼获，再在左侧确认出售。卖鱼是零钱，主收入来自归航。',
-      hull: '买的是一艘在港船。归航带回；沉船丢失，木筏始终免费。',
-      supply: '物资进仓库，出港自动带一部分。每次出航都会消耗。',
-      weapon: '霜矛、雷矛、陨石出航自带。其余用海图碎片学会；准备界面选出港三张。',
-      talent: '永久能力。沉船不会丢掉天赋。',
+      sell: '卖掉仓库鱼换碎片。卖价低于买价。',
+      hull: '木筏免费。重筏 / 冲锋船买的是一艘在港船，沉了要重买。',
+      supply: '饵和修理剂入仓库，出港再装进 8 格背包。1–3 星鱼可直购。',
+      weapon: '学会永久。出航带 3 张。可升到 3 级。',
+      talent: '永久。可升到 3 级。',
     }[shopTab] || '';
     let detail = `<h3 class="hub-clip-h">${tabMeta?.name || '商店'}</h3>
       <p class="hub-fs-blurb">${blurb}</p>
@@ -731,6 +836,24 @@ export function createHub(deps) {
       }
       if (act === 'supply') {
         const r = buySupply(deps.getMeta(), actId);
+        deps.toast(r.msg);
+        if (r.ok) { deps.setMeta(r.meta); render(); }
+        return;
+      }
+      if (act === 'buyFish') {
+        const r = buyWarehouseFish(deps.getMeta(), actId);
+        deps.toast(r.msg);
+        if (r.ok) { deps.setMeta(r.meta); render(); }
+        return;
+      }
+      if (act === 'upgradeSkill') {
+        const r = upgradeSkill(deps.getMeta(), actId);
+        deps.toast(r.msg);
+        if (r.ok) { deps.setMeta(r.meta); render(); }
+        return;
+      }
+      if (act === 'upgradeTalent') {
+        const r = upgradeTalent(deps.getMeta(), actId);
         deps.toast(r.msg);
         if (r.ok) { deps.setMeta(r.meta); render(); }
         return;
@@ -788,20 +911,44 @@ export function createHub(deps) {
         });
       }).join('');
     } else if (shopTab === 'supply') {
-      cards = SHOP_SUPPLIES.map((item) => shopCardHtml({
-        key: `supply:${item.id}`,
-        title: item.name,
-        sub: `${item.cost} 海图碎片 · ×${item.amount}`,
-        tone: item.tone,
-        itemId: item.id,
-      })).join('');
+      const sub = ['bait', 'repair', 'fish'].map((z) => {
+        const label = z === 'bait' ? '鱼饵' : z === 'repair' ? '修补' : '鱼类';
+        return `<button type="button" class="hub-shop-tab${shopSupplyZone === z ? ' active' : ''}" data-supply-zone="${z}">${label}</button>`;
+      }).join('');
+      if (shopSupplyZone === 'fish') {
+        cards = listShopBuyFishIds().map((id) => {
+          const def = getFishDef(id);
+          const cost = shopBuyCost(def);
+          return shopCardHtml({
+            key: `fish:${id}`,
+            title: def.name,
+            sub: `${rarityStars(def.rarity)} · ${cost}`,
+            tone: `#${(def.color >>> 0).toString(16).padStart(6, '0')}`,
+            itemId: id,
+          });
+        }).join('');
+      } else {
+        cards = SHOP_SUPPLIES.filter((item) => item.zone === shopSupplyZone).map((item) => shopCardHtml({
+          key: `supply:${item.id}`,
+          title: item.name,
+          sub: `${item.cost} · ×${item.amount}`,
+          tone: item.tone,
+          itemId: item.id,
+        })).join('');
+      }
+      cards = `<div class="hub-shop-subtabs">${sub}</div>${cards}`;
     } else if (shopTab === 'weapon') {
       cards = SHOP_WEAPONS.map((item) => {
         const owned = item.cost <= 0 || !!meta.unlocks[item.id];
+        const lv = owned ? skillLevel(meta, item.id) : 0;
+        let sub;
+        if (!owned) sub = `${item.cost} 海图碎片`;
+        else if (lv >= 3) sub = 'Lv.3 满级';
+        else sub = `Lv.${lv} · 升${lv + 1} ${skillUpgradeCost(item.id, lv)}`;
         return shopCardHtml({
           key: `buy:${item.id}`,
           title: item.name,
-          sub: owned ? (item.cost <= 0 ? '出航自带' : '已学会') : `${item.cost} 海图碎片`,
+          sub,
           tone: item.tone,
           itemId: item.id,
           owned,
@@ -810,14 +957,18 @@ export function createHub(deps) {
     } else if (shopTab === 'talent') {
       cards = SHOP_TALENTS.map((item) => {
         const owned = !!meta.unlocks[item.id];
+        const lv = owned ? talentLevel(meta, item.id) : 0;
+        let sub;
+        if (!owned) sub = `${item.cost} 海图碎片`;
+        else if (lv >= 3) sub = 'Lv.3 满级';
+        else sub = `Lv.${lv} · 升${lv + 1} ${talentUpgradeCost(lv)}`;
         return shopCardHtml({
           key: `buy:${item.id}`,
           title: item.name,
-          sub: owned ? '已学会' : `${item.cost} 海图碎片`,
+          sub,
           tone: item.tone,
           itemId: item.id,
           owned,
-          disabled: owned,
         });
       }).join('');
     }
@@ -833,6 +984,14 @@ export function createHub(deps) {
         renderShop(meta);
       });
     });
+    els.shop.querySelectorAll('[data-supply-zone]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        shopSupplyZone = btn.dataset.supplyZone;
+        shopDetail = null;
+        renderShop(meta);
+      });
+    });
 
     const catalog = [...SHOP_HULLS, ...SHOP_SUPPLIES, ...SHOP_WEAPONS, ...SHOP_TALENTS];
     els.shop.querySelectorAll('[data-shop-key]').forEach((btn) => {
@@ -844,7 +1003,7 @@ export function createHub(deps) {
           if (!fish) return;
           shopDetail = {
             title: fish.name,
-            desc: `稀有度 ${'★'.repeat(Math.min(5, fish.rarity || 1))} · 卖鱼换零钱，主收入仍是归航`,
+            desc: `稀有度 ${rarityStars(fish.rarity || 1)} · 卖掉仓库鱼换碎片。卖价低于买价。`,
             priceLine: `售价 ${fishSellPrice(fish)} 海图碎片`,
             act: 'sell',
             actId: String(idx),
@@ -869,22 +1028,75 @@ export function createHub(deps) {
           renderShopDetail(meta);
           return;
         }
+        if (key.startsWith('fish:')) {
+          const id = key.slice(5);
+          const def = getFishDef(id);
+          const cost = shopBuyCost(def);
+          shopDetail = {
+            title: def.name,
+            desc: `${rarityStars(def.rarity)} · 进仓库，可绑槽或再卖掉（会亏差价）。4 星以上只能钓。`,
+            priceLine: `${cost} 海图碎片（卖价 ${fishSellPrice({ defId: def.id, rarity: def.rarity, category: def.category })}）`,
+            act: meta.fragments >= cost ? 'buyFish' : null,
+            actId: id,
+            actLabel: '购入',
+          };
+          renderShopDetail(meta);
+          return;
+        }
         if (key.startsWith('buy:')) {
           const id = key.slice(4);
           const item = catalog.find((s) => s.id === id);
           const weapon = SHOP_WEAPONS.find((w) => w.id === id);
+          const talent = SHOP_TALENTS.find((t) => t.id === id);
           const isFreeSkill = !!weapon && weapon.cost <= 0;
           const owned = !!meta.unlocks[id] || isFreeSkill;
+          let priceLine;
+          let act = null;
+          let actLabel = '学习';
+          if (SHOP_HULLS.some((h) => h.id === id)) {
+            priceLine = owned ? '已在港' : `${item.cost} 海图碎片`;
+            act = (!owned && meta.fragments >= item.cost) ? 'buy' : null;
+            actLabel = '购入船体';
+          } else if (weapon) {
+            const lv = owned ? skillLevel(meta, id) : 0;
+            if (!owned) {
+              priceLine = `${item.cost} 海图碎片学会`;
+              act = meta.fragments >= item.cost ? 'buy' : null;
+              actLabel = '学习';
+            } else if (lv >= 3) {
+              priceLine = 'Lv.3 满级';
+            } else {
+              const cost = skillUpgradeCost(id, lv);
+              priceLine = `Lv.${lv} → ${lv + 1} · ${cost} 海图碎片`;
+              act = meta.fragments >= cost ? 'upgradeSkill' : null;
+              actLabel = `升到 ${lv + 1} 级`;
+            }
+          } else if (talent) {
+            const lv = owned ? talentLevel(meta, id) : 0;
+            if (!owned) {
+              priceLine = `${item.cost} 海图碎片学会`;
+              act = meta.fragments >= item.cost ? 'buy' : null;
+              actLabel = '学习';
+            } else if (lv >= 3) {
+              priceLine = 'Lv.3 满级';
+            } else {
+              const cost = talentUpgradeCost(lv);
+              priceLine = `Lv.${lv} → ${lv + 1} · ${cost} 海图碎片`;
+              act = meta.fragments >= cost ? 'upgradeTalent' : null;
+              actLabel = `升到 ${lv + 1} 级`;
+            }
+          } else {
+            priceLine = owned ? '已入手' : `${item.cost} 海图碎片`;
+            act = (!owned && meta.fragments >= item.cost) ? 'buy' : null;
+          }
           shopDetail = item
             ? {
               title: item.name,
               desc: item.desc,
-              priceLine: isFreeSkill
-                ? '出航自带'
-                : (owned ? (SHOP_HULLS.some((h) => h.id === id) ? '已在港' : '已学会') : `${item.cost} 海图碎片`),
-              act: (!isFreeSkill && !owned && meta.fragments >= item.cost) ? 'buy' : null,
+              priceLine: isFreeSkill && !owned ? '出航自带' : priceLine,
+              act,
               actId: id,
-              actLabel: SHOP_HULLS.some((h) => h.id === id) ? '购入船体' : '学习',
+              actLabel,
             }
             : null;
           renderShopDetail(meta);
@@ -899,7 +1111,20 @@ export function createHub(deps) {
         if (!face || !f?.defId) return;
         try {
           const img = document.createElement('img');
-          img.src = getFishPortrait(f.defId);
+          img.src = getFishPortrait(f.defId, f);
+          img.alt = '';
+          img.draggable = false;
+          face.replaceChildren(img);
+        } catch (_) { /* keep swatch */ }
+      });
+    }
+    if (shopTab === 'supply' && shopSupplyZone === 'fish') {
+      listShopBuyFishIds().forEach((id) => {
+        const face = els.shop.querySelector(`[data-shop-key="fish:${id}"] .hub-shop-card-face`);
+        if (!face) return;
+        try {
+          const img = document.createElement('img');
+          img.src = getFishPortrait(id);
           img.alt = '';
           img.draggable = false;
           face.replaceChildren(img);
@@ -939,7 +1164,7 @@ export function createHub(deps) {
           const sel = selectedCodexId === id ? ' selected' : '';
           return `<button type="button" class="codex-entry polaroid${sel}${open ? '' : ' locked'}" data-codex="${id}">
             <span class="codex-entry-face">${open ? '' : '?'}</span>
-            <span class="codex-entry-name">${d.name}</span>
+            <span class="codex-entry-name">${open ? d.name : (d.rarity >= 6 ? '？？？' : d.name)}</span>
           </button>`;
         }).join('')}
       </div>`;
@@ -1015,16 +1240,19 @@ export function createHub(deps) {
     const rarity = RARITY[def.rarity] || RARITY[1];
     const idx = listFishIds().indexOf(id) + 1;
     if (els.codexSerial) els.codexSerial.textContent = unlocked ? `No. ${String(1000 + idx).padStart(4, '0')}` : 'No. ????';
-    if (els.codexName) els.codexName.textContent = unlocked ? def.name : '未记载物种';
+    if (els.codexName) els.codexName.textContent = unlocked
+      ? def.name
+      : ((def.rarity | 0) >= 6 ? '？？？' : '未记载物种');
     if (els.codexTag) {
+      const slot = def.slot ? SLOT_LABELS[def.slot] : '消耗';
       els.codexTag.textContent = unlocked
-        ? `${catLabel(def.category)} · ${rarity.label} · ${'★'.repeat(Math.min(5, def.rarity || 1))}`
+        ? `${rarity.label} · ${catLabel(def.category)} · ${slot}`
         : '尚未发现';
     }
     if (els.codexDesc) {
       els.codexDesc.textContent = unlocked
-        ? (def.desc || codexBlurb(def))
-        : '这片海域里还有未知的鱼影。出海钓到它们后，图鉴才会写下名字与模样。';
+        ? fishCodexBody(def)
+        : '出海钓到后记载';
     }
     if (els.codexPortrait) {
       els.codexPortrait.classList.toggle('locked', !unlocked);
@@ -1046,8 +1274,8 @@ export function createHub(deps) {
     }
     if (els.codexDesc) {
       els.codexDesc.textContent = unlocked
-        ? `${def.skillLabel}。${def.desc}`
-        : '击沉或斩断对应海怪后，才会记入怪物图鉴。';
+        ? def.desc
+        : '击沉或斩断后记载。';
     }
     if (els.codexPortrait) {
       els.codexPortrait.classList.toggle('locked', !unlocked);
@@ -1057,21 +1285,85 @@ export function createHub(deps) {
     }
   }
 
+  function fishCodexBody(def) {
+    const fx = codexBlurb(def);
+    const lore = def.desc || '';
+    return [fx, lore].filter(Boolean).join('\n');
+  }
+
   function catLabel(cat) {
     return ({ food: '消耗', weapon: '武器', engine: '动力', defense: '防御', utility: '机能', sense: '感知' })[cat] || '杂项';
   }
 
   function codexBlurb(def) {
     const e = def.effect || {};
+    const s = def.side || {};
     const bits = [];
-    if (e.ramMul) bits.push(`冲撞×${e.ramMul}`);
+    if (e.ramMul) bits.push(`冲撞 ×${e.ramMul}`);
+    if (e.ramDmg) bits.push(`伤 ${e.ramDmg}`);
     if (e.dash) bits.push(`冲刺 ${e.dash}m`);
-    if (e.freeze) bits.push(`冰冻 ${e.freeze}s`);
-    if (e.autoThrust) bits.push('持续推进');
-    if (e.block) bits.push('格挡');
-    if (e.tailwind) bits.push('顺风加速');
-    if (def.slot) bits.push('专属槽位生效');
-    return bits.length ? bits.join(' · ') : '海上奇物，绑到对应船槽后发挥力量。';
+    if (e.freeze) bits.push(`冻 ${e.freeze}s`);
+    if (e.shockwave) bits.push(e.shockDmg ? `冲击波伤 ${e.shockDmg}` : '冲击波');
+    if (e.cd) bits.push(`CD ${e.cd}`);
+    if (e.iFrame) bits.push(`无敌 ${e.iFrame}s`);
+    if (e.autoThrust) bits.push(`持续推力 ${e.autoThrust}`);
+    if (e.burst) bits.push(`爆发推 ${e.burst} 段`);
+    if (e.hover) bits.push(`悬停 ${e.hover}s`);
+    if (e.phase) bits.push(`相位 ${e.phase}s`);
+    if (e.autoShot) bits.push(`自动射 ${e.shotDmg}，CD ${e.shotCd}，距 ${e.range}`);
+    if (e.grab) bits.push(`抓取伤 ${e.grabDmg}`);
+    if (e.whip) bits.push(`鞭抽伤 ${e.whipDmg}`);
+    if (e.chargeCrush) bits.push(`蓄力碾 ${e.chargeCrush}s${e.crushDmg ? `，伤 ${e.crushDmg}` : ''}`);
+    if (e.block) bits.push(`格挡 ${e.block}`);
+    if (e.reflect) bits.push(`反伤 ${Math.round(e.reflect * 100)}%`);
+    if (e.wallHits) bits.push(`墙 ${e.wallHits} 次 / ${e.wallTime}s`);
+    if (e.reflectRanged) bits.push('反射远程弹');
+    if (e.corrosionMul) bits.push(`腐蚀 ×${e.corrosionMul}`);
+    if (e.jump) bits.push('可跳');
+    if (e.dive) bits.push(`下潜 ${e.dive}s`);
+    if (e.quake) bits.push('地震');
+    if (e.tailwind) bits.push(`顺风 ×${e.tailwind}`);
+    if (e.scan) bits.push(`扫描 ${e.scan}m`);
+    if (e.storm) bits.push(`风暴 ${e.storm}s`);
+    if (e.slowMo) bits.push(`慢动作 ${e.slowMo}s`);
+    if (e.chainZap) bits.push(`击杀后雷跳第二只，伤 ${e.chainDmg}`);
+    if (e.shoveWrap) bits.push('周期性弹开缠绕和漂浮物');
+    if (e.pierce) bits.push(`穿刺最多 ${e.pierce} 只，伤 ${e.pierceDmg}`);
+    if (e.convertHit) bits.push('下次船体伤变短加速（该次不掉血）');
+    if (e.rewind) bits.push(`Q：回到约 ${e.rewind}s 前位置`);
+    if (e.heatTrail) bits.push(`身后灼迹 DPS ${e.trailDps}`);
+    if (e.painThrust) bits.push('受伤转短推力');
+    if (e.root) bits.push(`定身近怪，伤 ${e.rootDmg}`);
+    if (e.storeBurst) bits.push('吸伤，满了范围爆');
+    if (e.onceImmunity) bits.push('本航次一次免疫海沟虫秒杀与强控');
+    if (s.speedMul) bits.push(`速 ×${s.speedMul}`);
+    if (s.turnMul) bits.push(`转向 ×${s.turnMul}`);
+    if (s.lockSteer) bits.push(`锁舵 ${s.lockSteer}s`);
+    if (s.slip) bits.push('甲板打滑');
+    if (s.frictionDps) bits.push('摩擦伤 2/分');
+    if (s.blur) bits.push(`视野糊 ${s.blur}s`);
+    if (s.noPaddle) bits.push('期间不能划桨');
+    if (s.reloadEvery) bits.push(`每 ${s.reloadEvery}s 要换弹`);
+    if (s.shake) bits.push('镜头晃');
+    if (s.recovery) bits.push(`收招 ${s.recovery}s`);
+    if (s.weight) bits.push(`重量 ×${s.weight}`);
+    if (s.accelMul) bits.push(`加速 ×${s.accelMul}`);
+    if (s.loosenChance) bits.push('10% 松绑');
+    if (s.hideSurface) bits.push('水面隐身');
+    if (s.scatterLoot) bits.push('打散附近打捞物');
+    if (s.headwind) bits.push(`逆风 ×${s.headwind}`);
+    if (s.wakeSleepers) bits.push('吵醒沉睡怪');
+    if (s.chainCd) bits.push('有内置 CD');
+    if (s.hitch) bits.push('偶发顿船');
+    if (s.chargeGap) bits.push('要充能间隔');
+    if (s.rearmCd) bits.push('要重新充能');
+    if (s.disorient) bits.push('随后短暂迷航');
+    if (s.selfCorrosion) bits.push('自身腐蚀加快');
+    if (s.heatCorrosion) bits.push('加速时腐蚀加快');
+    if (s.drag) bits.push('定身时船略慢');
+    if (s.breakArmor) bits.push('爆完短破防');
+    if (s.spent) bits.push('用过即耗');
+    return bits.join(' · ');
   }
 
   function syncMarkers() {

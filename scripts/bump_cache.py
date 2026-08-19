@@ -26,8 +26,11 @@ def main() -> None:
     new, n = re.subn(r"\./js/main\.js\?v=[0-9]+[a-z]?", f"./js/main.js?v={ver}", text)
     if n < 1:
         raise SystemExit(f"index.html: expected main.js?v= tokens, got {n}")
+    new, n_css = re.subn(r"css/style\.css\?v=[0-9]+[a-z]?", f"css/style.css?v={ver}", new)
+    if n_css != 1:
+        raise SystemExit(f"index.html: expected 1 style.css?v= token, got {n_css}")
     html.write_text(new, encoding="utf-8", newline="\n")
-    print(f"updated index.html ({n} tokens)")
+    print(f"updated index.html (js x{n}, css x{n_css})")
     bump_file(
         ROOT / "js" / "main.js",
         r"from '\./vfx/skillVfx\.js\?v=[^']+'",
