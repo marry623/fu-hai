@@ -29,9 +29,10 @@ import {
   discoverFish, discoverMonster, syncLoadoutSuppliesFromWarehouse, consumeLoadoutOnDepart,
   loadoutSuppliesPacked, clampBoatId, HULL_NAMES, equippedSkills, skillShopToVfx,
   skillLevel, scaledSkillCard, fishmongerGreenMul, ghostWakeCorrMul, talentLevel,
-} from './meta.js?v=31u';
+  chargeZoneTicket,
+} from './meta.js?v=31v';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=31h';
-import { createHub } from './hub.js?v=31n';
+import { createHub } from './hub.js?v=31v';
 import { createCoverScene } from './coverScene.js?v=28m';
 import { createHubIsland } from './hubIsland.js?v=31q';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=29q';
@@ -40,8 +41,8 @@ import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=31g';
-import { createSkillVfx, SKILL_CARDS } from './vfx/skillVfx.js?v=31u';
-import { renderManualHtml } from './hubManual.js?v=31t';
+import { createSkillVfx, SKILL_CARDS } from './vfx/skillVfx.js?v=31w';
+import { renderManualHtml } from './hubManual.js?v=31v';
 import * as sfx from './audio.js?v=29y';
 
 const canvas = document.getElementById('c');
@@ -1843,6 +1844,16 @@ function openCover() {
 }
 
 function startRun(fromCheckpoint = false) {
+  const isTut = (startZone | 0) === -1;
+  if (!fromCheckpoint && !isTut) {
+    const ticket = chargeZoneTicket(meta, startZone);
+    if (!ticket.ok) {
+      showToast(ticket.msg);
+      return;
+    }
+    meta = ticket.meta;
+    if (ticket.cost > 0) showToast(ticket.msg);
+  }
   setBackpackOpen(false);
   setSeaMapOpen(false);
   hub?.hide();
@@ -1872,7 +1883,6 @@ function startRun(fromCheckpoint = false) {
   state.runDistance = fromCheckpoint ? state.runDistance : 0;
   state.maxZ = paddle.state.z;
   state.zone = startZone;
-  const isTut = (startZone | 0) === -1;
   if (!fromCheckpoint) {
     state.checkpoint = 0;
     state.checkpointUsed = false;

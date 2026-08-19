@@ -39,10 +39,10 @@ import {
   packSupply,
   unpackSupply,
   LOADOUT_BAG_SIZE,
-  ZONE_UNLOCK_COST,
-} from './meta.js?v=31u';
+  zoneTicketCost,
+} from './meta.js?v=31v';
 import { HUB_SPOTS } from './hubIsland.js?v=31q';
-import { renderManualHtml } from './hubManual.js?v=31t';
+import { renderManualHtml } from './hubManual.js?v=31v';
 
 const TAB_TITLES = {
   prep: '整备',
@@ -416,6 +416,10 @@ export function createHub(deps) {
       <div class="hub-fs-stat"><span>海域</span><strong>${zone?.name || '—'}</strong></div>
       <div class="hub-fs-stat"><span>配装</span><strong>${filled}/${SLOT_ORDER.length}</strong></div>
       <div class="hub-fs-stat"><span>携带</span><strong>${(meta.loadout?.cargo || []).length}</strong></div>
+      <div class="hub-fs-stat"><span>门票</span><strong>${(() => {
+        const c = zoneTicketCost(deps.getStartZone());
+        return c > 0 ? `${c} 碎片` : '免费';
+      })()}</strong></div>
     `;
   }
 
@@ -586,11 +590,13 @@ export function createHub(deps) {
       return `<div class="hub-zone ${selected ? 'selected' : ''} ${unlocked ? '' : 'locked'}">
         <button type="button" class="hub-zone-pick" data-pick-zone="${z.id}" ${unlocked ? '' : 'disabled'}>
           <strong><span class="hub-zone-swatch" style="background:${z.color || '#2ec4b6'}"></span>${z.name}</strong>
-          <span>${unlocked
-            ? (FEATURE_LABELS[z.feature] || z.unlockHint || '可出航')
-            : (z.id > 0 && ZONE_UNLOCK_COST[z.id]
-              ? `${ZONE_UNLOCK_COST[z.id]} 碎片解锁`
-              : (z.unlockHint || '航行归航解锁'))}</span>
+          <span>${(() => {
+            if (!unlocked) return z.id === -1 ? (z.unlockHint || '') : '\u901a\u5173\u4e0a\u5173\u89e3\u9501';
+            const feat = FEATURE_LABELS[z.feature] || z.unlockHint || '';
+            const cost = zoneTicketCost(z.id);
+            if (cost > 0) return feat ? `${feat} \u00b7 \u95e8\u7968 ${cost}` : `\u95e8\u7968 ${cost} \u788e\u7247`;
+            return feat;
+          })()}</span>
         </button>
       </div>`;
     }).join('');

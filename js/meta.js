@@ -357,16 +357,13 @@ export function settleRun(meta, {
     m.warehouse.supplies = w;
   }
 
-  // Unlock next zone by distance milestones OR successful return from current sea
-  const zoneUnlockAt = [0, 400, 900, 1600, 2500];
-  for (let i = 0; i < zoneUnlockAt.length; i++) {
-    if (distance >= zoneUnlockAt[i] && !m.unlockedZones.includes(i)) {
-      m.unlockedZones.push(i);
-    }
-  }
+  // Unlock the next sea only after a successful return from this one
   if (success) {
-    const next = (startZone | 0) + 1;
-    if (next > 0 && next < 5 && !m.unlockedZones.includes(next)) m.unlockedZones.push(next);
+    const cur = startZone | 0;
+    if (cur >= 0) {
+      const next = cur + 1;
+      if (next < 5 && !m.unlockedZones.includes(next)) m.unlockedZones.push(next);
+    }
   }
   m.unlockedZones = [...new Set(m.unlockedZones.filter((z) => (z | 0) >= 0))].sort((a, b) => a - b);
 
@@ -502,13 +499,38 @@ export const SHOP = [
   ...SHOP_TALENTS,
 ];
 
-export const ZONE_UNLOCK_COST = [
-  null, // 0 free
+export const ZONE_TICKET_COST = [
+  0, // 0 浅滩免费
   5,
   12,
   20,
   30,
 ];
+export const ZONE_UNLOCK_COST = ZONE_TICKET_COST;
+
+export function zoneTicketCost(zoneId) {
+  const id = zoneId | 0;
+  if (id === -1) return 0;
+  if (id < 0 || id >= ZONE_TICKET_COST.length) return null;
+  return ZONE_TICKET_COST[id] | 0;
+}
+
+export function chargeZoneTicket(meta, zoneId) {
+  const id = zoneId | 0;
+  if (id === -1) return { ok: true, meta, cost: 0 };
+  if (!(meta.unlockedZones || [0]).includes(id)) {
+    return { ok: false, meta, msg: '\u9700\u5148\u901a\u5173\u4e0a\u4e00\u4e2a\u6d77\u57df' };
+  }
+  const cost = zoneTicketCost(id);
+  if (cost == null) return { ok: false, meta, msg: '\u65e0\u6548\u6d77\u57df' };
+  if (cost <= 0) return { ok: true, meta, cost: 0 };
+  if ((meta.fragments | 0) < cost) {
+    return { ok: false, meta, msg: `\u95e8\u7968 ${cost} \u788e\u7247\uff0c\u4f59\u989d\u4e0d\u8db3` };
+  }
+  const m = { ...meta, fragments: (meta.fragments | 0) - cost };
+  saveMeta(m);
+  return { ok: true, meta: m, cost, msg: `\u95e8\u7968 \u2212${cost}` };
+}
 
 export function tryUnlock(meta, shopId) {
   const item = SHOP.find((s) => s.id === shopId);
@@ -799,21 +821,7 @@ export function sellWarehouseFish(meta, warehouseIndex) {
 }
 
 export function tryUnlockZone(meta, zoneId) {
-  if (meta.unlockedZones.includes(zoneId)) return { ok: false, meta, msg: '已解锁' };
-  const cost = ZONE_UNLOCK_COST[zoneId];
-  if (cost == null) return { ok: false, meta, msg: '无效海域' };
-  // need previous zone unlocked
-  if (zoneId > 0 && !meta.unlockedZones.includes(zoneId - 1)) {
-    return { ok: false, meta, msg: '需先解锁上一海域' };
-  }
-  if (meta.fragments < cost) return { ok: false, meta, msg: '海图碎片不足' };
-  const m = {
-    ...meta,
-    fragments: meta.fragments - cost,
-    unlockedZones: [...meta.unlockedZones, zoneId].sort((a, b) => a - b),
-  };
-  saveMeta(m);
-  return { ok: true, meta: m, msg: '海域已解锁' };
+  return { ok: false, meta, msg: '\u6d77\u57df\u9700\u901a\u5173\u4e0a\u4e00\u5173\u89e3\u9501' };
 }
 
 export function hullMaxForBoat(unlocks, selected) {
