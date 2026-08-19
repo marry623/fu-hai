@@ -40,8 +40,9 @@ import {
   unpackSupply,
   LOADOUT_BAG_SIZE,
   ZONE_UNLOCK_COST,
-} from './meta.js?v=31h';
-import { HUB_SPOTS } from './hubIsland.js?v=23h';
+} from './meta.js?v=31n';
+import { HUB_SPOTS } from './hubIsland.js?v=31q';
+import { renderManualHtml } from './hubManual.js?v=31n';
 
 const TAB_TITLES = {
   prep: '整备',
@@ -49,10 +50,11 @@ const TAB_TITLES = {
   depart: '出港',
   shop: '商店',
   codex: '图鉴',
+  library: '图书馆',
 };
 
 const SHIP_TABS = new Set(['prep', 'warehouse', 'depart']);
-const CLIP_KEYS = ['prep', 'warehouse', 'depart', 'shop', 'codex'];
+const CLIP_KEYS = ['prep', 'warehouse', 'depart', 'shop', 'codex', 'library'];
 const FEATURE_LABELS = {
   none: '初始海域',
   current: '水流会推船',
@@ -112,6 +114,8 @@ export function createHub(deps) {
     mapCanvas: document.getElementById('hub-map-canvas'),
     warehouseStage: document.getElementById('hub-warehouse-stage'),
     shopStage: document.getElementById('hub-shop-stage'),
+    libraryStage: document.getElementById('hub-library-stage'),
+    libraryBody: document.getElementById('hub-library-body'),
     shipTabs: [...document.querySelectorAll('.hub-ship-tab')],
     codexTabsWrap: document.getElementById('codex-switch'),
     clipPanels: {
@@ -120,6 +124,7 @@ export function createHub(deps) {
       depart: document.getElementById('hub-fs-left-depart'),
       shop: document.getElementById('hub-fs-left-shop'),
       codex: document.getElementById('hub-fs-left-codex'),
+      library: document.getElementById('hub-fs-left-library'),
     },
     markers: document.getElementById('hub-markers'),
     drawer: document.getElementById('hub-drawer'),
@@ -139,6 +144,8 @@ export function createHub(deps) {
   let shopSupplyZone = 'bait';
   let warehouseTab = 'fish';
   let shopDetail = null;
+
+  if (els.libraryBody) els.libraryBody.innerHTML = renderManualHtml();
 
   if (els.markers) {
     els.markers.innerHTML = HUB_SPOTS.map((s) => `
@@ -208,7 +215,7 @@ export function createHub(deps) {
       b.classList.toggle('hidden', !ship && id !== 'shop');
       b.classList.toggle('active', b.dataset.hubNav === id);
     });
-    if (id === 'shop' || id === 'codex') {
+    if (id === 'shop' || id === 'codex' || id === 'library') {
       els.shipTabs.forEach((b) => b.classList.add('hidden'));
     }
     els.codexTabsWrap?.classList.toggle('hidden', id !== 'codex');
@@ -218,10 +225,12 @@ export function createHub(deps) {
     els.warehouseStage?.classList.toggle('hidden', id !== 'warehouse');
     els.centerCodex?.classList.toggle('hidden', id !== 'codex');
     els.shopStage?.classList.toggle('hidden', id !== 'shop');
+    els.libraryStage?.classList.toggle('hidden', id !== 'library');
 
     els.drawer?.classList.toggle('is-boat-view', drawerOpen && showBoat);
     els.drawerCard?.classList.toggle('is-ship', ship);
     els.drawerCard?.classList.toggle('is-catalog', id === 'shop' || id === 'codex');
+    els.drawerCard?.classList.toggle('is-library', id === 'library');
     els.drawerCard?.classList.remove('hub-sea-gold');
     els.mat?.classList.toggle('is-boat', showBoat);
 
@@ -237,9 +246,11 @@ export function createHub(deps) {
         ? '配装预览'
         : id === 'warehouse'
           ? '鱼获'
-          : id === 'depart'
+            : id === 'depart'
             ? '海域全貌'
-            : (id === 'codex' ? '图鉴' : '商店');
+            : id === 'library'
+              ? '手册'
+              : (id === 'codex' ? '图鉴' : '商店');
     }
 
     els.markers?.querySelectorAll('[data-hub-spot]').forEach((m) => {

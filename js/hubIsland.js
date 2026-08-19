@@ -128,10 +128,6 @@ function buildPort(gradientMap) {
   const hull = M(new THREE.BoxGeometry(2.8, 0.65, 1.1), 0x6b3f1f, gradientMap, 1.07);
   hull.position.set(3.2, 0.35, 2.6);
   g.add(hull);
-  const bow = M(new THREE.ConeGeometry(0.6, 1.2, 4), 0x5a3218, gradientMap, 1.07);
-  bow.rotation.z = -Math.PI / 2;
-  bow.position.set(4.6, 0.4, 2.6);
-  g.add(bow);
   const mast = M(new THREE.CylinderGeometry(0.06, 0.08, 2.8, 5), 0x4a2f14, gradientMap, 1.15);
   mast.position.set(3.0, 1.85, 2.6);
   g.add(mast);
@@ -139,9 +135,6 @@ function buildPort(gradientMap) {
   sail.rotation.z = Math.PI;
   sail.position.set(3.55, 1.7, 2.6);
   g.add(sail);
-  const flag = M(new THREE.BoxGeometry(0.4, 0.25, 0.05), 0xff6b4a, gradientMap, 1.15);
-  flag.position.set(3.2, 3.3, 2.6);
-  g.add(flag);
 
   // crates / rope barrels
   const c1 = crate(gradientMap); c1.position.set(-0.5, 0.9, -0.9); g.add(c1);
@@ -430,12 +423,70 @@ function buildCodex(gradientMap) {
   return tagHit(g, 'codex');
 }
 
+/** 图书馆 — 砖墙小楼 + 书脊 */
+function buildLibrary(gradientMap) {
+  const g = new THREE.Group();
+
+  const pad = M(new THREE.BoxGeometry(3.6, 0.22, 3.2), 0xd4c4a8, gradientMap, 1.04);
+  pad.position.y = 0.18;
+  g.add(pad);
+
+  const body = M(new THREE.BoxGeometry(3.0, 2.8, 2.6), 0xc45c3a, gradientMap);
+  body.position.y = 1.55;
+  g.add(body);
+  const belt = M(new THREE.BoxGeometry(3.15, 0.22, 2.75), 0xf0e6c8, gradientMap, 1.05);
+  belt.position.y = 2.2;
+  g.add(belt);
+  const roof = M(new THREE.ConeGeometry(2.35, 1.35, 4), 0x5a3a28, gradientMap, 1.05);
+  roof.rotation.y = Math.PI / 4;
+  roof.position.y = 3.55;
+  g.add(roof);
+
+  const door = M(new THREE.BoxGeometry(0.7, 1.35, 0.1), 0x3a2818, gradientMap, 1.12);
+  door.position.set(0, 0.95, 1.35);
+  g.add(door);
+  for (const x of [-0.95, 0.95]) {
+    const win = M(new THREE.BoxGeometry(0.48, 0.7, 0.08), 0xfde68a, gradientMap, 1.12);
+    win.position.set(x, 1.85, 1.34);
+    g.add(win);
+  }
+  for (const x of [-1.2, 1.2]) {
+    const col = M(new THREE.CylinderGeometry(0.14, 0.16, 2.5, 6), 0xe8dcc8, gradientMap, 1.1);
+    col.position.set(x, 1.4, 1.45);
+    g.add(col);
+  }
+
+  const shelf = M(new THREE.BoxGeometry(1.6, 0.9, 0.35), 0x8b5a2b, gradientMap, 1.08);
+  shelf.position.set(-1.9, 0.85, 0.4);
+  g.add(shelf);
+  const tones = [0x3a5a7a, 0xc45c1a, 0x2ec4b6, 0xffe066, 0x6a2a8a, 0xe85d4c];
+  for (let i = 0; i < 6; i++) {
+    const book = M(new THREE.BoxGeometry(0.18, 0.55, 0.28), tones[i], gradientMap, 1.15);
+    book.position.set(-2.4 + i * 0.22, 1.05, 0.55);
+    g.add(book);
+  }
+
+  const lamp = M(new THREE.CylinderGeometry(0.06, 0.07, 1.4, 5), 0x4a3a28, gradientMap, 1.15);
+  lamp.position.set(1.35, 1.1, 1.55);
+  g.add(lamp);
+  const glow = M(new THREE.SphereGeometry(0.16, 6, 6), 0xffe066, gradientMap, 1.2);
+  glow.position.set(1.35, 1.85, 1.55);
+  g.add(glow);
+
+  const banner = M(new THREE.BoxGeometry(1.5, 0.38, 0.08), 0xf0e6c8, gradientMap, 1.1);
+  banner.position.set(0, 2.85, 1.4);
+  g.add(banner);
+
+  return tagHit(g, 'library');
+}
+
 export const HUB_SPOTS = [
   { id: 'depart', label: '出港', sub: '港口码头', color: '#2ec4b6' },
   { id: 'prep', label: '整备', sub: '船坞工棚', color: '#e8a04a' },
   { id: 'warehouse', label: '仓库', sub: '物资库房', color: '#ffd24a' },
   { id: 'shop', label: '商店', sub: '海岛市集', color: '#ff6b9d' },
   { id: 'codex', label: '图鉴', sub: '鱼种展馆', color: '#a78bfa' },
+  { id: 'library', label: '图书馆', sub: '新手教程', color: '#c45c3a' },
 ];
 
 export function createHubIsland(gradientMap) {
@@ -566,6 +617,11 @@ export function createHubIsland(gradientMap) {
   warehouse.rotation.y = -0.55;
   root.add(warehouse);
 
+  const library = buildLibrary(gradientMap);
+  library.position.set(-6.0, 1.15, -3.8);
+  library.rotation.y = 0.5;
+  root.add(library);
+
   // Lots of palms
   const palmSpots = [
     [-5, 1.4, 7, 1], [5, 1.4, 7.5, 0.95], [-10, 1.4, -1, 1.15], [10, 1.4, 0, 1],
@@ -670,15 +726,17 @@ export function createHubIsland(gradientMap) {
     warehouse: new THREE.Object3D(),
     shop: new THREE.Object3D(),
     codex: new THREE.Object3D(),
+    library: new THREE.Object3D(),
   };
   anchors.depart.position.set(0, 4.8, 9.5);
   anchors.prep.position.set(-8.5, 5.2, 1.2);
   anchors.warehouse.position.set(5.6, 5.0, -3.6);
   anchors.shop.position.set(8.5, 4.8, 1.5);
   anchors.codex.position.set(0, 5.6, -8.2);
+  anchors.library.position.set(-6.0, 5.1, -3.8);
   Object.values(anchors).forEach((a) => root.add(a));
 
-  const hits = [port, yard, warehouse, shop, codex];
+  const hits = [port, yard, warehouse, shop, codex, library];
 
   function setHighlight(id) {
     hits.forEach((h) => {

@@ -31,16 +31,17 @@ import {
   skillLevel, scaledSkillCard, fishmongerGreenMul, ghostWakeCorrMul, talentLevel,
 } from './meta.js?v=31h';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=31h';
-import { createHub } from './hub.js?v=31k';
+import { createHub } from './hub.js?v=31n';
 import { createCoverScene } from './coverScene.js?v=28m';
-import { createHubIsland } from './hubIsland.js?v=28k';
+import { createHubIsland } from './hubIsland.js?v=31q';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=29q';
 import { createBpBoatStage } from './bpBoatStage.js?v=31d';
 import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=30h';
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=31g';
-import { createSkillVfx, SKILL_CARDS } from './vfx/skillVfx.js?v=31m';
+import { createSkillVfx, SKILL_CARDS } from './vfx/skillVfx.js?v=31o';
+import { renderManualHtml } from './hubManual.js?v=31n';
 import * as sfx from './audio.js?v=29y';
 
 const canvas = document.getElementById('c');
@@ -118,6 +119,7 @@ const ui = {
   btnCoverTutorial: document.getElementById('btn-cover-tutorial'),
   btnCoverQuit: document.getElementById('btn-cover-quit'),
   coverTutorial: document.getElementById('cover-tutorial'),
+  coverManualBody: document.getElementById('cover-manual-body'),
   btnTutorialClose: document.getElementById('btn-tutorial-close'),
   hud: document.getElementById('hud'),
   oarL: document.getElementById('oar-l'),
@@ -2883,10 +2885,10 @@ ui.btnCoverStart?.addEventListener('click', () => {
   if ((startZone | 0) === -1) startZone = 0;
   openHub();
 });
+if (ui.coverManualBody) ui.coverManualBody.innerHTML = renderManualHtml();
+
 ui.btnCoverTutorial?.addEventListener('click', () => {
-  // Prefer live practice bay over static text panel
-  startZone = -1;
-  startRun(false);
+  ui.coverTutorial?.classList.remove('hidden');
 });
 ui.tutGuideNext?.addEventListener('click', (e) => {
   e.preventDefault();
