@@ -217,6 +217,107 @@ export const ZONE_MONSTER_POOLS = {
   4: ['trenchWorm', 'lavaBarnacle', 'sporeJelly', 'waveWhale', ...CORE_MONSTERS],
 };
 
+/** Swimming/static combat anchors. Shallow reef is the floor. */
+export const ZONE_COMBAT_COUNT = {
+  [-1]: 1,
+  0: 448,
+  1: 540,
+  2: 610,
+  3: 700,
+  4: 800,
+};
+
+export const ZONE_WRAP_COUNT = {
+  [-1]: 0,
+  0: 8,
+  1: 10,
+  2: 12,
+  3: 16,
+  4: 20,
+};
+
+/** Roster HP — trash can be one-shot by thunder/meteor; elites take many hits. */
+export const MONSTER_HP = {
+  woodUrchin: 28,
+  thiefOtter: 28,
+  barnacle: 40,
+  sporeJelly: 56,
+  inkJelly: 60,
+  serpent: 70,
+  shark: 80,
+  sawShark: 84,
+  bladeCrab: 84,
+  ghostHook: 100,
+  kraken: 120,
+  lightningSnake: 130,
+  lavaBarnacle: 130,
+  voidOctopus: 140,
+  waveWhale: 180,
+  trenchWorm: 200,
+};
+
+export function monsterHp(id) {
+  const rid = resolveMonsterId(id);
+  return MONSTER_HP[rid] ?? 80;
+}
+
+/** Hull damage on ram / melee contact */
+export const MONSTER_HULL_TOUCH = {
+  shark: 10,
+  sawShark: 10,
+  bladeCrab: 6,
+  thiefOtter: 6,
+  waveWhale: 14,
+  serpent: 8,
+  sporeJelly: 5,
+  inkJelly: 5,
+  lightningSnake: 6,
+  trenchWorm: 8,
+};
+
+export const MONSTER_HULL_SHOT = {
+  serpent: 6,
+  sporeJelly: 4,
+  inkJelly: 4,
+  lightningSnake: 5,
+};
+
+export const MONSTER_WRAP_DPS = {
+  kraken: 2.2,
+  barnacle: 2.2,
+  lavaBarnacle: 2.2,
+  ghostHook: 1.6,
+  voidOctopus: 1.6,
+};
+
+export function hullTouchDamage(id, kind) {
+  const rid = resolveMonsterId(id);
+  if (MONSTER_HULL_TOUCH[rid] != null) return MONSTER_HULL_TOUCH[rid];
+  return kind === 'ram' ? 10 : 8;
+}
+
+export function hullShotDamage(id) {
+  const rid = resolveMonsterId(id);
+  return MONSTER_HULL_SHOT[rid] ?? 6;
+}
+
+export function wrapDps(id) {
+  const rid = resolveMonsterId(id);
+  return MONSTER_WRAP_DPS[rid] ?? 2.2;
+}
+
+export function combatCountForZone(zoneId) {
+  const z = zoneId | 0;
+  if (z === -1) return 1;
+  return ZONE_COMBAT_COUNT[z] ?? ZONE_COMBAT_COUNT[0];
+}
+
+export function wrapCountForZone(zoneId) {
+  const z = zoneId | 0;
+  if (z === -1) return 0;
+  return ZONE_WRAP_COUNT[z] ?? ZONE_WRAP_COUNT[0];
+}
+
 export function listMonsterIds() {
   return CODEX_MONSTER_IDS.slice();
 }

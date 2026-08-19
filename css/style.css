@@ -1392,6 +1392,9 @@ html, body {
   z-index: 12;
 }
 .weapon-chip {
+  position: relative;
+  overflow: hidden;
+  min-width: 96px;
   border: 3px solid #000;
   border-radius: 8px;
   padding: 8px 12px;
@@ -1402,9 +1405,50 @@ html, body {
   cursor: pointer;
   font-family: inherit;
   box-shadow: 0 3px 0 #000;
+  text-align: left;
 }
 .weapon-chip.active {
   background: linear-gradient(180deg, #ff8a3d, #e01858);
+}
+.weapon-chip-label {
+  position: relative;
+  z-index: 1;
+  display: block;
+}
+.weapon-chip-veil {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100%;
+  background: rgba(4, 8, 14, 0.68);
+  transform: scaleY(0);
+  transform-origin: bottom;
+  pointer-events: none;
+  z-index: 1;
+}
+.weapon-chip-cd {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  font-size: 16px;
+  font-weight: 900;
+  color: #ffe566;
+  text-shadow: 2px 2px 0 #000;
+  pointer-events: none;
+  letter-spacing: 0.02em;
+}
+.weapon-chip.cooling .weapon-chip-cd {
+  display: flex;
+}
+.weapon-chip.cooling .weapon-chip-label {
+  opacity: 0.22;
+}
+.weapon-chip.cooling {
+  cursor: default;
 }
 .distance-hero {
   position: absolute;

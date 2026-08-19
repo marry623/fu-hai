@@ -160,9 +160,9 @@ export function spawnBeam(scene, target, opts = {}) {
   light.position.copy(bEnd).lerp(bStart, 0.15);
   scene.add(light);
 
-  let age = 0, scorched = false;
+    let beamTicks = 0;
 
-  function update(dt) {
+    function update(dt) {
     age += dt;
     const phase = age < chargeT ? 'charge'
       : age < chargeT + fireT ? 'fire'
@@ -199,8 +199,8 @@ export function spawnBeam(scene, target, opts = {}) {
     rings.instanceMatrix.needsUpdate = true;
     light.intensity = beamFade * 9;
 
-    if (phase === 'fire' && !scorched) {
-      scorched = true;
+    if (phase === 'fire' && beamTicks < 1) {
+      beamTicks = 1;
       opts.onImpact?.();
       if (fx) {
         fx.bursts.spawn(BurstMode.AIR, cx, Y + 0.55, cz, {
@@ -217,6 +217,11 @@ export function spawnBeam(scene, target, opts = {}) {
           colorA: 0xaad4ff, colorB: 0x2266cc,
         });
       }
+    }
+
+    if (phase === 'burn' && beamTicks === 1 && age >= chargeT + fireT + 0.18) {
+      beamTicks = 2;
+      opts.onImpact?.();
     }
 
     if ((phase === 'fire' || phase === 'burn') && fx && Math.random() < dt * 22) {

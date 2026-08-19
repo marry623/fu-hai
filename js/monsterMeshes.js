@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
-import { resolveMonsterId } from './monsterCatalog.js?v=29f';
+import { resolveMonsterId, monsterHp } from './monsterCatalog.js?v=30b';
 
 function addPart(g, mesh, outlineScale = 1.08) {
   g.add(mesh);
@@ -556,6 +556,79 @@ export function createMonsterMesh(monsterId, gm) {
   return g;
 }
 
+const _hpBox = new THREE.Box3();
+const HP_FULL_W = 1.85;
+const HP_H = 0.2;
+
+function hpMat(hex, opacity) {
+  const m = new THREE.SpriteMaterial({
+    color: hex,
+    transparent: true,
+    opacity,
+    depthTest: false,
+    depthWrite: false,
+    sizeAttenuation: true,
+  });
+  m.userData.skipOutline = true;
+  return m;
+}
+
+const HP_MAT_BG = hpMat(0x1a100c, 0.88);
+const HP_MAT_OK = hpMat(0x3dcc78, 0.96);
+const HP_MAT_MID = hpMat(0xe8c44a, 0.96);
+const HP_MAT_LOW = hpMat(0xe85a4a, 0.96);
+
+function attachHpBar(g) {
+  g.updateMatrixWorld(true);
+  _hpBox.setFromObject(g);
+  const top = Math.max(1.4, Number.isFinite(_hpBox.max.y) ? _hpBox.max.y : 1.6);
+  const ps = Math.max(0.08, g.scale.y || 1);
+  const bar = new THREE.Group();
+  bar.name = 'hpBar';
+  bar.scale.setScalar(1 / ps);
+  bar.position.y = (top + 0.52) / ps;
+
+  const bg = new THREE.Sprite(HP_MAT_BG);
+  bg.scale.set(HP_FULL_W + 0.12, HP_H + 0.09, 1);
+  bg.center.set(0.5, 0.5);
+  bg.renderOrder = 24;
+  bg.userData.skipOutline = true;
+
+  const fill = new THREE.Sprite(HP_MAT_OK);
+  fill.scale.set(HP_FULL_W, HP_H, 1);
+  fill.center.set(0.5, 0.5);
+  fill.renderOrder = 25;
+  fill.userData.skipOutline = true;
+
+  bar.add(bg);
+  bar.add(fill);
+  bar.userData.fill = fill;
+  bar.userData.fullW = HP_FULL_W;
+  g.add(bar);
+  g.userData.hpBar = bar;
+  syncHpBar(g, null);
+}
+
+export function syncHpBar(mesh, boatPos) {
+  const bar = mesh?.userData?.hpBar;
+  if (!bar) return;
+  if (!mesh.visible || mesh.userData.dead || (mesh.userData.kind === 'wrap' && !mesh.userData.active)) {
+    bar.visible = false;
+    return;
+  }
+  const cap = Math.max(1, mesh.userData.maxHp || 1);
+  const hp = Math.max(0, mesh.userData.hp ?? cap);
+  const ratio = Math.max(0, Math.min(1, hp / cap));
+  const near = boatPos
+    ? Math.hypot(mesh.position.x - boatPos.x, mesh.position.z - boatPos.z) < 26
+    : true;
+  bar.visible = ratio < 0.999 || near || !!mesh.userData.chasing;
+  const fill = bar.userData.fill;
+  const w = Math.max(0.06, ratio) * bar.userData.fullW;
+  fill.scale.set(w, HP_H, 1);
+  fill.material = ratio > 0.55 ? HP_MAT_OK : ratio > 0.28 ? HP_MAT_MID : HP_MAT_LOW;
+}
+
 export function createCombatMonster(monsterId, gm, index = 0) {
   const id = resolveMonsterId(monsterId);
   const g = createMonsterMesh(id, gm);
@@ -583,5 +656,9 @@ export function createCombatMonster(monsterId, gm, index = 0) {
   g.userData.bob = Math.random() * 10;
   g.userData.shotCd = 0.8 + Math.random();
   g.userData.hitCd = 0;
+  const cap = monsterHp(id);
+  g.userData.hp = cap;
+  g.userData.maxHp = cap;
+  attachHpBar(g);
   return g;
 }

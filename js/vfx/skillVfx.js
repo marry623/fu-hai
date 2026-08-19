@@ -12,7 +12,7 @@ import { spawnVoid } from './spawnVoid.js?v=30a';
 import { spawnPhoenix } from './spawnPhoenix.js?v=30a';
 import { spawnSingularity } from './spawnSingularity.js?v=30a';
 import { spawnWorldroot } from './spawnWorldroot.js?v=30a';
-import { spawnBeam } from './spawnBeam.js?v=30a';
+import { spawnBeam } from './spawnBeam.js?v=30b';
 import { spawnSnare } from './spawnSnare.js?v=30a';
 import { spawnGlacier } from './spawnGlacier.js?v=30a';
 
@@ -395,7 +395,7 @@ function aimMaterial() {
       uFill: { value: 0.3 },
       uColorCore: { value: new THREE.Color(0.92, 0.98, 1) },
       uColorEdge: { value: new THREE.Color(0.24, 0.7, 1) },
-      uColorInvalid: { value: new THREE.Color(1.0, 0.12, 0.08) },
+      uColorInvalid: { value: new THREE.Color(1.0, 0.04, 0.0) },
     },
     vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
     fragmentShader: /* glsl */ `
@@ -461,7 +461,10 @@ function aimMaterial() {
         float alpha=clamp(fill+lines,0.0,1.0)*sweep;
         if(alpha<0.004) discard;
         vec3 color=uColorEdge*fill+uColorCore*(lines);
-        color=mix(color, uColorInvalid*(fill+lines*1.35), uInvalid);
+        float flash=0.55+0.45*sin(uTime*18.0);
+        vec3 bad=uColorInvalid*(fill*2.8+lines*3.6+body*0.55)*flash;
+        color=mix(color, bad, uInvalid);
+        alpha=mix(alpha, clamp(alpha*2.1+body*0.42*flash,0.0,1.0), uInvalid);
         gl_FragColor=vec4(color, alpha);
       }
     `,
@@ -630,12 +633,20 @@ function zoneMaterial() {
         vec2 p=(vUv-0.5)*2.0;
         float r=length(p);
         float ring=smoothstep(0.07,0.0,abs(r-0.98));
+        float ring2=smoothstep(0.055,0.0,abs(r-0.70));
         float fill=smoothstep(1.0,0.12,r)*uFill;
         float pulse=0.75+0.25*sin(uTime*6.0);
+        float badPulse=0.5+0.5*sin(uTime*16.0);
         float frost=fbm3(vec3(p*4.0, uTime*0.4))*0.5+0.5;
+        float cross=max(
+          smoothstep(0.09,0.0,abs(p.x))*smoothstep(0.78,0.06,abs(p.y)),
+          smoothstep(0.09,0.0,abs(p.y))*smoothstep(0.78,0.06,abs(p.x))
+        );
         float alpha=(ring*1.4+fill)*pulse*(0.7+0.3*frost);
+        alpha=mix(alpha, (ring*3.2+ring2*2.0+fill*2.2+cross*2.1)*badPulse, uInvalid);
         if(alpha<0.01) discard;
-        vec3 col=mix(uColor, vec3(1.0,0.12,0.06), uInvalid);
+        vec3 col=mix(uColor, vec3(1.7,0.05,0.0), uInvalid);
+        col=mix(col, vec3(1.0,0.75,0.12), uInvalid*cross);
         gl_FragColor=vec4(col, alpha);
       }
     `,
@@ -1193,22 +1204,24 @@ function createAimRig(scene) {
     if (zoneR > 0) {
       arrow.visible = false;
       zone.visible = true;
-      const clamped = Math.min(dist, maxRange);
+      const place = valid ? Math.min(dist, maxRange) : dist;
       const ux = dist > 0.001 ? dx / dist : 0;
       const uz = dist > 0.001 ? dz / dist : 1;
-      zone.position.set(origin.x + ux * clamped, Y_WATER, origin.z + uz * clamped);
-      zone.scale.setScalar(zoneR);
+      zone.position.set(origin.x + ux * place, Y_WATER, origin.z + uz * place);
+      zone.scale.setScalar(zoneR * (valid ? 1 : 1.12));
       zoneMat.uniforms.uTime.value = performance.now() * 0.001;
       zoneMat.uniforms.uRadius.value = zoneR;
       zoneMat.uniforms.uInvalid.value = valid ? 0 : 1;
-      zoneMat.uniforms.uFill.value = valid ? 0.18 : 0.42;
-      zoneMat.uniforms.uColor.value.set(valid ? (zoneColor[kind] || 0xff6a18) : 0xff2210);
-      return { valid, dist: clamped, yaw, dir: { x: ux, z: uz } };
+      zoneMat.uniforms.uFill.value = valid ? 0.18 : 0.78;
+      zoneMat.uniforms.uColor.value.set(valid ? (zoneColor[kind] || 0xff6a18) : 0xff1400);
+      return { valid, dist: Math.min(dist, maxRange), yaw, dir: { x: ux, z: uz } };
     }
 
     zone.visible = false;
     arrow.visible = true;
-    const length = Math.min(maxRange, Math.max(2.5, dist));
+    const length = valid
+      ? Math.min(maxRange, Math.max(2.5, dist))
+      : Math.min(Math.max(2.5, dist), maxRange + 10);
     const back = 1.05;
     const forward = length + 1.6;
     const halfW = 2.2;
@@ -1221,10 +1234,10 @@ function createAimRig(scene) {
     arrowMat.uniforms.uLength.value = length;
     arrowMat.uniforms.uReveal.value = reveal;
     arrowMat.uniforms.uInvalid.value = valid ? 0 : 1;
-    arrowMat.uniforms.uFill.value = valid ? 0.3 : 0.58;
+    arrowMat.uniforms.uFill.value = valid ? 0.3 : 0.92;
     if (!valid) {
-      arrowMat.uniforms.uColorCore.value.setRGB(1.0, 0.22, 0.12);
-      arrowMat.uniforms.uColorEdge.value.setRGB(1.0, 0.08, 0.04);
+      arrowMat.uniforms.uColorCore.value.setRGB(1.0, 0.42, 0.06);
+      arrowMat.uniforms.uColorEdge.value.setRGB(1.0, 0.02, 0.0);
     } else if (kind === 'thunder') {
       arrowMat.uniforms.uColorCore.value.setRGB(0.95, 0.98, 1);
       arrowMat.uniforms.uColorEdge.value.setRGB(0.22, 0.55, 1);
@@ -1310,14 +1323,14 @@ export function createSkillVfx({ scene }) {
 }
 
 export const SKILL_CARDS = [
-  { id: 'ice',         name: '霜矛',     cd: 1.2, range: 24, radius: 0 },
-  { id: 'thunder',     name: '雷矛',     cd: 1.5, range: 26, radius: 0 },
-  { id: 'meteor',      name: '陨石',     cd: 3.5, range: 16, radius: 5.5 },
-  { id: 'void',        name: '虚空裂缝', cd: 2.8, range: 22, radius: 0 },
-  { id: 'phoenix',     name: '炎凤',     cd: 3.2, range: 26, radius: 0 },
-  { id: 'singularity', name: '引力奇点', cd: 5.0, range: 20, radius: 5 },
-  { id: 'worldroot',   name: '根茎绽放', cd: 4.2, range: 20, radius: 4 },
-  { id: 'beam',        name: '光束炮',   cd: 4.5, range: 28, radius: 0 },
-  { id: 'snare',       name: '电磁陷阱', cd: 3.8, range: 18, radius: 4 },
-  { id: 'glacier',     name: '冰封王冠', cd: 5.5, range: 18, radius: 5 },
+  { id: 'ice',         name: '霜矛',     cd: 1.2, range: 24, radius: 0, dmg: 16 },
+  { id: 'thunder',     name: '雷矛',     cd: 1.5, range: 26, radius: 0, dmg: 28 },
+  { id: 'meteor',      name: '陨石',     cd: 3.5, range: 16, radius: 8, dmg: 40 },
+  { id: 'void',        name: '虚空裂缝', cd: 2.8, range: 22, radius: 0, dmg: 26 },
+  { id: 'phoenix',     name: '炎凤',     cd: 3.2, range: 26, radius: 0, dmg: 32 },
+  { id: 'singularity', name: '引力奇点', cd: 5.0, range: 20, radius: 5, dmg: 38 },
+  { id: 'worldroot',   name: '根茎绽放', cd: 4.2, range: 20, radius: 4, dmg: 20 },
+  { id: 'beam',        name: '光束炮',   cd: 4.5, range: 28, radius: 0, dmg: 22 },
+  { id: 'snare',       name: '电磁陷阱', cd: 3.8, range: 18, radius: 4, dmg: 18 },
+  { id: 'glacier',     name: '冰封王冠', cd: 5.5, range: 18, radius: 5, dmg: 16 },
 ];

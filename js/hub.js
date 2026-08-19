@@ -5,7 +5,7 @@ import { SLOT_ORDER, SLOT_LABELS } from './slots.js';
 import { getFishDef, FISH_CATALOG, RARITY } from './fishCatalog.js?v=29q';
 import { getFishPortrait } from './fishPortrait.js?v=29q';
 import { getItemPortrait } from './itemPortrait.js?v=29r';
-import { listMonsterIds, getMonsterDef } from './monsterCatalog.js?v=29q';
+import { listMonsterIds, getMonsterDef } from './monsterCatalog.js?v=30b';
 import { getMonsterPortrait } from './monsterPortrait.js?v=29p';
 import {
   SHOP_TABS,

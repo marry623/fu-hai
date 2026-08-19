@@ -12,8 +12,8 @@ import {
 } from './flotsam.js?v=29e';
 import {
   createVortexField, updateVortices, findNearestVortex, createFishingController, CAST_AIM_DIST, tintVortexField, VORTEX_COUNT,
-} from './fishing.js?v=29q';
-import { createHazards } from './hazards.js?v=29r';
+} from './fishing.js?v=30f';
+import { createHazards } from './hazards.js?v=30c';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot,
@@ -35,8 +35,8 @@ import { createCoverScene } from './coverScene.js?v=28m';
 import { createHubIsland } from './hubIsland.js?v=28k';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=29q';
 import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=29l';
-import { getMonsterDef, resolveMonsterId, monstersForZone } from './monsterCatalog.js?v=29q';
-import { createSkillVfx, SKILL_CARDS } from './vfx/skillVfx.js?v=30a';
+import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=30b';
+import { createSkillVfx, SKILL_CARDS } from './vfx/skillVfx.js?v=30f';
 import * as sfx from './audio.js?v=29y';
 
 const canvas = document.getElementById('c');
@@ -212,12 +212,52 @@ function equippedRunCard(slot) {
   return SKILL_CARDS.find((c) => c.id === vfxId) || SKILL_CARDS[0];
 }
 
-function refreshWeaponChips() {
+function ensureWeaponChipParts(el) {
+  if (el.querySelector('.weapon-chip-label')) return;
+  el.textContent = '';
+  const label = document.createElement('span');
+  label.className = 'weapon-chip-label';
+  const veil = document.createElement('span');
+  veil.className = 'weapon-chip-veil';
+  const cd = document.createElement('span');
+  cd.className = 'weapon-chip-cd';
+  el.append(label, veil, cd);
+}
+
+function formatSkillCd(remain) {
+  if (remain >= 9.95) return String(Math.ceil(remain));
+  return remain.toFixed(1);
+}
+
+function updateWeaponCds() {
   document.querySelectorAll('.weapon-chip').forEach((el) => {
+    ensureWeaponChipParts(el);
     const w = Number(el.dataset.w);
     const card = equippedRunCard(w);
-    el.textContent = `${w + 1} ${card.name}`;
+    const remain = state.started ? Math.max(0, skillCdUntil[w] - now()) : 0;
+    const cooling = remain > 0.02;
+    el.classList.toggle('cooling', cooling);
+    const cdEl = el.querySelector('.weapon-chip-cd');
+    const veil = el.querySelector('.weapon-chip-veil');
+    if (!cooling) {
+      cdEl.textContent = '';
+      veil.style.transform = 'scaleY(0)';
+      return;
+    }
+    const total = Math.max(0.01, Number(card.cd) || 1);
+    cdEl.textContent = formatSkillCd(remain);
+    veil.style.transform = `scaleY(${Math.min(1, remain / total)})`;
   });
+}
+
+function refreshWeaponChips() {
+  document.querySelectorAll('.weapon-chip').forEach((el) => {
+    ensureWeaponChipParts(el);
+    const w = Number(el.dataset.w);
+    const card = equippedRunCard(w);
+    el.querySelector('.weapon-chip-label').textContent = `${w + 1} ${card.name}`;
+  });
+  updateWeaponCds();
 }
 
 
@@ -880,7 +920,7 @@ function applyDamage(amount, reason, quiet = false) {
       const n = hazards.blastRadius(boatPos(), 9, (id) => {
         state.kills++;
         registerMonster(id);
-      });
+      }, 36);
       legendFx.obsidianStore = 0;
       legendFx.obsidianBreakUntil = t + 2.5;
       showToast(n ? `黑曜心爆发 · 击破 ${n}` : '黑曜心爆发 · 破防');
@@ -1804,7 +1844,7 @@ function startRun(fromCheckpoint = false) {
   seaWorld.scatterProps(vortices, flotsam);
   tintVortexField(vortices, loaded.water);
   hazards.spawnScattered({
-    count: isTut ? 1 : vortices.length * 4,
+    count: combatCountForZone(startZone),
     map: loaded,
     mapPoints: loaded.spawnPoints || [],
     lhMeshes: seaWorld.getLighthouses(),
@@ -2135,17 +2175,23 @@ function tickLegendSkills(dt, phys, clockT) {
     const hits = hazards.pierceLine(boatPos(), phys.yaw, 22, 2, (id) => {
       state.kills++;
       registerMonster(id);
-    });
+    }, 34);
     legendFx.voltCd = t + 5.2;
-    if (hits.length) showToast(`电棘穿刺 ×${hits.length}`);
+    if (hits.killed) showToast(`电棘击沉 ×${hits.killed}`);
+    else if (hits.length) showToast(`电棘命中 ×${hits.length}`);
   }
 
   if (slotHas('tarWhip') && t >= legendFx.tarCd) {
-    const e = hazards.rootNearest(boatPos(), 2.8, clockT, 15);
+    let tarKilled = false;
+    const e = hazards.rootNearest(boatPos(), 2.8, clockT, 15, 18, (id) => {
+      tarKilled = true;
+      state.kills++;
+      registerMonster(id);
+    });
     if (e) {
       legendFx.tarCd = t + 6.2;
       legendFx.tarDragUntil = t + 2.8;
-      showToast('焦油定身！');
+      showToast(tarKilled ? '焦油击沉！' : '焦油定身！');
     }
   }
 
@@ -2160,7 +2206,12 @@ function tickLegendSkills(dt, phys, clockT) {
       });
     }
     while (legendFx.trail.length && t - legendFx.trail[0].t > 2.6) legendFx.trail.shift();
-    if (legendFx.trail.length) hazards.disperseNearPoints(legendFx.trail, 2.3, clockT);
+    if (legendFx.trail.length) {
+      hazards.disperseNearPoints(legendFx.trail, 2.3, clockT, 8, dt, (id) => {
+        state.kills++;
+        registerMonster(id);
+      });
+    }
   } else {
     legendFx.trail.length = 0;
   }
@@ -2303,9 +2354,13 @@ function tick() {
         if (slotHas('thunderCore') && now() >= legendFx.chainCd) {
           const next = hazards.nearestEnemy(boatPos(), 18);
           if (next) {
-            hazards.stunEnemy(next, t + 1.35);
             legendFx.chainCd = now() + 2.8;
-            showToast('雷核连锁！');
+            hazards.stunEnemy(next, t + 1.35);
+            const chained = hazards.blastRadius(next.position, 2.4, (id2) => {
+              state.kills++;
+              registerMonster(id2);
+            }, 20);
+            showToast(chained ? '雷核连锁击沉！' : '雷核连锁！');
           }
         }
         if (id === 'thiefOtter' && monsterFx.stolen) {
@@ -2426,6 +2481,7 @@ function tick() {
   }
   if (state.seaMapOpen) drawSeaMapOverlay();
   skillVfx.update(dt);
+  updateWeaponCds();
   updateFlotsam(flotsam, t);
   updateVortices(vortices, t);
   wake.update(dt);
@@ -2519,37 +2575,51 @@ function applySkillHit(card, origin, dir, range, impact, extra = {}) {
   if (!state.started || hull.sunk) return;
   const clockT = clock.elapsedTime;
   const lineYaw = Math.atan2(dir.x, dir.z);
+  const dmg = Number(card.dmg) || 20;
+  const onKill = (id) => {
+    state.kills++;
+    registerMonster(id);
+  };
   if (card.id === 'ice') {
     const front = extra.front ?? range;
-    const stunned = hazards.stunAlongLine(origin, lineYaw, front, 1.6, clockT, 3.4);
-    const wraps = hazards.cutWrapsAlongLine(origin, lineYaw, front, 4.5);
+    let killed = 0;
+    const stunned = hazards.stunAlongLine(origin, lineYaw, front, 1.6, clockT, 3.4, dmg, (id) => {
+      killed++;
+      onKill(id);
+    }, extra.hitEnemies);
+    const wraps = hazards.cutWrapsAlongLine(origin, lineYaw, front, 4.5, dmg, extra.hitWraps);
     const wn = noteSkillWraps(wraps);
     if (wn) extra.onWrapToast?.(wn);
+    else if (killed) extra.onKillToast?.(killed);
     else if (stunned && extra.announceStun) extra.onStunToast?.(stunned);
     return;
   }
   if (card.id === 'thunder' || card.id === 'void' || card.id === 'phoenix' || card.id === 'beam') {
     const pierce = card.id === 'beam' ? 4 : 2;
-    const hits = hazards.pierceLine(origin, lineYaw, range, pierce, (id) => {
-      state.kills++;
-      registerMonster(id);
-    });
-    const wraps = hazards.cutWrapsAlongLine(origin, lineYaw, range, 4.5);
+    const hits = hazards.pierceLine(origin, lineYaw, range, pierce, onKill, dmg);
+    const wraps = hazards.cutWrapsAlongLine(origin, lineYaw, range, 4.5, dmg);
     const wn = noteSkillWraps(wraps);
-    const n = hits.length + wn;
-    showToast(n ? `${card.name} ×${n}` : `${card.name}！`);
+    const n = (hits.killed || 0) + wn;
+    const toast = n ? `${card.name} 击沉 ×${n}` : hits.length ? `${card.name} 命中` : `${card.name}！`;
+    if (n || !extra.note?.toasted) {
+      showToast(toast);
+      if (extra.note) extra.note.toasted = true;
+    }
     return;
   }
   const rad = Math.max(0.5, Number(card.radius) || 5);
-  const n = hazards.blastRadius(impact, rad, (id) => {
-    state.kills++;
-    registerMonster(id);
-  });
-  const wraps = hazards.cutWrapsInRadius(impact, rad + 1);
-  const wn = noteSkillWraps(wraps);
-  hazards.shoveWraps(impact, rad + 1);
-  showToast(n || wn ? `${card.name} ${n + wn}` : `${card.name}！`);
-}
+    const n = hazards.blastRadius(impact, rad, onKill, dmg);
+    const wraps = hazards.cutWrapsInRadius(impact, rad + 1, dmg);
+    const wn = noteSkillWraps(wraps);
+    hazards.shoveWraps(impact, rad + 1);
+    if (card.id === 'worldroot') hazards.rootNearest(impact, 2.4, clockT, rad + 2);
+    if (card.id === 'glacier') hazards.stunInRadius(impact, rad, 1.8, clockT);
+    const toast = n || wn ? `${card.name} 击沉 ×${n + wn}` : `${card.name}！`;
+    if (n || wn || !extra.note?.toasted) {
+      showToast(toast);
+      if (extra.note) extra.note.toasted = true;
+    }
+  }
 
 function tryCastSkill() {
   if (!state.started || hull.sunk || state.lighthouseOpen || state.seaMapOpen) return;
@@ -2581,16 +2651,25 @@ function tryCastSkill() {
   const impact = { x: hit.x, z: hit.z };
   sfx.skill(card.id);
   skillCdUntil[state.weapon] = t + card.cd;
+  updateWeaponCds();
   if (card.id === 'ice') {
     let iceAnnounced = false;
+    const hitEnemies = new Set();
+    const hitWraps = new Set();
     skillVfx.cast(card.id, origin, dir, range, {
       onSweep(front) {
         applySkillHit(card, origin, dir, range, impact, {
           front,
+          hitEnemies,
+          hitWraps,
           announceStun: !iceAnnounced,
           onWrapToast(n) {
             iceAnnounced = true;
             showToast(`霜矛冻断缠绕 ×${n}`);
+          },
+          onKillToast(n) {
+            iceAnnounced = true;
+            showToast(`霜矛击沉 ×${n}`);
           },
           onStunToast(n) {
             iceAnnounced = true;
@@ -2604,8 +2683,9 @@ function tryCastSkill() {
       },
     });
   } else {
+    const note = { toasted: false };
     skillVfx.cast(card.id, origin, dir, range, {
-      onImpact: () => applySkillHit(card, origin, dir, range, impact),
+      onImpact: () => applySkillHit(card, origin, dir, range, impact, { note }),
     });
   }
 }
