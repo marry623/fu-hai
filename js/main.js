@@ -13,11 +13,11 @@ import {
 import {
   createVortexField, updateVortices, findNearestVortex, createFishingController, CAST_AIM_DIST, tintVortexField, VORTEX_COUNT,
 } from './fishing.js?v=31c';
-import { createHazards } from './hazards.js?v=31z';
+import { createHazards } from './hazards.js?v=32d';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
-  SLOT_ORDER, SLOT_LABELS, feedSlot,
-} from './slots.js?v=31r';
+  SLOT_ORDER, SLOT_LABELS, feedSlot, ramCdForRarity,
+} from './slots.js?v=32d';
 import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS } from './fishCatalog.js?v=31u';
 import { createFishMesh } from './fishMeshes.js?v=31c';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
@@ -41,7 +41,7 @@ import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=31g';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=32c';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=32d';
 import { renderManualHtml } from './hubManual.js?v=31y';
 import * as sfx from './audio.js?v=29y';
 
@@ -155,6 +155,7 @@ const state = {
   invulnUntil: 0,
   inkCd: 0,
   inkShots: 0,
+  ramCd: 0,
   pendingEvent: null,
   lighthouseOpen: false,
   seaMapOpen: false,
@@ -1420,9 +1421,11 @@ function fishBlurb(def) {
   const bits = [];
   const e = def.effect || {};
   const s = def.side || {};
-  if (e.ramMul) bits.push(`冲撞×${e.ramMul}`);
-  if (e.dash) bits.push(`冲刺 ${e.dash}m`);
-  if (e.freeze) bits.push(`冰冻 ${e.freeze}s`);
+  if (e.ramMul) bits.push(`\u51b2\u649e\u00d7${e.ramMul}`);
+  if (e.ramDmg) bits.push(`\u649e\u51fb ${e.ramDmg}`);
+  if (e.ramMul || e.ramDmg) bits.push(`\u649e\u51fb\u51b7\u5374 ${ramCdForRarity(def.rarity)}s`);
+  if (e.dash) bits.push(`\u51b2\u523a ${e.dash}m`);
+  if (e.freeze) bits.push(`\u51b0\u51bb ${e.freeze}s`);
   if (e.shockwave) bits.push(e.shockDmg ? `冲击 ${e.shockDmg}` : '龙震冲击波');
   if (e.autoThrust) bits.push(`持续推进 ${e.autoThrust}`);
   if (e.burst) bits.push(`爆发推进 ${e.burst}s`);
@@ -1952,6 +1955,25 @@ function refreshSlots() {
     el.classList.toggle('sealed', monsterFx.sealedSlot === s);
     const v = state.slots[s];
     el.title = v ? `${SLOT_LABELS[s]}：${v.name} 活性${Math.floor(v.vitality)}` : SLOT_LABELS[s];
+    if (s === 'bow') {
+      let cdEl = el.querySelector('.slot-cd');
+      if (!cdEl) {
+        cdEl = document.createElement('span');
+        cdEl.className = 'slot-cd hidden';
+        el.appendChild(cdEl);
+      }
+      const canRam = !!(state.slots.bow && (getFishDef(state.slots.bow.defId)?.effect?.ramMul
+        || getFishDef(state.slots.bow.defId)?.effect?.ramDmg));
+      const show = state.started && state.ramCd > 0 && canRam;
+      if (show) {
+        cdEl.textContent = String(Math.ceil(state.ramCd));
+        cdEl.classList.remove('hidden');
+        el.classList.add('on-cd');
+      } else {
+        cdEl.classList.add('hidden');
+        el.classList.remove('on-cd');
+      }
+    }
   });
   document.querySelectorAll('.slot-vita-fill').forEach((fill) => {
     const s = fill.dataset.slot;
@@ -2199,6 +2221,7 @@ function startRun(fromCheckpoint = false) {
     state.checkpointUsed = true;
   }
   state.shellBlocks = 0;
+  state.ramCd = 0;
   skillCdUntil[0] = skillCdUntil[1] = skillCdUntil[2] = 0;
   refreshWeaponChips();
   skillVfx.clear();
@@ -2721,6 +2744,23 @@ function tick() {
     }
     const dropped = updateSlotsVitality(state.slots, boat, dt, gradientMap);
     if (dropped.length) showToast(`${dropped.join('、')} 力竭脱落`);
+
+    if (state.started) {
+      if ((b.hasRam || b.hasPuffer) && state.ramCd <= 0) {
+        const hits = hazards.ramKill(boatPos(), phys.speed, b.ramMul, (id) => {
+          state.kills++;
+          registerMonster(id);
+          showToast('\u649e\u89d2\u51fb\u6c89\uff01');
+          if (monsterFx.heatSeal) {
+            monsterFx.sealedSlot = null;
+            monsterFx.heatSeal = false;
+            showToast('\u649e\u51fb\u9707\u98de\u7194\u5ca9\u85e4\u58f6');
+          }
+        }, b.ramDmg || 12);
+        if (hits > 0) state.ramCd = b.ramCd || 3.4;
+      }
+      if (state.ramCd > 0) state.ramCd -= dt;
+    }
     refreshSlots();
 
     tickMonsterFx(dt);
@@ -2815,19 +2855,6 @@ function tick() {
         }
       }
       if (state.inkCd > 0) state.inkCd -= dt;
-
-      if (b.hasRam || b.hasPuffer) {
-        hazards.ramKill(boatPos(), phys.speed, b.ramMul, (id) => {
-          state.kills++;
-          registerMonster(id);
-          showToast('撞角击沉！');
-          if (monsterFx.heatSeal) {
-            monsterFx.sealedSlot = null;
-            monsterFx.heatSeal = false;
-            showToast('撞击震飞熔岩藤壶');
-          }
-        }, b.ramDmg || 12);
-      }
     }
 
     // Keep flotsam / vortices from drifting too far —soft pull back into map

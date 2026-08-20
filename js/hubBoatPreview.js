@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { createBoat, setBoatVariant, BOAT_WATERLINE_Y } from './boat.js?v=28l';
 import { getFishDef } from './fishCatalog.js?v=31u';
-import { equipFish, SLOT_ORDER } from './slots.js?v=31r';
+import { equipFish, SLOT_ORDER } from './slots.js?v=32d';
 
 const _v = new THREE.Vector3();
 

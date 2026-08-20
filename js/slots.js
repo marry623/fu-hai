@@ -108,6 +108,21 @@ export function sideEffectMul(slotsState, slot) {
   return s.vitality < 20 ? 2 : 1;
 }
 
+/** Bow ram pulse cooldown by fish rarity — higher stars slightly shorter, all ~3s */
+export const RAM_CD_BY_RARITY = {
+  1: 3.4,
+  2: 3.2,
+  3: 3.0,
+  4: 2.8,
+  5: 2.6,
+  6: 2.4,
+};
+
+export function ramCdForRarity(rarity) {
+  const r = Math.max(1, Math.min(6, (rarity | 0) || 1));
+  return RAM_CD_BY_RARITY[r] ?? 3.0;
+}
+
 export function computeBonuses(slotsState) {
   const b = {
     autoThrust: 0,
@@ -124,6 +139,7 @@ export function computeBonuses(slotsState) {
     shotRange: 8,
     hasRam: false,
     ramDmg: 12,
+    ramCd: 3.4,
     blockFrac: 0,
     hasBounce: false,
     hasPuffer: false,
@@ -157,6 +173,7 @@ export function computeBonuses(slotsState) {
     if (def.effect?.ramMul || def.effect?.ramDmg) {
       b.hasRam = true;
       b.ramDmg = def.effect.ramDmg || 12;
+      if (slot === 'bow') b.ramCd = ramCdForRarity(def.rarity || s.rarity || 1);
     }
     if (def.effect?.jump) b.hasBounce = true;
     if (def.side?.speedMul) b.speedMul *= Math.pow(def.side.speedMul, sm > 1 ? 1.5 : 1);

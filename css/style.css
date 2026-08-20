@@ -716,6 +716,28 @@ html, body {
   background: linear-gradient(180deg, #ff8a3d, #c4302b);
 }
 
+.slot-chip.on-cd {
+  position: relative;
+  color: #cde;
+}
+.slot-chip .slot-cd {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #ffe066;
+  font-size: 14px;
+  font-weight: 900;
+  pointer-events: none;
+  z-index: 2;
+}
+.slot-chip .slot-cd.hidden {
+  display: none !important;
+}
+
 .slot-chip.bag {
   background: linear-gradient(180deg, #1ad4c8, #0a8f8a);
   color: #042;

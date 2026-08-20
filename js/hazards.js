@@ -802,14 +802,16 @@ export function createHazards(gradientMap, scene) {
     return best;
   }
 
+  /** Deal one ram pulse; returns number of enemies hit (damaged or killed). */
   function ramKill(pos, speed, mul, onKill, dmg) {
     if (speed < 8) return 0;
     const amount = dmg ?? 12 * (mul || 1);
     let n = 0;
     for (const e of enemies) {
-      if (!e.visible) continue;
+      if (!e.visible || e.userData.dead) continue;
       if (Math.hypot(e.position.x - pos.x, e.position.z - pos.z) < 3.5 * mul) {
-        if (damageEnemy(e, amount, onKill)) n++;
+        damageEnemy(e, amount, onKill);
+        n++;
       }
     }
     return n;

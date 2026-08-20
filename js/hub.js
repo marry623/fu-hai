@@ -1,7 +1,7 @@
 /** Hub UI — backpack desk; 整备=3D船, 出港=海域地图, 仓库=格子 */
 
 import { ZONES } from './zones.js?v=31y';
-import { SLOT_ORDER, SLOT_LABELS } from './slots.js?v=31r';
+import { SLOT_ORDER, SLOT_LABELS, ramCdForRarity } from './slots.js?v=32d';
 import { getFishDef, FISH_CATALOG, RARITY, listShopBuyFishIds, shopBuyCost, BAIT_KINDS, rarityStars } from './fishCatalog.js?v=31u';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=31c';
@@ -1329,10 +1329,11 @@ export function createHub(deps) {
     const e = def.effect || {};
     const s = def.side || {};
     const bits = [];
-    if (e.ramMul) bits.push(`冲撞 ×${e.ramMul}`);
-    if (e.ramDmg) bits.push(`伤 ${e.ramDmg}`);
-    if (e.dash) bits.push(`冲刺 ${e.dash}m`);
-    if (e.freeze) bits.push(`冻 ${e.freeze}s`);
+    if (e.ramMul) bits.push(`\u51b2\u649e \u00d7${e.ramMul}`);
+    if (e.ramDmg) bits.push(`\u4f24 ${e.ramDmg}`);
+    if (e.ramMul || e.ramDmg) bits.push(`\u649e\u51fb\u51b7\u5374 ${ramCdForRarity(def.rarity)}s`);
+    if (e.dash) bits.push(`\u51b2\u523a ${e.dash}m`);
+    if (e.freeze) bits.push(`\u51bb ${e.freeze}s`);
     if (e.shockwave) bits.push(e.shockDmg ? `冲击波伤 ${e.shockDmg}` : '冲击波');
     if (e.cd) bits.push(`CD ${e.cd}`);
     if (e.iFrame) bits.push(`无敌 ${e.iFrame}s`);
