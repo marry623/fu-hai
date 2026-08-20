@@ -17,8 +17,9 @@ import { createHazards } from './hazards.js?v=32d';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot, ramCdForRarity,
-} from './slots.js?v=32d';
-import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS } from './fishCatalog.js?v=31u';
+} from './slots.js?v=32e';
+import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS, familyOf, familyLabel } from './fishCatalog.js?v=32h';
+import { createFamilyVfx } from './familyVfx.js?v=32p';
 import { createFishMesh } from './fishMeshes.js?v=31c';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=31c';
@@ -32,7 +33,7 @@ import {
   chargeZoneTicket, canDepartZone, saveMeta,
 } from './meta.js?v=31y';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=31h';
-import { createHub } from './hub.js?v=31y';
+import { createHub } from './hub.js?v=32f';
 import { createCoverScene } from './coverScene.js?v=28m';
 import { createHubIsland } from './hubIsland.js?v=31q';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=29q';
@@ -41,8 +42,8 @@ import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=31g';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=32d';
-import { renderManualHtml } from './hubManual.js?v=31y';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=32p';
+import { renderManualHtml } from './hubManual.js?v=32j';
 import * as sfx from './audio.js?v=29y';
 
 const canvas = document.getElementById('c');
@@ -579,6 +580,8 @@ scene.add(foam);
 const boat = createBoat(gradientMap, selectedBoat);
 scene.add(boat);
 const wake = createWakeSystem(scene);
+const familyVfx = createFamilyVfx(boat);
+let lastFamilyKey = '';
 
 /** Aim ring + bobber + fishing line */
 const aimRing = new THREE.Mesh(
@@ -884,7 +887,7 @@ const TUT_STEPS = [
   },
   {
     title: '\u6539\u88c5',
-    body: 'Tab \u5f00\u80cc\u5305\uff0c\u628a\u9c7c\u7ed1\u5230\u5b83\u7684\u4e13\u5c5e\u69fd\u3002',
+    body: 'Tab \u5f00\u80cc\u5305\uff0c\u628a\u9c7c\u7ed1\u5230\u4e13\u5c5e\u69fd\u3002\u89d2\u6807\u662f\u516d\u65cf\uff1a\u58f3\u7532 / \u58a8\u96fe / \u8f6e\u673a / \u5e06\u96f7 / \u5bd2\u6f5c / \u9ab8\u9707\u3002\u540c\u65cf\u88c5\u5230\u4e0d\u540c\u69fd\u53ef\u5171\u9e23\u3002',
     btn: '\u4e0b\u4e00\u6b65',
     gate: 'equip',
   },
@@ -936,7 +939,7 @@ function tutStepBody(step) {
     case 2:
       return `\u7ee7\u7eed\u5411\u5317 \u00b7 \u9760\u8fd1\u6f02\u6d6e\u7269\u6309 E\uff08\u7ea6 ${dist} \u7c73\uff09`;
     case 3:
-      return '\u6309 Tab \u6253\u5f00\u80cc\u5305 \u00b7 \u9009\u4e2d\u9c7c\u7ed1\u5230\u4e13\u5c5e\u69fd';
+      return '\u6309 Tab \u6253\u5f00\u80cc\u5305 \u00b7 \u7ed1\u5230\u4e13\u5c5e\u69fd \u00b7 \u89d2\u6807\u516d\u65cf\uff0c\u540c\u65cf\u4e0d\u540c\u69fd\u53ef\u5171\u9e23';
     case 4:
       return `\u6309 1 / 2 / 3 \u5207\u6362\u6280\u80fd\u3002\u79fb\u52a8\u9f20\u6807\u9009\u4e2d\u6d77\u9762\uff0c\u5de6\u952e\u70b9\u51fb\u653b\u51fb\uff08\u7ea6 ${dist} \u7c73\uff09`;
     case 5:
@@ -1163,7 +1166,10 @@ function applyDamage(amount, reason, quiet = false) {
     if (state.slots.sideR?.defId === 'shell' || state.slots.sideR?.defId === 'grouper') {
       state.slots.sideR = null;
     }
-    if (!quiet) showToast('格挡挡下攻击！');
+    if (!quiet) {
+      showToast('\u683c\u6321\u6321\u4e0b\u653b\u51fb\uff01');
+      if ((b.families || []).some((f) => f.id === 'shell')) familyVfx.pulse('shell');
+    }
     refreshSlots();
     return;
   }
@@ -1421,6 +1427,8 @@ function fishBlurb(def) {
   const bits = [];
   const e = def.effect || {};
   const s = def.side || {};
+  const fam = familyOf(def);
+  if (fam) bits.push(`\u65cf\uff1a${fam.name}（${fam.tip}）`);
   if (e.ramMul) bits.push(`\u51b2\u649e\u00d7${e.ramMul}`);
   if (e.ramDmg) bits.push(`\u649e\u51fb ${e.ramDmg}`);
   if (e.ramMul || e.ramDmg) bits.push(`\u649e\u51fb\u51b7\u5374 ${ramCdForRarity(def.rarity)}s`);
@@ -1661,9 +1669,14 @@ function makePolaroidCell({ kind, index, item, selected, onClick, badge }) {
     const color = hexColor(item.color ?? 0x7dffc0);
     thumbInner = `<div class="bp-thumb-blob" style="background:${color}"></div>`;
   }
+  const fam = item.defId ? familyOf(item.defId) : null;
+  const familyChip = fam
+    ? `<span class="bp-family-chip fam-${fam.id}" style="--fam:${fam.color}">${fam.name}</span>`
+    : '';
   btn.innerHTML = `
     <span class="bp-tape top"></span>
     ${badge ? `<span class="bp-slot-badge">${badge}</span>` : ''}
+    ${familyChip}
     <div class="bp-polaroid">
       <div class="bp-thumb">${thumbInner}</div>
       <div class="bp-cell-name">${name}</div>
@@ -1689,12 +1702,13 @@ function renderBackpackDetail() {
       defId: f.defId,
       rarity: f.rarity,
       ribbon: r.label,
-      tagline: `${categoryLabel(def.category)} · ${rarityStars(f.rarity || 1)}`,
+      tagline: `${categoryLabel(def.category)} · ${rarityStars(f.rarity || 1)}${familyLabel(def) ? ` · ${familyLabel(def)}` : ''}`,
       desc: fishBlurb(def),
       meta: [
         def.slot ? `只能绑在：${SLOT_LABELS[def.slot]}（其他槽位不可用）` : '不可绑槽（食用/修理/投喂）',
+        familyLabel(def) ? `族共鸣：${familyLabel(def)}（同族双装激活）` : '',
         `活性参考：${Math.floor(f.vitality ?? 100)}`,
-      ].join('<br>'),
+      ].filter(Boolean).join('<br>'),
       showSlots: !!def.slot,
       fish: f,
       actions: {
@@ -1717,9 +1731,9 @@ function renderBackpackDetail() {
       defId: f.defId,
       rarity: f.rarity,
       ribbon: r.label,
-      tagline: `已绑定 · ${categoryLabel(def.category)}`,
+      tagline: `已绑定 · ${categoryLabel(def.category)}${familyLabel(def) ? ` · ${familyLabel(def)}` : ''}`,
       desc: fishBlurb(def),
-      meta: `活性${Math.floor(f.vitality ?? 0)} / 100<br>力竭后会自动脱落回海里。`,
+      meta: `活性${Math.floor(f.vitality ?? 0)} / 100<br>${familyLabel(def) ? `族：${familyLabel(def)}（同族双装共鸣）<br>` : ''}力竭后会自动脱落回海里。`,
       showSlots: false,
       fish: f,
       actions: { discard: false, eat: false, equip: false, feed: false, use: false },
@@ -1990,7 +2004,19 @@ function refreshSlots() {
 
 function updateComboHint() {
   const b = bonuses();
-  if (b.combos.length) setPrompt(ui.comboHint, `联动：${b.combos.map((c) => c.name).join(' · ')}`);
+  const fams = b.families || [];
+  const key = fams.map((f) => f.id).join(',');
+  if (key !== lastFamilyKey) {
+    const gained = fams.filter((f) => !lastFamilyKey.split(',').includes(f.id));
+    lastFamilyKey = key;
+    familyVfx.sync(fams.map((f) => f.id));
+    for (const f of gained) {
+      if (f.id) showToast(`\u5171\u9e23\uff1a${f.name} \u00b7 ${f.tip}`);
+    }
+  } else {
+    familyVfx.sync(fams.map((f) => f.id));
+  }
+  if (fams.length) setPrompt(ui.comboHint, `\u5171\u9e23\uff1a${fams.map((c) => c.name).join(' \u00b7 ')}`);
   else setPrompt(ui.comboHint, '');
 }
 
@@ -1998,7 +2024,11 @@ function tryJump() {
   if (!bonuses().hasBounce) return showToast('需要船底弹跳鱼');
   if (now() < state.jumpUntil - 0.5) return;
   state.jumpUntil = now() + 1.0;
-  state.invulnUntil = now() + 0.9;
+  state.invulnUntil = now() + 1.0;
+  if ((bonuses().families || []).some((f) => f.id === 'tide')) {
+    state.invulnUntil = now() + 1.25;
+    familyVfx.pulse('tide');
+  }
   showToast('弹跳！');
 }
 
@@ -2222,6 +2252,8 @@ function startRun(fromCheckpoint = false) {
   }
   state.shellBlocks = 0;
   state.ramCd = 0;
+  lastFamilyKey = '';
+  familyVfx.sync([]);
   skillCdUntil[0] = skillCdUntil[1] = skillCdUntil[2] = 0;
   refreshWeaponChips();
   skillVfx.clear();
@@ -2757,7 +2789,10 @@ function tick() {
             showToast('\u649e\u51fb\u9707\u98de\u7194\u5ca9\u85e4\u58f6');
           }
         }, b.ramDmg || 12);
-        if (hits > 0) state.ramCd = b.ramCd || 3.4;
+        if (hits > 0) {
+          state.ramCd = b.ramCd || 3.4;
+          if ((b.families || []).some((f) => f.id === 'rift')) familyVfx.pulse('rift');
+        }
       }
       if (state.ramCd > 0) state.ramCd -= dt;
     }
@@ -2840,12 +2875,13 @@ function tick() {
     updateEvacHud();
     if (state.started) {
       if (b.hasInk && state.inkCd <= 0) {
-        const range = (b.shotRange || 8) * (b.combos.some((c) => c.id === 'inkscan') ? 1.4 : 1);
+        const range = b.shotRange || 8;
         const tgen = hazards.nearestEnemy(boatPos(), range);
         if (tgen) {
           hazards.shootInk(boatPos(), tgen, gradientMap, b.shotDmg || 10);
           state.inkCd = b.shotCd || 1.2;
           state.inkShots++;
+          if ((b.families || []).some((f) => f.id === 'ink')) familyVfx.pulse('ink');
           const reloadEvery = getFishDef(state.slots.sideL?.defId)?.side?.reloadEvery;
           if (reloadEvery && state.inkShots >= reloadEvery) {
             showToast('喷墨耗尽，空格附近补墨…');
@@ -2929,6 +2965,7 @@ function tick() {
   updateFlotsam(flotsam, t);
   updateVortices(vortices, t);
   wake.update(dt);
+  familyVfx.update(dt, paddle.state?.speed || 0);
   drawMinimap();
   renderer.render(scene, camera);
   requestAnimationFrame(tick);

@@ -1,8 +1,8 @@
 /** Hub UI — backpack desk; 整备=3D船, 出港=海域地图, 仓库=格子 */
 
 import { ZONES } from './zones.js?v=31y';
-import { SLOT_ORDER, SLOT_LABELS, ramCdForRarity } from './slots.js?v=32d';
-import { getFishDef, FISH_CATALOG, RARITY, listShopBuyFishIds, shopBuyCost, BAIT_KINDS, rarityStars } from './fishCatalog.js?v=31u';
+import { SLOT_ORDER, SLOT_LABELS, ramCdForRarity } from './slots.js?v=32e';
+import { getFishDef, FISH_CATALOG, RARITY, listShopBuyFishIds, shopBuyCost, BAIT_KINDS, rarityStars, familyOf, familyLabel } from './fishCatalog.js?v=32h';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=31c';
 import { listMonsterIds, getMonsterDef } from './monsterCatalog.js?v=31g';
@@ -43,7 +43,7 @@ import {
   canDepartZone,
 } from './meta.js?v=31y';
 import { HUB_SPOTS } from './hubIsland.js?v=31q';
-import { renderManualHtml } from './hubManual.js?v=31y';
+import { renderManualHtml } from './hubManual.js?v=32j';
 
 const TAB_TITLES = {
   prep: '整备',
@@ -725,8 +725,13 @@ export function createHub(deps) {
       const badge = slot
         ? `<span class="bp-slot-badge${occupied ? ' occupied' : ''}">${occupied ? '已占' : '可绑'}·${SLOT_LABELS[slot] || slot}</span>`
         : '';
+      const fam = familyOf(f.defId);
+      const famChip = fam
+        ? `<span class="bp-family-chip fam-${fam.id}" style="--fam:${fam.color}">${fam.name}</span>`
+        : '';
       return `<div class="bp-cell hub-wh-cell" data-wh="${i}">
         <span class="bp-tape top"></span>
+        ${famChip}
         <div class="bp-polaroid">
           ${badge}
           <div class="bp-thumb">${thumb}</div>
@@ -952,7 +957,7 @@ export function createHub(deps) {
           return shopCardHtml({
             key: `fish:${id}`,
             title: def.name,
-            sub: `${rarityStars(def.rarity)} · ${cost}`,
+            sub: `${rarityStars(def.rarity)}${familyLabel(def) ? ` · ${familyLabel(def)}` : ''} · ${cost}`,
             tone: `#${(def.color >>> 0).toString(16).padStart(6, '0')}`,
             itemId: id,
           });
@@ -1192,8 +1197,13 @@ export function createHub(deps) {
           const open = !!unlocked[id];
           const d = getFishDef(id);
           const sel = selectedCodexId === id ? ' selected' : '';
+      const fam = open ? familyOf(id) : null;
+          const famHtml = fam
+            ? `<span class="codex-entry-fam" style="--fam:${fam.color}">${fam.name}</span>`
+            : '';
           return `<button type="button" class="codex-entry polaroid${sel}${open ? '' : ' locked'}" data-codex="${id}">
             <span class="codex-entry-face">${open ? '' : '?'}</span>
+            ${famHtml}
             <span class="codex-entry-name">${open ? d.name : (d.rarity >= 6 ? '？？？' : d.name)}</span>
           </button>`;
         }).join('')}
@@ -1274,10 +1284,11 @@ export function createHub(deps) {
       ? def.name
       : ((def.rarity | 0) >= 6 ? '？？？' : '未记载物种');
     if (els.codexTag) {
-      const slot = def.slot ? SLOT_LABELS[def.slot] : '消耗';
+      const slot = def.slot ? SLOT_LABELS[def.slot] : '\u6d88\u8017';
+      const fam = unlocked ? familyLabel(def) : '';
       els.codexTag.textContent = unlocked
-        ? `${rarity.label} · ${catLabel(def.category)} · ${slot}`
-        : '尚未发现';
+        ? `${rarity.label} \u00b7 ${catLabel(def.category)} \u00b7 ${slot}${fam ? ` \u00b7 ${fam}` : ''}`
+        : '\u5c1a\u672a\u53d1\u73b0';
     }
     if (els.codexDesc) {
       els.codexDesc.textContent = unlocked
@@ -1286,8 +1297,12 @@ export function createHub(deps) {
     }
     if (els.codexPortrait) {
       els.codexPortrait.classList.toggle('locked', !unlocked);
+      const fam = unlocked ? familyOf(id) : null;
+      const chip = fam
+        ? `<span class="codex-family-chip" style="--fam:${fam.color}">${fam.name}</span>`
+        : '';
       els.codexPortrait.innerHTML = unlocked
-        ? `<img src="${getFishPortrait(id)}" alt="" draggable="false" />`
+        ? `${chip}<img src="${getFishPortrait(id)}" alt="" draggable="false" />`
         : '<span class="codex-q">?</span>';
     }
   }
@@ -1332,6 +1347,8 @@ export function createHub(deps) {
     if (e.ramMul) bits.push(`\u51b2\u649e \u00d7${e.ramMul}`);
     if (e.ramDmg) bits.push(`\u4f24 ${e.ramDmg}`);
     if (e.ramMul || e.ramDmg) bits.push(`\u649e\u51fb\u51b7\u5374 ${ramCdForRarity(def.rarity)}s`);
+    const fam = familyOf(def);
+    if (fam) bits.unshift(`\u65cf\uff1a${fam.name}（${fam.tip}\uff0c\u540c\u65cf\u53cc\u88c5\u5171\u9e23）`);
     if (e.dash) bits.push(`\u51b2\u523a ${e.dash}m`);
     if (e.freeze) bits.push(`\u51bb ${e.freeze}s`);
     if (e.shockwave) bits.push(e.shockDmg ? `冲击波伤 ${e.shockDmg}` : '冲击波');

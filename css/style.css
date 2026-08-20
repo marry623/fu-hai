@@ -1199,6 +1199,41 @@ html, body {
   background: #4a2010;
 }
 
+.bp-family-chip,
+.codex-family-chip,
+.codex-entry-fam {
+  position: absolute;
+  z-index: 3;
+  left: 6px;
+  top: 8px;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  border-radius: 3px;
+  border: 2px solid #1a1008;
+  background: var(--fam, #c8b090);
+  color: #1a1008;
+  box-shadow: 0 2px 0 #000;
+  pointer-events: none;
+  line-height: 1.2;
+}
+.codex-family-chip {
+  left: 10px;
+  top: 10px;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+.codex-entry-fam {
+  left: 4px;
+  top: 4px;
+  font-size: 8px;
+  padding: 1px 4px;
+}
+.codex-portrait {
+  position: relative;
+}
+
 .bp-clip {
   position: relative;
   display: flex;
@@ -3004,6 +3039,19 @@ html, body {
 .hub-drawer #hub-fs-left-depart .hub-clip-h {
   flex-shrink: 0;
 }
+/* Zone pick must stay visible; cargo scrolls when bag is full */
+.hub-drawer #hub-fs-left-depart .hub-zones {
+  flex: 1 1 auto;
+  min-height: 132px;
+  max-height: min(280px, 42vh);
+}
+.hub-drawer #hub-cargo {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(148px, 26vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .hub-drawer #hub-fs-left-codex {
   overflow: hidden;
 }
@@ -3388,7 +3436,7 @@ button.hub-bp-card {
   flex-direction: column;
   gap: 8px;
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: 120px;
   max-height: min(240px, 36vh);
   overflow-y: auto;
   overscroll-behavior: contain;

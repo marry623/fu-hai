@@ -1,4 +1,4 @@
-import { getFishDef, activeCombos, RARITY, ADJACENCY } from './fishCatalog.js?v=31u';
+import { getFishDef, activeFamilies, RARITY } from './fishCatalog.js?v=32h';
 import { createFishMesh, setFishVitalityVisual, animateFishMesh } from './fishMeshes.js?v=31c';
 
 export const SLOT_LABELS = {
@@ -33,10 +33,12 @@ export function equipFish(boat, slotsState, fishItem, preferredSlot, gradientMap
   boat.userData.mounts[useSlot].add(mesh);
   boat.userData.mounts[useSlot].userData.fishMesh = mesh;
 
-  const combos = activeCombos(slotsState);
+  const families = activeFamilies(slotsState);
   const covered = prev ? `（覆盖 ${prev.name}）` : '';
-  const comboMsg = combos.length ? ` · 联动：${combos.map((c) => c.name).join('、')}` : '';
-  return { ok: true, slot: useSlot, msg: `${fishItem.name} → ${SLOT_LABELS[useSlot]}${covered}${comboMsg}` };
+  const famMsg = families.length
+    ? ` · \u5171\u9e23\uff1a${families.map((f) => f.name).join('\u3001')}`
+    : '';
+  return { ok: true, slot: useSlot, msg: `${fishItem.name} \u2192 ${SLOT_LABELS[useSlot]}${covered}${famMsg}` };
 }
 
 function orientForSlot(mesh, slot) {
@@ -147,8 +149,10 @@ export function computeBonuses(slotsState) {
     hasSailfish: false,
     hasRadar: false,
     hasBarnacle: false,
-    combos: activeCombos(slotsState),
+    families: activeFamilies(slotsState),
+    combos: [],
   };
+  b.combos = b.families;
 
   for (const slot of SLOT_ORDER) {
     const s = slotsState[slot];
@@ -188,11 +192,13 @@ export function computeBonuses(slotsState) {
     if (s.defId === 'barnacle') b.hasBarnacle = true;
   }
 
-  for (const c of b.combos) {
-    if (c.bonus.thrustMul) b.thrustMul *= c.bonus.thrustMul;
-    if (c.bonus.ramMul) b.ramMul *= c.bonus.ramMul;
-    if (c.bonus.block) b.block += c.bonus.block;
-    if (c.bonus.corrosionMul) b.corrosionMul *= c.bonus.corrosionMul;
+  for (const f of b.families) {
+    if (f.id === 'shell') b.block += 1;
+    if (f.id === 'ink') b.shotRange *= 1.15;
+    if (f.id === 'drive') b.thrustMul *= 1.15;
+    if (f.id === 'gale') b.turnMul *= 1.10;
+    if (f.id === 'tide') b.corrosionMul *= 0.88;
+    if (f.id === 'rift') b.ramDmg = (b.ramDmg || 12) * 1.12;
   }
 
   return b;
