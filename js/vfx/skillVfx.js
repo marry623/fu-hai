@@ -17,6 +17,7 @@ import { spawnSnare } from './spawnSnare.js?v=30a';
 import { spawnGlacier } from './spawnGlacier.js?v=30a';
 
 /** Sit above opaque waving water (crests ~0.8–1.1m). */
+export const AIM_HEAD_EXTRA = 2.6;
 const Y_WATER = 1.15;
 const MAX_CASTS = 4;
 const ICE_COUNT = 56;
@@ -1196,15 +1197,16 @@ function createAimRig(scene) {
     const dist = Math.hypot(dx, dz);
     const yaw = Math.atan2(dx, dz);
     const tooClose = dist < 2.2;
-    const tooFar = dist > maxRange + 0.05;
+    const tooFar = dist > maxRange + AIM_HEAD_EXTRA + 0.05;
     const valid = !tooClose && !tooFar;
     reveal = Math.min(1, reveal + dt * 4);
     const zoneR = radius > 0 ? radius : 0;
+    const reach = maxRange + AIM_HEAD_EXTRA;
 
     if (zoneR > 0) {
       arrow.visible = false;
       zone.visible = true;
-      const place = valid ? Math.min(dist, maxRange) : dist;
+      const place = valid ? Math.min(dist, reach) : dist;
       const ux = dist > 0.001 ? dx / dist : 0;
       const uz = dist > 0.001 ? dz / dist : 1;
       zone.position.set(origin.x + ux * place, Y_WATER, origin.z + uz * place);
@@ -1214,14 +1216,14 @@ function createAimRig(scene) {
       zoneMat.uniforms.uInvalid.value = valid ? 0 : 1;
       zoneMat.uniforms.uFill.value = valid ? 0.18 : 0.78;
       zoneMat.uniforms.uColor.value.set(valid ? (zoneColor[kind] || 0xff6a18) : 0xff1400);
-      return { valid, dist: Math.min(dist, maxRange), yaw, dir: { x: ux, z: uz } };
+      return { valid, dist: Math.min(dist, reach), yaw, dir: { x: ux, z: uz } };
     }
 
     zone.visible = false;
     arrow.visible = true;
     const length = valid
-      ? Math.min(maxRange, Math.max(2.5, dist))
-      : Math.min(Math.max(2.5, dist), maxRange + 10);
+      ? Math.min(reach, Math.max(2.5, dist))
+      : Math.min(Math.max(2.5, dist), reach + 10);
     const back = 1.05;
     const forward = length + 1.6;
     const halfW = 2.2;

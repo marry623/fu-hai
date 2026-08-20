@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
-import { pointInPoly, EVAC_RADIUS, EVAC_HOLD } from './seaMaps.js?v=31r';
+import { pointInPoly, EVAC_RADIUS, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=31y';
 import { pickMonsterForZone, getMonsterDef, monstersForZone, monsterHp, hullTouchDamage, hullShotDamage, wrapDps, wrapCountForZone } from './monsterCatalog.js?v=31g';
 import { createCombatMonster, createMonsterMesh, syncHpBar } from './monsterMeshes.js?v=30c';
 
@@ -40,6 +40,8 @@ export function createHazards(gradientMap, scene) {
   let spawnPoints = [];
   /** @type {THREE.Object3D[]} */
   let lighthouses = [];
+  /** @type {THREE.Mesh|null} */
+  let tutMonsterRing = null;
   /** @type {{ active:boolean, remain:number, dwell:number, lhId:string|null, x:number, z:number }} */
   let evacStatus = { active: false, remain: EVAC_HOLD, dwell: 0, lhId: null, x: 0, z: 0 };
 
@@ -217,8 +219,8 @@ export function createHazards(gradientMap, scene) {
       const catalogId = pool[0];
       const def = getMonsterDef(catalogId);
       enemyAnchors.push({
-        x: spawnPt.x + 16,
-        z: spawnPt.z + 32,
+        x: TUTORIAL_BEATS.monster.x,
+        z: TUTORIAL_BEATS.monster.z,
         kind: def.kind === 'ranged' ? 'ranged' : def.kind === 'suction' ? 'suction' : def.kind === 'static' ? 'static' : 'ram',
         catalogId,
       });
@@ -301,8 +303,27 @@ export function createHazards(gradientMap, scene) {
       enemies[i].userData.dead = false;
       enemies[i].userData.respawnIn = 0;
       enemies[i].userData.chasing = false;
-      // Practice bay: keep the teaching monster visible from the start
-      enemies[i].visible = zid === -1;
+      enemies[i].userData.tutLocked = zid === -1;
+      enemies[i].visible = false;
+      if (zid === -1 && i === 0) {
+        enemies[i].scale.setScalar(1.35);
+        if (tutMonsterRing) root.remove(tutMonsterRing);
+        tutMonsterRing = new THREE.Mesh(
+          new THREE.RingGeometry(5.5, 9, 32),
+          new THREE.MeshBasicMaterial({
+            color: 0xff6b4a,
+            transparent: true,
+            opacity: 0.45,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+          })
+        );
+        tutMonsterRing.rotation.x = -Math.PI / 2;
+        tutMonsterRing.position.set(a.x, 0.12, a.z);
+        tutMonsterRing.visible = false;
+        tutMonsterRing.userData.skipOutline = true;
+        root.add(tutMonsterRing);
+      }
     }
 
     for (const w of wraps) root.remove(w);
@@ -370,12 +391,21 @@ export function createHazards(gradientMap, scene) {
       onEvacuate,
       boatSpeed = 0,
       boatYaw = 0,
+      blockEvac = false,
+      onEvacBlocked,
     } = opts;
+
+    const evacRadiusFor = (lh) => lh.userData.evacRadius ?? EVAC_RADIUS;
 
     // Count current chasers
     let chasers = enemies.filter((e) => e.visible && e.userData.chasing).length;
 
     for (const e of enemies) {
+      if (e.userData.tutLocked) {
+        e.visible = false;
+        e.userData.chasing = false;
+        continue;
+      }
       if (e.userData.dead) continue;
       if (e.userData.respawnIn != null && e.userData.respawnIn > 0) {
         e.userData.respawnIn -= dt;
@@ -658,41 +688,53 @@ export function createHazards(gradientMap, scene) {
     // Lighthouse evacuate: stay in ring for EVAC_HOLD seconds
     let bestIn = null;
     let bestD = Infinity;
-    for (const lh of lighthouses) {
-      if (lh.userData.claimed) {
-        if (lh.userData.evacDwell) lh.userData.evacDwell = 0;
-        continue;
-      }
-      const d = Math.hypot(lh.position.x - boatPos.x, lh.position.z - boatPos.z);
-      if (d < EVAC_RADIUS) {
-        if (d < bestD) {
-          bestD = d;
-          bestIn = lh;
-        }
-      } else {
-        lh.userData.evacDwell = 0;
-      }
-    }
-
-    if (bestIn) {
-      bestIn.userData.evacDwell = (bestIn.userData.evacDwell || 0) + dt;
-      const dwell = bestIn.userData.evacDwell;
-      evacStatus = {
-        active: true,
-        dwell,
-        remain: Math.max(0, EVAC_HOLD - dwell),
-        lhId: bestIn.userData.lhId || bestIn.userData.checkpoint || null,
-        x: bestIn.position.x,
-        z: bestIn.position.z,
-      };
-      if (dwell >= EVAC_HOLD) {
-        bestIn.userData.claimed = true;
-        bestIn.userData.evacDwell = 0;
-        evacStatus = { active: false, remain: EVAC_HOLD, dwell: 0, lhId: null, x: 0, z: 0 };
-        onEvacuate?.(bestIn.userData.lhId || bestIn.userData.checkpoint);
+    if (blockEvac) {
+      for (const lh of lighthouses) lh.userData.evacDwell = 0;
+      evacStatus = { active: false, remain: EVAC_HOLD, dwell: 0, lhId: null, x: 0, z: 0 };
+      for (const lh of lighthouses) {
+        if (!lh.visible) continue;
+        const d = Math.hypot(lh.position.x - boatPos.x, lh.position.z - boatPos.z);
+        if (d < evacRadiusFor(lh)) onEvacBlocked?.();
+        break;
       }
     } else {
-      evacStatus = { active: false, remain: EVAC_HOLD, dwell: 0, lhId: null, x: 0, z: 0 };
+      for (const lh of lighthouses) {
+        if (lh.userData.claimed || !lh.visible) {
+          if (lh.userData.evacDwell) lh.userData.evacDwell = 0;
+          continue;
+        }
+        const d = Math.hypot(lh.position.x - boatPos.x, lh.position.z - boatPos.z);
+        const r = evacRadiusFor(lh);
+        if (d < r) {
+          if (d < bestD) {
+            bestD = d;
+            bestIn = lh;
+          }
+        } else {
+          lh.userData.evacDwell = 0;
+        }
+      }
+
+      if (bestIn) {
+        bestIn.userData.evacDwell = (bestIn.userData.evacDwell || 0) + dt;
+        const dwell = bestIn.userData.evacDwell;
+        evacStatus = {
+          active: true,
+          dwell,
+          remain: Math.max(0, EVAC_HOLD - dwell),
+          lhId: bestIn.userData.lhId || bestIn.userData.checkpoint || null,
+          x: bestIn.position.x,
+          z: bestIn.position.z,
+        };
+        if (dwell >= EVAC_HOLD) {
+          bestIn.userData.claimed = true;
+          bestIn.userData.evacDwell = 0;
+          evacStatus = { active: false, remain: EVAC_HOLD, dwell: 0, lhId: null, x: 0, z: 0 };
+          onEvacuate?.(bestIn.userData.lhId || bestIn.userData.checkpoint);
+        }
+      } else {
+        evacStatus = { active: false, remain: EVAC_HOLD, dwell: 0, lhId: null, x: 0, z: 0 };
+      }
     }
 
     for (const e of enemies) syncHpBar(e, boatPos);
@@ -842,9 +884,9 @@ export function createHazards(gradientMap, scene) {
       const dx = e.position.x - origin.x;
       const dz = e.position.z - origin.z;
       const proj = dx * dirX + dz * dirZ;
-      if (proj < 0.4 || proj > maxDist) continue;
+      if (proj < -1.2 || proj > maxDist + 3.2) continue;
       const perp = Math.abs(dx * dirZ - dz * dirX);
-      if (perp < 2.5) scored.push({ e, proj });
+      if (perp < 3.6) scored.push({ e, proj });
     }
     scored.sort((a, b) => a.proj - b.proj);
     const hits = [];
@@ -910,7 +952,7 @@ export function createHazards(gradientMap, scene) {
       const dx = e.position.x - origin.x;
       const dz = e.position.z - origin.z;
       const proj = dx * dirX + dz * dirZ;
-      if (proj < 0.2 || proj > maxDist) continue;
+      if (proj < -1.2 || proj > maxDist + 3.2) continue;
       const perp = Math.abs(dx * dirZ - dz * dirX);
       if (perp < width) {
         fn(e);
@@ -958,7 +1000,7 @@ export function createHazards(gradientMap, scene) {
       const dx = w.position.x - origin.x;
       const dz = w.position.z - origin.z;
       const proj = dx * dirX + dz * dirZ;
-      if (proj < -1 || proj > maxDist) continue;
+      if (proj < -1 || proj > maxDist + 3.2) continue;
       const perp = Math.abs(dx * dirZ - dz * dirX);
       if (perp < width) {
         once?.add(w);
@@ -999,10 +1041,23 @@ export function createHazards(gradientMap, scene) {
     return null;
   }
 
+  function setTutorialReveal(step, dismissed = false) {
+    const unlock = (step | 0) >= 4;
+    for (const e of enemies) {
+      e.userData.tutLocked = !unlock;
+      if (!unlock) {
+        e.visible = false;
+        e.userData.chasing = false;
+      }
+    }
+    if (tutMonsterRing) tutMonsterRing.visible = unlock;
+  }
+
   return {
     root, enemies, wraps, planks,
     get lighthouses() { return lighthouses; },
     update, shootInk, nearestEnemy, ramKill, cutNearestWrap, setSpawnLayout, spawnScattered, spawnAroundVortices,
+    setTutorialReveal,
     stunEnemy, rootNearest, pierceLine, blastRadius, shoveWraps, disperseNearPoints,
     stunAlongLine, cutWrapsAlongLine, cutWrapsInRadius, stunInRadius,
     getEvacStatus,

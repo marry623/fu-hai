@@ -64,6 +64,7 @@ const DEFAULT = {
   talentLevels: {},
   unlockedZones: [0],
   tutorialDone: false,
+  hubIntroDone: false,
   hullRepair: 100, // prep-time hull % stored as absolute max fill preference
 };
 
@@ -220,6 +221,7 @@ function normalizeMeta(data) {
       ? [...new Set(data.unlockedZones.filter((z) => (z | 0) >= 0))].sort((a, b) => a - b)
       : [0],
     tutorialDone: !!data.tutorialDone,
+    hubIntroDone: !!data.hubIntroDone,
     econV2: ECON_V2,
   };
   if ((data.econV2 | 0) < ECON_V2) {
@@ -291,6 +293,7 @@ export function settleRun(meta, {
     },
     unlockedZones: [...(meta.unlockedZones || [0])],
     tutorialDone: !!meta.tutorialDone,
+    hubIntroDone: !!meta.hubIntroDone,
   };
 
   const isTutorial = (startZone | 0) === -1;
@@ -508,6 +511,18 @@ export const ZONE_TICKET_COST = [
 ];
 export const ZONE_UNLOCK_COST = ZONE_TICKET_COST;
 
+export function canDepartZone(meta, zoneId) {
+  const id = zoneId | 0;
+  if (id === -1) return { ok: true };
+  if (!meta?.tutorialDone) {
+    return { ok: false, msg: '\u9700\u5148\u5b8c\u6210\u7ec3\u4e60\u6e7e\u5f52\u822a' };
+  }
+  if (!(meta.unlockedZones || [0]).includes(id)) {
+    return { ok: false, msg: '\u9700\u5148\u901a\u5173\u4e0a\u4e00\u4e2a\u6d77\u57df' };
+  }
+  return { ok: true };
+}
+
 export function zoneTicketCost(zoneId) {
   const id = zoneId | 0;
   if (id === -1) return 0;
@@ -518,9 +533,8 @@ export function zoneTicketCost(zoneId) {
 export function chargeZoneTicket(meta, zoneId) {
   const id = zoneId | 0;
   if (id === -1) return { ok: true, meta, cost: 0 };
-  if (!(meta.unlockedZones || [0]).includes(id)) {
-    return { ok: false, meta, msg: '\u9700\u5148\u901a\u5173\u4e0a\u4e00\u4e2a\u6d77\u57df' };
-  }
+  const gate = canDepartZone(meta, id);
+  if (!gate.ok) return { ok: false, meta, msg: gate.msg };
   const cost = zoneTicketCost(id);
   if (cost == null) return { ok: false, meta, msg: '\u65e0\u6548\u6d77\u57df' };
   if (cost <= 0) return { ok: true, meta, cost: 0 };

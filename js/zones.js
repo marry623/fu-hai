@@ -1,6 +1,6 @@
 /** Zone table — palette + meta; geometry lives in seaMaps.js */
 
-import { SEA_MAPS, TUTORIAL_MAP, getSeaMap } from './seaMaps.js?v=31r';
+import { SEA_MAPS, TUTORIAL_MAP, getSeaMap } from './seaMaps.js?v=31y';
 
 function zoneFromMap(m) {
   return {

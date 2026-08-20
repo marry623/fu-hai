@@ -1,6 +1,6 @@
 /** Hub UI — backpack desk; 整备=3D船, 出港=海域地图, 仓库=格子 */
 
-import { ZONES } from './zones.js?v=31r';
+import { ZONES } from './zones.js?v=31y';
 import { SLOT_ORDER, SLOT_LABELS } from './slots.js?v=31r';
 import { getFishDef, FISH_CATALOG, RARITY, listShopBuyFishIds, shopBuyCost, BAIT_KINDS, rarityStars } from './fishCatalog.js?v=31u';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
@@ -40,9 +40,10 @@ import {
   unpackSupply,
   LOADOUT_BAG_SIZE,
   zoneTicketCost,
-} from './meta.js?v=31v';
+  canDepartZone,
+} from './meta.js?v=31y';
 import { HUB_SPOTS } from './hubIsland.js?v=31q';
-import { renderManualHtml } from './hubManual.js?v=31v';
+import { renderManualHtml } from './hubManual.js?v=31y';
 
 const TAB_TITLES = {
   prep: '整备',
@@ -168,6 +169,8 @@ export function createHub(deps) {
 
   function show() {
     root?.classList.remove('hidden');
+    const meta = deps.getMeta();
+    if (!meta?.tutorialDone) deps.setStartZone?.(-1);
     closeDrawer();
     render();
     deps.onHubShow?.();
@@ -290,6 +293,12 @@ export function createHub(deps) {
     if (els.drawerFrags) els.drawerFrags.textContent = String(meta.fragments);
     if (els.drawerBest) els.drawerBest.textContent = `${meta.bestDistance || 0}m`;
 
+    const hint = root?.querySelector('.hub-island-hint');
+    if (hint) {
+      hint.textContent = meta.tutorialDone
+        ? '\u70b9\u51fb\u5efa\u7b51\u8fdb\u5165\u529f\u80fd \u00b7 \u6e2f\u53e3\u51fa\u6e2f \u00b7 \u8239\u57d9\u6574\u5907 \u00b7 \u5e02\u96c6\u5546\u5e97 \u00b7 \u5c55\u9986\u56fe\u9274 \u00b7 \u56fe\u4e66\u9986\u6559\u7a0b'
+        : '\u5148\u5b8c\u6210\u7ec3\u4e60\u6e7e\u5f52\u822a\u624d\u80fd\u51fa\u6d45\u6ee9\u3002\u53ef\u5148\u770b\u5e02\u96c6\u3001\u4ed3\u5e93\u3001\u6574\u5907\u4e0e\u56fe\u4e66\u9986\u3002';
+    }
     renderDepartSummary(meta);
     ensureWarehouseChrome();
     renderLoadoutBackpack(meta, els.backpack);
@@ -585,13 +594,17 @@ export function createHub(deps) {
     if (!els.zones) return;
     const start = deps.getStartZone();
     els.zones.innerHTML = ZONES.map((z) => {
-      const unlocked = z.id === -1 || (meta.unlockedZones || [0]).includes(z.id);
+      const unlocked = canDepartZone(meta, z.id).ok;
       const selected = start === z.id;
       return `<div class="hub-zone ${selected ? 'selected' : ''} ${unlocked ? '' : 'locked'}">
         <button type="button" class="hub-zone-pick" data-pick-zone="${z.id}" ${unlocked ? '' : 'disabled'}>
           <strong><span class="hub-zone-swatch" style="background:${z.color || '#2ec4b6'}"></span>${z.name}</strong>
           <span>${(() => {
-            if (!unlocked) return z.id === -1 ? (z.unlockHint || '') : '\u901a\u5173\u4e0a\u5173\u89e3\u9501';
+            if (!unlocked) {
+              if (z.id === -1) return z.unlockHint || '';
+              if (!meta.tutorialDone) return '\u5148\u5b8c\u6210\u7ec3\u4e60\u6e7e\u5f52\u822a';
+              return '\u901a\u5173\u4e0a\u5173\u89e3\u9501';
+            }
             const feat = FEATURE_LABELS[z.feature] || z.unlockHint || '';
             const cost = zoneTicketCost(z.id);
             if (cost > 0) return feat ? `${feat} \u00b7 \u95e8\u7968 ${cost}` : `\u95e8\u7968 ${cost} \u788e\u7247`;
@@ -605,7 +618,7 @@ export function createHub(deps) {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const id = Number(btn.dataset.pickZone);
-        if (id !== -1 && !(meta.unlockedZones || []).includes(id)) return;
+        if (!canDepartZone(meta, id).ok) return;
         deps.setStartZone(id);
         render();
         deps.drawHubMap?.(els.mapCanvas);

@@ -295,7 +295,19 @@ export const SEA_MAPS = [
   }),
 ];
 
-/** Tiny safe tutorial sea — before formal zone 0 */
+/** Linear practice-bay beats: straight north corridor on x=0 */
+export const TUTORIAL_BEATS = {
+  spawn: { x: 0, z: 8, yaw: 0 },
+  fish: { x: 0, z: 28 },
+  salvage: { x: 0, z: 44 },
+  monster: { x: 0, z: 62 },
+  lighthouse: { x: 0, z: 90 },
+};
+
+/** Practice bay only — smaller evac ring; formal maps use EVAC_RADIUS */
+export const TUTORIAL_EVAC_RADIUS = 16;
+
+/** Narrow corridor tutorial sea — before formal zone 0 */
 export const TUTORIAL_MAP = makeSea({
   id: -1,
   name: '练习湾',
@@ -307,16 +319,22 @@ export const TUTORIAL_MAP = makeSea({
   feature: 'tutorial',
   unlockHint: '安全教学',
   cx: 0,
-  cz: 70,
-  rx: 135,
-  rz: 125,
-  n: 12,
-  jitter: 0.08,
-  spawn: { x: 0, z: 10, yaw: 0 },
-  lh: [{ x: 0, z: 72, id: 'tut-lh' }],
+  cz: 50,
+  rx: 52,
+  rz: 118,
+  n: 14,
+  jitter: 0.04,
+  spawn: { ...TUTORIAL_BEATS.spawn },
+  lh: [{ x: TUTORIAL_BEATS.lighthouse.x, z: TUTORIAL_BEATS.lighthouse.z, id: 'tut-lh' }],
   reefs: [],
-  islands: [{ x: -42, z: 48, r: 10, shape: 'round' }],
-  shoals: [{ x: 28, z: 36, rx: 12, rz: 5, yaw: 0.4 }],
+  islands: [
+    { x: -38, z: 32, r: 11, shape: 'round' },
+    { x: 38, z: 56, r: 10, shape: 'round' },
+  ],
+  shoals: [
+    { x: 22, z: 20, rx: 9, rz: 4, yaw: -0.2 },
+    { x: -20, z: 72, rx: 10, rz: 4, yaw: 0.3 },
+  ],
   spawns: [],
 });
 

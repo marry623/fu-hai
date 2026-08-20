@@ -13,7 +13,7 @@ import {
 import {
   createVortexField, updateVortices, findNearestVortex, createFishingController, CAST_AIM_DIST, tintVortexField, VORTEX_COUNT,
 } from './fishing.js?v=31c';
-import { createHazards } from './hazards.js?v=31c';
+import { createHazards } from './hazards.js?v=31z';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot,
@@ -22,27 +22,27 @@ import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS } from './
 import { createFishMesh } from './fishMeshes.js?v=31c';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=31c';
-import { getSeaMap, EVAC_HOLD } from './seaMaps.js?v=31r';
-import { getZone } from './zones.js?v=31r';
+import { getSeaMap, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=31y';
+import { getZone } from './zones.js?v=31y';
 import {
   loadMeta, settleRun, hullMaxForBoat, thrustMulForBoat, hasWeaponUnlock,
   discoverFish, discoverMonster, syncLoadoutSuppliesFromWarehouse, consumeLoadoutOnDepart,
   loadoutSuppliesPacked, clampBoatId, HULL_NAMES, equippedSkills, skillShopToVfx,
   skillLevel, scaledSkillCard, fishmongerGreenMul, ghostWakeCorrMul, talentLevel,
-  chargeZoneTicket,
-} from './meta.js?v=31v';
+  chargeZoneTicket, canDepartZone, saveMeta,
+} from './meta.js?v=31y';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=31h';
-import { createHub } from './hub.js?v=31v';
+import { createHub } from './hub.js?v=31y';
 import { createCoverScene } from './coverScene.js?v=28m';
 import { createHubIsland } from './hubIsland.js?v=31q';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=29q';
 import { createBpBoatStage } from './bpBoatStage.js?v=31d';
-import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=30h';
+import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=31y';
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=31g';
-import { createSkillVfx, SKILL_CARDS } from './vfx/skillVfx.js?v=31w';
-import { renderManualHtml } from './hubManual.js?v=31v';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=32c';
+import { renderManualHtml } from './hubManual.js?v=31y';
 import * as sfx from './audio.js?v=29y';
 
 const canvas = document.getElementById('c');
@@ -126,6 +126,8 @@ const ui = {
   oarL: document.getElementById('oar-l'),
   oarR: document.getElementById('oar-r'),
 };
+
+if (ui.tutGuide && ui.hud) ui.hud.appendChild(ui.tutGuide);
 
 let meta = loadMeta();
 let selectedBoat = clampBoatId(meta.unlocks, meta.loadout?.boatId || 'raft');
@@ -681,6 +683,53 @@ function mouseOnWater() {
 
 const seaWorld = createSeaWorld();
 scene.add(seaWorld.root);
+
+function createTutMarker() {
+  const g = new THREE.Group();
+  const dest = new THREE.Group();
+  const mat = (hex, opacity = 1) => new THREE.MeshBasicMaterial({
+    color: hex, transparent: opacity < 1, opacity, depthWrite: false, side: THREE.DoubleSide,
+  });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(3.4, 7.2, 40), mat(0x7dffc0, 0.95));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.16;
+  ring.userData.skipOutline = true;
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(3.2, 28), mat(0x7dffc0, 0.28));
+  disc.rotation.x = -Math.PI / 2;
+  disc.position.y = 0.12;
+  disc.userData.skipOutline = true;
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 7.5, 8), mat(0xb8ffe0, 0.9));
+  pole.position.y = 3.8;
+  pole.userData.skipOutline = true;
+  const arrow = new THREE.Mesh(new THREE.ConeGeometry(1.6, 3.6, 4), mat(0x7dffc0));
+  arrow.position.y = 8.4;
+  arrow.userData.skipOutline = true;
+  dest.add(ring, disc, pole, arrow);
+
+  const path = new THREE.Group();
+  const ribbon = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat(0x5cffb0, 0.32));
+  ribbon.rotation.x = -Math.PI / 2;
+  ribbon.position.y = 0.1;
+  ribbon.userData.skipOutline = true;
+  path.add(ribbon);
+  const chevrons = [];
+  for (let i = 0; i < 18; i++) {
+    const c = new THREE.Mesh(new THREE.ConeGeometry(1.05, 2.4, 3), mat(0xa8ffe0, 0.95));
+    c.rotation.x = Math.PI / 2;
+    c.position.y = 0.35;
+    c.userData.skipOutline = true;
+    c.visible = false;
+    path.add(c);
+    chevrons.push(c);
+  }
+  g.add(dest, path);
+  g.userData = { dest, path, ribbon, chevrons, ring };
+  g.visible = false;
+  scene.add(g);
+  return g;
+}
+
+const tutMarker = createTutMarker();
 const weatherFx = createWeatherFx(scene);
 
 const coverScene = createCoverScene(gradientMap);
@@ -815,42 +864,162 @@ function setPrompt(el, msg) {
 /** Practice bay — click-through narration cards */
 const TUT_STEPS = [
   {
-    title: '划桨',
-    body: 'A / D 交替划。同时按住直行。',
-    btn: '下一步',
+    title: '\u5212\u6868',
+    body: 'A / D \u4ea4\u66ff\u5212\u3002\u540c\u65f6\u6309\u4f4f\u76f4\u884c\uff0c\u5148\u5f80\u524d\u5f00\u4e00\u6bb5\u3002',
+    btn: '\u4e0b\u4e00\u6b65',
+    gate: 'paddle',
   },
   {
-    title: '钓鱼',
-    body: '靠近水圈，空格抛竿。指针进绿区再空格。',
-    btn: '下一步',
+    title: '\u9493\u9c7c',
+    body: '\u9760\u8fd1\u6c34\u5708\uff0c\u7a7a\u683c\u629b\u7aff\u3002\u6307\u9488\u8fdb\u7eff\u533a\u518d\u7a7a\u683c\u3002',
+    btn: '\u4e0b\u4e00\u6b65',
+    gate: 'fish',
   },
   {
-    title: '打捞',
-    body: '靠近木桶 / 箱子 / 瓶子，按 E。',
-    btn: '下一步',
+    title: '\u6253\u635e',
+    body: '\u9760\u8fd1\u6728\u6876 / \u7bb1\u5b50 / \u74f6\u5b50\uff0c\u6309 E \u6361\u8d77\u4e00\u4ef6\u3002',
+    btn: '\u4e0b\u4e00\u6b65',
+    gate: 'salvage',
   },
   {
-    title: '改装',
-    body: 'Tab 开背包。鱼只能绑到它的专属槽。',
-    btn: '下一步',
+    title: '\u6539\u88c5',
+    body: 'Tab \u5f00\u80cc\u5305\uff0c\u628a\u9c7c\u7ed1\u5230\u5b83\u7684\u4e13\u5c5e\u69fd\u3002',
+    btn: '\u4e0b\u4e00\u6b65',
+    gate: 'equip',
   },
   {
-    title: '打怪',
-    body: '1 霜矛 · 2 雷矛 · 3 陨石。鼠标选中海面再左键。',
-    btn: '下一步',
+    title: '\u6253\u602a',
+    body: '\u6309 1 / 2 / 3 \u5207\u6362\u6280\u80fd\u3002\u79fb\u52a8\u9f20\u6807\u9009\u4e2d\u6d77\u9762\uff0c\u5de6\u952e\u70b9\u51fb\u653b\u51fb\u3002',
+    btn: '\u4e0b\u4e00\u6b65',
+    gate: 'kill',
   },
   {
-    title: '归航',
-    body: `开进灯塔绿圈，停满 ${EVAC_HOLD} 秒回基地。本关不带出物资。`,
-    btn: '开始练习',
+    title: '\u5f52\u822a',
+    body: `\u5f00\u8fdb\u706f\u5854\u7eff\u5708\uff0c\u505c\u6ee1 ${EVAC_HOLD} \u79d2\u56de\u57fa\u5730\u3002\u672c\u5173\u4e0d\u5e26\u51fa\u7269\u8d44\u3002`,
+    btn: '\u53bb\u706f\u5854',
+    gate: 'evac',
   },
 ];
 
 const tut = {
   active: false,
-  step: 0, // 0..4 cards; after dismiss keep active for LH prompt
+  step: 0,
   dismissed: false,
+  gateMet: false,
+  salvaged: false,
+  evacWarnAt: 0,
 };
+
+function tutTargetForStep(step) {
+  const s = step | 0;
+  if (s <= 1) return TUTORIAL_BEATS.fish;
+  if (s === 2) return TUTORIAL_BEATS.salvage;
+  if (s === 3) return null;
+  if (s === 4) return TUTORIAL_BEATS.monster;
+  return TUTORIAL_BEATS.lighthouse;
+}
+
+function tutDistToTarget(step = tut.step) {
+  const t = tutTargetForStep(step);
+  if (!t) return 0;
+  return Math.hypot(paddle.state.x - t.x, paddle.state.z - t.z);
+}
+
+function tutStepBody(step) {
+  const dist = Math.round(tutDistToTarget(step));
+  switch (step | 0) {
+    case 0:
+      return `\u5411\u5317\u5212\u5230\u5149\u6807\u5904\uff08\u7ea6 ${dist} \u7c73\uff09\u00b7 A / D \u4ea4\u66ff\u5212 \u00b7 A / D \u540c\u65f6\u6309\u76f4\u884c`;
+    case 1:
+      return '\u811a\u4e0b\u6c34\u5708 \u00b7 \u7a7a\u683c\u629b\u7aff\uff0c\u7eff\u533a\u518d\u7a7a\u683c';
+    case 2:
+      return `\u7ee7\u7eed\u5411\u5317 \u00b7 \u9760\u8fd1\u6f02\u6d6e\u7269\u6309 E\uff08\u7ea6 ${dist} \u7c73\uff09`;
+    case 3:
+      return '\u6309 Tab \u6253\u5f00\u80cc\u5305 \u00b7 \u9009\u4e2d\u9c7c\u7ed1\u5230\u4e13\u5c5e\u69fd';
+    case 4:
+      return `\u6309 1 / 2 / 3 \u5207\u6362\u6280\u80fd\u3002\u79fb\u52a8\u9f20\u6807\u9009\u4e2d\u6d77\u9762\uff0c\u5de6\u952e\u70b9\u51fb\u653b\u51fb\uff08\u7ea6 ${dist} \u7c73\uff09`;
+    case 5:
+      return `\u5411\u5317\u5230\u706f\u5854\u7eff\u5708 \u00b7 \u505c\u6ee1 ${EVAC_HOLD} \u79d2\uff08\u7ea6 ${dist} \u7c73\uff09`;
+    default:
+      return '';
+  }
+}
+
+function applyTutorialWorld() {
+  if (!tut.active) return;
+  seaWorld.setTutorialReveal?.(tut.step, tut.dismissed);
+  hazards.setTutorialReveal?.(tut.step, tut.dismissed);
+}
+
+function tutHasBindableFish() {
+  return state.fishHold.some((f) => !!getFishDef(f.defId)?.slot);
+}
+
+function checkTutGate() {
+  if (!tut.active || tut.dismissed) return false;
+  const gate = TUT_STEPS[tut.step]?.gate;
+  const fish = TUTORIAL_BEATS.fish;
+  if (gate === 'paddle') {
+    return Math.hypot(paddle.state.x - fish.x, paddle.state.z - fish.z) <= 8;
+  }
+  if (gate === 'fish') return tutHasBindableFish();
+  if (gate === 'salvage') return !!tut.salvaged;
+  if (gate === 'equip') return (state.mods | 0) >= 1;
+  if (gate === 'kill') return (state.kills | 0) >= 1;
+  if (gate === 'evac') return true;
+  return false;
+}
+
+function updateTutMarker(time) {
+  const ud = tutMarker.userData;
+  if (!tut.active || tut.dismissed || tut.step === 3) {
+    tutMarker.visible = false;
+    return;
+  }
+  const target = tutTargetForStep(tut.step);
+  if (!target) {
+    tutMarker.visible = false;
+    return;
+  }
+  tutMarker.visible = true;
+  tutMarker.position.set(0, 0, 0);
+  ud.dest.position.set(target.x, 0, target.z);
+  const pulse = 0.92 + Math.sin(time * 5) * 0.12;
+  ud.dest.scale.setScalar(pulse);
+  if (ud.ring?.material) ud.ring.material.opacity = 0.7 + Math.sin(time * 6) * 0.25;
+
+  const ox = paddle.state.x;
+  const oz = paddle.state.z;
+  const dx = target.x - ox;
+  const dz = target.z - oz;
+  const dist = Math.hypot(dx, dz);
+  const yaw = Math.atan2(dx, dz);
+  const ribbon = ud.ribbon;
+  if (dist < 4) {
+    ribbon.visible = false;
+    ud.chevrons.forEach((c) => { c.visible = false; });
+    return;
+  }
+  ribbon.visible = true;
+  ribbon.position.set((ox + target.x) * 0.5, 0.1, (oz + target.z) * 0.5);
+  ribbon.rotation.set(-Math.PI / 2, yaw, 0);
+  ribbon.scale.set(2.6, dist, 1);
+  if (ribbon.material) ribbon.material.opacity = 0.22 + Math.sin(time * 4) * 0.08;
+
+  const step = 5.6;
+  const start = 3.2;
+  const end = dist - 4.5;
+  let n = 0;
+  for (let d = start; d < end && n < ud.chevrons.length; d += step) {
+    const c = ud.chevrons[n++];
+    const t = d / dist;
+    c.visible = true;
+    c.position.set(ox + dx * t, 0.45 + Math.sin(time * 6 + n) * 0.12, oz + dz * t);
+    c.rotation.set(-Math.PI / 2, yaw, 0);
+    c.scale.setScalar(1.05 + Math.sin(time * 7 + n) * 0.12);
+  }
+  for (; n < ud.chevrons.length; n++) ud.chevrons[n].visible = false;
+}
 
 function hideTutGuide() {
   ui.tutGuide?.classList.add('hidden');
@@ -866,10 +1035,14 @@ function renderTutGuide() {
     hideTutGuide();
     return;
   }
+  tut.gateMet = checkTutGate();
   if (ui.tutGuideStep) ui.tutGuideStep.textContent = `${tut.step + 1} / ${TUT_STEPS.length}`;
   if (ui.tutGuideTitle) ui.tutGuideTitle.textContent = s.title;
-  if (ui.tutGuideBody) ui.tutGuideBody.textContent = s.body;
-  if (ui.tutGuideNext) ui.tutGuideNext.textContent = s.btn;
+  if (ui.tutGuideBody) ui.tutGuideBody.textContent = tutStepBody(tut.step);
+  if (ui.tutGuideNext) {
+    ui.tutGuideNext.textContent = tut.gateMet ? s.btn : '\u5148\u5b8c\u6210\u6b64\u6b65';
+    ui.tutGuideNext.disabled = !tut.gateMet;
+  }
   ui.tutGuide.classList.remove('hidden');
   setPrompt(ui.prompt, '');
 }
@@ -878,34 +1051,57 @@ function resetTutorialGuide() {
   tut.active = (startZone | 0) === -1;
   tut.step = 0;
   tut.dismissed = false;
+  tut.gateMet = false;
+  tut.salvaged = false;
+  tut.evacWarnAt = 0;
+  tutMarker.visible = false;
+  applyTutorialWorld();
   if (tut.active) renderTutGuide();
   else hideTutGuide();
 }
 
 function onTutGuideNext() {
   if (!tut.active || tut.dismissed) return;
+  if (!checkTutGate()) {
+    renderTutGuide();
+    return;
+  }
   if (tut.step < TUT_STEPS.length - 1) {
     tut.step += 1;
+    if (tut.step === 3) {
+      state.backpackTab = 'catch';
+      if (state.fishHold.length) state.selectedFish = 0;
+    }
+    applyTutorialWorld();
     renderTutGuide();
     return;
   }
   tut.dismissed = true;
+  applyTutorialWorld();
   hideTutGuide();
-  setPrompt(ui.prompt, `开进灯塔绿圈，停 ${EVAC_HOLD} 秒归航`);
+  setPrompt(ui.prompt, `\u5f00\u8fdb\u706f\u5854\u7eff\u5708\uff0c\u505c ${EVAC_HOLD} \u79d2\u5f52\u822a`);
 }
 
 function tickTutorialGuide(_dt) {
-  if (!tut.active) return;
+  if (!tut.active) {
+    tutMarker.visible = false;
+    return;
+  }
+  updateTutMarker(performance.now() * 0.001);
   if (!tut.dismissed) {
-    // Card owns the UI; keep prompt clear
+    const met = checkTutGate();
+    if (ui.tutGuideBody) ui.tutGuideBody.textContent = tutStepBody(tut.step);
+    if (met !== tut.gateMet) renderTutGuide();
+    else if (ui.tutGuideNext) ui.tutGuideNext.disabled = !met;
     setPrompt(ui.prompt, '');
     return;
   }
   const ev = hazards.getEvacStatus?.();
   if (ev?.active) {
-    setPrompt(ui.prompt, `灯塔归航 · 再停 ${ev.remain.toFixed(1)} 秒`);
+    setPrompt(ui.prompt, `\u706f\u5854\u5f52\u822a \u00b7 \u518d\u505c ${ev.remain.toFixed(1)} \u79d2`);
   } else {
-    setPrompt(ui.prompt, `开进灯塔绿圈，停 ${EVAC_HOLD} 秒归航`);
+    const dist = Math.round(tutDistToTarget(5));
+    setPrompt(ui.prompt, `\u5f00\u8fdb\u706f\u5854\u7eff\u5708\uff0c\u505c ${EVAC_HOLD} \u79d2\u5f52\u822a\uff08\u7ea6 ${dist} \u7c73\uff09`);
   }
 }
 
@@ -1058,6 +1254,12 @@ const fishing = createFishingController({
     hideFishingFx();
   },
   onCatch(fish) {
+    if (tut.active && !getFishDef(fish.defId)?.slot) {
+      for (let i = 0; i < 12; i++) {
+        const t = pickFishForZone(0, 'crude');
+        if (getFishDef(t.defId)?.slot) { fish = t; break; }
+      }
+    }
     state.fishHold.push(fish);
     sfx.fishCatch(fish.rarity);
     state.selectedFish = state.fishHold.length - 1;
@@ -1146,11 +1348,18 @@ function trySalvage() {
   obj.visible = false;
   obj.userData.collected = true;
   const r = rollSalvage(obj.userData.type);
-  if (r.type === 'trap') {
+  if (tut.active && r.type === 'event') {
+    grantBait(1, 'crude');
+    sfx.collect();
+    showToast('\u6253\u635e\u5230\u9c7c\u9972\uff08\u6559\u5b66\uff09');
+    updateInv();
+    tut.salvaged = true;
+  } else if (r.type === 'trap') {
     if (tut.active) {
       grantBait(1, 'crude');
-      showToast('打捞到鱼饵（教学）');
+      showToast('\u6253\u635e\u5230\u9c7c\u9972\uff08\u6559\u5b66\uff09');
       updateInv();
+      tut.salvaged = true;
     } else {
       applyDamage(20, '箱型海性');
     }
@@ -1167,12 +1376,15 @@ function trySalvage() {
     sfx.collect();
     showToast(`打捞 ${r.name}×${r.amount}`);
     updateInv();
+    if (tut.active) tut.salvaged = true;
   }
-  setTimeout(() => {
-    respawnFlotsam(obj, obj.userData.id);
-    obj.position.z = paddle.state.z + 40 + Math.random() * 60;
-    obj.position.x = (Math.random() - 0.5) * 40;
-  }, 8000);
+  if (!tut.active) {
+    setTimeout(() => {
+      respawnFlotsam(obj, obj.userData.id);
+      obj.position.z = paddle.state.z + 40 + Math.random() * 60;
+      obj.position.x = (Math.random() - 0.5) * 40;
+    }, 8000);
+  }
 }
 
 function resolveEvent(which) {
@@ -1275,6 +1487,10 @@ function categoryLabel(cat) {
 }
 
 function setBackpackOpen(open) {
+  if (!open && tut.active && tut.step === 3 && (state.mods | 0) < 1) {
+    showToast('\u5148\u5b8c\u6210\u7ed1\u9c7c\u6539\u88c5');
+    return;
+  }
   state.fishPanelOpen = !!open;
   ui.backpack.classList.toggle('hidden', !open);
   ui.backpack.setAttribute('aria-hidden', open ? 'false' : 'true');
@@ -1770,6 +1986,7 @@ function finishRun(outcome) {
   state.started = false;
   tut.active = false;
   tut.dismissed = true;
+  tutMarker.visible = false;
   hideTutGuide();
   phase = 'settle';
   ui.lighthouseModal?.classList.add('hidden');
@@ -1807,6 +2024,16 @@ ${storeNote}`;
   if (ui.settleTitle) ui.settleTitle.textContent = title;
   if (ui.settleStats) ui.settleStats.textContent = stats;
   ui.sinkStats.textContent = stats;
+  if (ui.btnRetry) {
+    ui.btnRetry.textContent = wasTutorial && !success
+      ? '\u56de\u6e2f\u53e3\u770b\u770b'
+      : '\u8fd4\u56de\u57fa\u5730';
+  }
+  if (ui.btnSettleHub) {
+    ui.btnSettleHub.textContent = wasTutorial && success
+      ? '\u8fdb\u5165\u6e2f\u53e3'
+      : '\u8fd4\u56de\u57fa\u5730';
+  }
   if (outcome === 'sink') {
     ui.sinkModal.classList.remove('hidden');
     ui.settleModal?.classList.add('hidden');
@@ -1822,6 +2049,19 @@ function onSink() {
   finishRun('sink');
 }
 
+function maybeHubIntro() {
+  if (!meta.tutorialDone || meta.hubIntroDone) return;
+  meta = { ...meta, hubIntroDone: true };
+  saveMeta(meta);
+  const lines = [
+    '\u6574\u5907\uff1a\u7ed1\u9c7c\u3001\u643a\u5e26\u997c\u4e0e\u4fee\u7406',
+    '\u4ed3\u5e93\uff1a\u5b58\u9c7c\u4e0e\u7269\u8d44',
+    '\u5e02\u96c6\uff1a\u7528\u6d77\u56fe\u788e\u7247\u4e70\u4e1c\u897f',
+    '\u51fa\u6e2f\uff1a\u6d45\u6ee9\u514d\u8d39\uff0c\u540e\u7eed\u6d77\u57df\u6bcf\u5c40\u6263\u95e8\u7968',
+  ];
+  lines.forEach((msg, i) => setTimeout(() => showToast(msg), 450 + i * 2300));
+}
+
 function openHub() {
   phase = 'hub';
   state.started = false;
@@ -1830,8 +2070,10 @@ function openHub() {
   ui.sinkModal.classList.add('hidden');
   ui.settleModal?.classList.add('hidden');
   ui.lighthouseModal?.classList.add('hidden');
+  if (!meta.tutorialDone) startZone = -1;
   setWorldMode('hub');
   hub?.show();
+  maybeHubIntro();
 }
 
 function openCover() {
@@ -1846,6 +2088,12 @@ function openCover() {
 function startRun(fromCheckpoint = false) {
   const isTut = (startZone | 0) === -1;
   if (!fromCheckpoint && !isTut) {
+    const gate = canDepartZone(meta, startZone);
+    if (!gate.ok) {
+      showToast(gate.msg);
+      startZone = -1;
+      return;
+    }
     const ticket = chargeZoneTicket(meta, startZone);
     if (!ticket.ok) {
       showToast(ticket.msg);
@@ -1876,8 +2124,11 @@ function startRun(fromCheckpoint = false) {
   lastBoatZ = sp.z;
 
   state.started = true;
-  if (!fromCheckpoint) state.runSkills = equippedSkills(meta);
-  else if (!Array.isArray(state.runSkills) || !state.runSkills.length) {
+  if (!fromCheckpoint) {
+    state.runSkills = isTut
+      ? ['skillFrost', 'skillStorm', 'skillMeteor']
+      : equippedSkills(meta);
+  } else if (!Array.isArray(state.runSkills) || !state.runSkills.length) {
     state.runSkills = equippedSkills(meta);
   }
   state.runDistance = fromCheckpoint ? state.runDistance : 0;
@@ -2203,6 +2454,7 @@ function drawMinimap() {
     ctx.stroke();
   }
   for (const lh of (seaWorld.getLighthouses() || [])) {
+    if (!lh.visible) continue;
     const mx = cx + (lh.position.x - paddle.state.x) * scale;
     const my = cy - (lh.position.z - paddle.state.z) * scale;
     if (mx > 2 && mx < w - 2 && my > 2 && my < h - 2) {
@@ -2219,6 +2471,27 @@ function drawMinimap() {
         ctx.textAlign = 'center';
         ctx.fillText(ev.remain.toFixed(1), mx, my - 8);
         ctx.textAlign = 'left';
+      }
+    }
+  }
+  if (tut.active && !tut.dismissed && tut.step !== 3) {
+    const target = tutTargetForStep(tut.step);
+    if (target) {
+      const mx = cx + (target.x - paddle.state.x) * scale;
+      const my = cy - (target.z - paddle.state.z) * scale;
+      if (mx > 2 && mx < w - 2 && my > 2 && my < h - 2) {
+        const pulse = 7 + Math.sin(performance.now() * 0.006) * 2;
+        ctx.strokeStyle = '#7dffc0';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(mx, my, pulse, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(mx - 5, my);
+        ctx.lineTo(mx + 5, my);
+        ctx.moveTo(mx, my - 5);
+        ctx.lineTo(mx, my + 5);
+        ctx.stroke();
       }
     }
   }
@@ -2513,6 +2786,14 @@ function tick() {
         finishRun('return');
       },
       cutWrap: equippedRunCard(state.weapon).id === 'thunder',
+      blockEvac: tut.active && !tut.dismissed,
+      onEvacBlocked: () => {
+        const t = performance.now();
+        if (t - tut.evacWarnAt > 2500) {
+          tut.evacWarnAt = t;
+          showToast('\u5148\u5b8c\u6210\u6559\u5b66\u6b65\u9aa4\u624d\u80fd\u5f52\u822a');
+        }
+      },
     });
 
     tickTutorialGuide(dt);
@@ -2719,7 +3000,7 @@ function applySkillHit(card, origin, dir, range, impact, extra = {}) {
   if (card.id === 'ice') {
     const front = extra.front ?? range;
     let killed = 0;
-    const stunned = hazards.stunAlongLine(origin, lineYaw, front, card.stun || 1.6, clockT, 3.4, dmg, (id) => {
+    const stunned = hazards.stunAlongLine(origin, lineYaw, front, card.stun || 1.6, clockT, 3.8, dmg, (id) => {
       killed++;
       onKill(id);
     }, extra.hitEnemies);
@@ -2778,7 +3059,7 @@ function tryCastSkill() {
     showToast('太近了');
     return;
   }
-  if (dist > card.range + 0.4) {
+  if (dist > card.range + AIM_HEAD_EXTRA + 0.4) {
     showToast('超出施放范围');
     return;
   }

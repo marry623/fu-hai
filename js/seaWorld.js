@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
-import { getSeaMap, constrainToPoly, pointInPoly, EVAC_RADIUS } from './seaMaps.js?v=31r';
+import { getSeaMap, constrainToPoly, pointInPoly, EVAC_RADIUS, TUTORIAL_BEATS, TUTORIAL_EVAC_RADIUS } from './seaMaps.js?v=31y';
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { scatterBiomeDecor, updateBiomeDecor, jitterRockCluster } from './biomeDecor.js?v=30h';
 
@@ -104,6 +104,83 @@ function makeLighthouse(gm, biome) {
   g.userData.evacRing = ring;
   g.userData.evacRingMat = ringMat;
 
+  return g;
+}
+
+/** Practice bay only — taller, brighter, gold evac ring; hidden until tutorial step 5 */
+function makeTutorialLighthouse(gm) {
+  const g = new THREE.Group();
+  const S = 3.6;
+  const stone = 0x5a6878;
+  const stripe = 0xffc857;
+  const lamp = 0xfff8c0;
+  const cream = 0xfefae0;
+  const base = M(new THREE.CylinderGeometry(1.5 * S, 1.7 * S, 0.9 * S, 6), stone, gm, 1.04);
+  base.position.y = 0.45 * S;
+  g.add(base);
+  const stripes = [
+    [cream, 1.05], [stripe, 0.98], [cream, 0.9],
+    [stripe, 0.84], [cream, 0.78], [stripe, 0.72],
+  ];
+  let y = 0.9 * S;
+  for (const [col, r] of stripes) {
+    const ring = M(new THREE.CylinderGeometry(r * 0.92 * S, r * S, 1.55 * S, 8), col, gm, 1.04);
+    ring.position.y = y + 0.78 * S;
+    g.add(ring);
+    y += 1.5 * S;
+  }
+  const cap = M(new THREE.ConeGeometry(1.05 * S, 1.15 * S, 8), stripe, gm, 1.06);
+  cap.position.y = y + 0.65 * S;
+  g.add(cap);
+  const beaconY = y + 0.4 * S;
+  const lightCore = new THREE.Mesh(
+    new THREE.SphereGeometry(1.65 * S, 12, 10),
+    new THREE.MeshBasicMaterial({ color: lamp })
+  );
+  lightCore.position.y = beaconY;
+  lightCore.userData.skipOutline = true;
+  g.add(lightCore);
+  const lightHalo = new THREE.Mesh(
+    new THREE.SphereGeometry(3.2 * S, 12, 10),
+    new THREE.MeshBasicMaterial({ color: lamp, transparent: true, opacity: 0.45, depthWrite: false })
+  );
+  lightHalo.position.y = beaconY;
+  lightHalo.userData.skipOutline = true;
+  g.add(lightHalo);
+  const beam = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.7 * S, 2.4 * S, 70 * S, 8, 1, true),
+    new THREE.MeshBasicMaterial({
+      color: lamp, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false,
+    })
+  );
+  beam.position.y = beaconY + 34 * S;
+  beam.userData.skipOutline = true;
+  g.add(beam);
+  const point = new THREE.PointLight(lamp, 7, 1200, 1.2);
+  point.position.y = beaconY;
+  g.add(point);
+  g.userData.beacon = { core: lightCore, halo: lightHalo, beam, point };
+  g.userData.beaconY = beaconY;
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0xffe066,
+    transparent: true,
+    opacity: 0.32,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(TUTORIAL_EVAC_RADIUS * 0.9, TUTORIAL_EVAC_RADIUS, 48),
+    ringMat
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.08;
+  ring.userData.skipOutline = true;
+  g.add(ring);
+  g.userData.evacRing = ring;
+  g.userData.evacRingMat = ringMat;
+  g.userData.isTutorialLh = true;
+  g.userData.evacRadius = TUTORIAL_EVAC_RADIUS;
+  g.visible = false;
   return g;
 }
 
@@ -224,6 +301,8 @@ export function createSeaWorld() {
   const root = new THREE.Group();
   root.name = 'seaWorld';
   let current = null;
+  let tutVortices = null;
+  let tutFlotsam = null;
   /** @type {THREE.Object3D[]} */
   let lighthouses = [];
   /** @type {THREE.Group|null} */
@@ -299,7 +378,9 @@ export function createSeaWorld() {
 
     lighthouses = [];
     for (const lh of map.lighthouses) {
-      const mesh = makeLighthouse(gradientMap, biome);
+      const mesh = (map.id === -1)
+        ? makeTutorialLighthouse(gradientMap)
+        : makeLighthouse(gradientMap, biome);
       mesh.position.set(lh.x, 0, lh.z);
       mesh.userData.checkpoint = lh.id;
       mesh.userData.lhId = lh.id;
@@ -381,35 +462,29 @@ export function createSeaWorld() {
     };
 
     if (tutorial) {
-      // One school near spawn + barrel / package / drift bottle for teaching
+      const beats = TUTORIAL_BEATS;
       vortexList?.forEach((v, i) => {
         if (i === 0) {
-          v.position.set(current.spawn.x + 12, 0, current.spawn.z + 22);
-          v.visible = true;
+          v.position.set(beats.fish.x, 0, beats.fish.z);
+          v.visible = false;
         } else {
           v.visible = false;
         }
       });
-      const pickByType = (type) => flotsamList?.find((f) => f.userData?.type === type);
-      const picks = [
-        pickByType('barrel'),
-        pickByType('package'),
-        pickByType('bottle'),
-      ].filter(Boolean);
-      // Fallback if a type is missing from the field
-      while (picks.length < 3 && flotsamList?.length) {
-        const next = flotsamList.find((f) => !picks.includes(f));
-        if (!next) break;
-        picks.push(next);
-      }
+      const barrel = flotsamList?.find((f) => f.userData?.type === 'barrel')
+        || flotsamList?.[0];
       flotsamList?.forEach((f) => { f.visible = false; });
-      picks.forEach((f, i) => {
-        f.position.set(current.spawn.x - 8 - i * 7, 0, current.spawn.z + 16 + i * 5);
-        f.visible = true;
-        if (f.userData) f.userData.collected = false;
-      });
+      if (barrel) {
+        barrel.position.set(beats.salvage.x, 0, beats.salvage.z);
+        barrel.visible = false;
+        if (barrel.userData) barrel.userData.collected = false;
+      }
+      tutVortices = vortexList || null;
+      tutFlotsam = barrel ? [barrel] : null;
       return;
     }
+    tutVortices = null;
+    tutFlotsam = null;
 
     // Grid + jitter so schools cover the whole sea
     if (vortexList?.length) {
@@ -467,12 +542,34 @@ export function createSeaWorld() {
     mat.color.setHex(active ? 0xffe066 : 0x7dffc0);
   }
 
+  function setTutorialReveal(step, dismissed = false) {
+    const s = step | 0;
+    tutVortices?.forEach((v, i) => {
+      if (i === 0) v.visible = s >= 1;
+      else v.visible = false;
+    });
+    tutFlotsam?.forEach((f) => {
+      if (f.userData?.collected) {
+        f.visible = false;
+        return;
+      }
+      f.visible = s >= 2;
+    });
+    for (const lh of lighthouses) {
+      if (!lh.userData.isTutorialLh) continue;
+      const show = dismissed && s >= 5;
+      lh.visible = show;
+      if (lh.userData.evacRing) lh.userData.evacRing.visible = show;
+    }
+  }
+
   return {
     root,
     load,
     reset,
     constrainBoat,
     scatterProps,
+    setTutorialReveal,
     updateBeacons,
     setEvacRingActive,
     updateDecor: (time) => updateBiomeDecor(decorRoot, time),
