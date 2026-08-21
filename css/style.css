@@ -2510,6 +2510,7 @@ html, body {
 }
 .hub-item-card,
 .codex-entry {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3091,11 +3092,12 @@ html, body {
   scrollbar-gutter: auto;
 }
 .hub-drawer .codex-entry {
+  position: relative;
   height: auto;
   min-height: 0;
   padding: 5px 5px 8px;
   gap: 3px;
-  overflow: visible;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3299,6 +3301,23 @@ button.hub-bp-card {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+.hub-shop-bulk {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 2px;
+}
+.hub-shop-bulk-btn {
+  flex-shrink: 0;
+}
+.hub-shop-bulk-hint {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6a5a48;
+}
 .hub-shop-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3379,6 +3398,8 @@ button.hub-bp-card {
   border-radius: 4px;
   background: #fff8ee;
   color: #1a1008;
+  flex: 0 0 auto;
+  align-self: stretch;
 }
 .hub-shop-detail strong {
   display: block;
@@ -3395,6 +3416,45 @@ button.hub-bp-card {
 .hub-shop-detail-price {
   color: #c45c1a !important;
   font-weight: 900 !important;
+}
+.hub-shop-detail img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+.hub-bm-result {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+}
+.hub-bm-result-face {
+  flex: 0 0 76px;
+  width: 76px;
+  height: 76px;
+  border: 2px solid #1a1008;
+  border-radius: 3px;
+  background: #3a3e42;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.hub-bm-result-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.hub-bm-result-body {
+  flex: 1;
+  min-width: 0;
+}
+.hub-drawer #hub-fs-left-blackmarket {
+  overflow: auto;
+}
+.hub-drawer #hub-bm-detail {
+  flex: 0 0 auto;
+  margin-top: 4px;
 }
 .hub-shop-act {
   margin-top: 8px;
@@ -3512,6 +3572,7 @@ button.hub-bp-card {
   max-height: 360px;
 }
 .codex-entry {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3770,3 +3831,14 @@ button.hub-bp-card {
   .cover-actions { animation: none; opacity: 1; }
 }
 
+
+
+.hub-relic-swatch {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(145deg, #2a2430, #1a1520 55%, #4a2060);
+}
+.codex-entry.relic-hidden .codex-entry-name { color: #a78bfa; }
+.hub-bm-grid { display: contents; }

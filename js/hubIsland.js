@@ -480,11 +480,49 @@ function buildLibrary(gradientMap) {
   return tagHit(g, 'library');
 }
 
+
+/** 黑市鉴宝 — 暗色摊棚 */
+function buildBlackMarket(gradientMap) {
+  const g = new THREE.Group();
+  const pad = M(new THREE.CylinderGeometry(2.4, 2.6, 0.22, 8), 0x3a342c, gradientMap, 1.03);
+  pad.position.y = 0.15;
+  g.add(pad);
+  const stall = M(new THREE.BoxGeometry(2.8, 1.1, 1.4), 0x2a2430, gradientMap);
+  stall.position.set(0, 0.85, 0.2);
+  g.add(stall);
+  for (const x of [-1.15, 1.15]) {
+    const post = M(new THREE.CylinderGeometry(0.08, 0.09, 2.4, 5), 0x1a1520, gradientMap, 1.12);
+    post.position.set(x, 1.5, -0.4);
+    g.add(post);
+  }
+  const awning = M(new THREE.BoxGeometry(3.0, 0.12, 2.0), 0x4a2060, gradientMap, 1.05);
+  awning.position.set(0, 2.55, 0.1);
+  awning.rotation.x = -0.12;
+  g.add(awning);
+  const stripe = M(new THREE.BoxGeometry(3.05, 0.08, 0.35), 0xc9a227, gradientMap, 1.08);
+  stripe.position.set(0, 2.62, 0.9);
+  g.add(stripe);
+  const lamp = M(new THREE.SphereGeometry(0.22, 6, 6), 0xffb347, gradientMap, 1.15);
+  lamp.position.set(0, 2.2, 0.85);
+  g.add(lamp);
+  const chest = M(new THREE.BoxGeometry(0.9, 0.55, 0.6), 0x1a1008, gradientMap, 1.1);
+  chest.position.set(-0.7, 0.55, 1.0);
+  g.add(chest);
+  const jar = M(new THREE.CylinderGeometry(0.22, 0.26, 0.55, 6), 0x6a40a0, gradientMap, 1.12);
+  jar.position.set(0.85, 0.7, 0.95);
+  g.add(jar);
+  const sign = M(new THREE.BoxGeometry(1.4, 0.45, 0.08), 0x2a1838, gradientMap, 1.1);
+  sign.position.set(0, 1.55, 1.0);
+  g.add(sign);
+  return tagHit(g, 'blackmarket');
+}
+
 export const HUB_SPOTS = [
   { id: 'depart', label: '出港', sub: '港口码头', color: '#2ec4b6' },
   { id: 'prep', label: '整备', sub: '船坞工棚', color: '#e8a04a' },
   { id: 'warehouse', label: '仓库', sub: '物资库房', color: '#ffd24a' },
   { id: 'shop', label: '商店', sub: '海岛市集', color: '#ff6b9d' },
+  { id: 'blackmarket', label: '黑市', sub: '东岛鉴宝', color: '#9b59b6' },
   { id: 'codex', label: '图鉴', sub: '鱼种展馆', color: '#a78bfa' },
   { id: 'library', label: '图书馆', sub: '新手教程', color: '#c45c3a' },
 ];
@@ -622,12 +660,50 @@ export function createHubIsland(gradientMap) {
   library.rotation.y = 0.5;
   root.add(library);
 
+  // East satellite isle — room for black market (not crowded on main ring)
+  const eastX = 21.5;
+  const eastZ = 0.5;
+  const eastSand = M(new THREE.CylinderGeometry(5.2, 5.8, 0.9, 7), 0xf0e0c0, gradientMap, 1.03);
+  eastSand.position.set(eastX, 0.3, eastZ);
+  root.add(eastSand);
+  const eastRim = M(new THREE.CylinderGeometry(4.4, 4.9, 0.3, 7), 0xf5ead0, gradientMap, 1.02);
+  eastRim.position.set(eastX, 0.75, eastZ);
+  root.add(eastRim);
+  const eastGrass = M(new THREE.CylinderGeometry(3.8, 4.2, 0.5, 7), 0x5cb85c, gradientMap, 1.03);
+  eastGrass.position.set(eastX, 1.1, eastZ);
+  root.add(eastGrass);
+  const eastHill = M(new THREE.ConeGeometry(1.6, 1.2, 5), 0x4caf50, gradientMap, 1.05);
+  eastHill.position.set(eastX + 1.2, 1.9, eastZ - 1.4);
+  root.add(eastHill);
+
+  // Boardwalk bridge: main shore → east isle
+  for (let i = 0; i < 5; i++) {
+    const plank = M(new THREE.BoxGeometry(1.15, 0.14, 1.35), i % 2 ? 0xb8895a : 0xa67c52, gradientMap, 1.04);
+    plank.position.set(12.4 + i * 1.2, 0.95, 0.2);
+    root.add(plank);
+  }
+  for (const z of [-0.75, 0.95]) {
+    for (let i = 0; i < 3; i++) {
+      const post = M(new THREE.CylinderGeometry(0.08, 0.09, 1.1, 5), 0x7a5230, gradientMap, 1.12);
+      post.position.set(13.2 + i * 2.0, 0.85, z);
+      root.add(post);
+    }
+  }
+
+  const blackmarket = buildBlackMarket(gradientMap);
+  blackmarket.position.set(eastX, 1.05, eastZ + 0.35);
+  blackmarket.rotation.y = -1.15;
+  root.add(blackmarket);
+
   // Lots of palms
   const palmSpots = [
-    [-5, 1.4, 7, 1], [5, 1.4, 7.5, 0.95], [-10, 1.4, -1, 1.15], [10, 1.4, 0, 1],
+    [-5, 1.4, 7, 1], [5, 1.4, 7.5, 0.95], [-10, 1.4, -1, 1.15],
     [-6, 1.4, -6, 0.9], [6, 1.4, -6.5, 1.05], [-3, 1.4, 4, 0.8], [3.5, 1.4, 3.5, 0.85],
     [-8, 1.4, 5, 0.9], [8.5, 1.4, 5.5, 0.95], [0, 1.9, -4.5, 0.75], [-2, 1.4, -7, 0.85],
-    [4, 1.4, -8, 0.9], [-11, 1.3, 3, 1.1], [11, 1.3, 3, 1.05],
+    [4, 1.4, -8, 0.9], [-11, 1.3, 3, 1.1],
+    // east isle palms
+    [eastX - 2.2, 1.25, eastZ + 2.0, 0.85], [eastX + 2.4, 1.25, eastZ - 1.8, 0.95],
+    [eastX + 1.8, 1.25, eastZ + 2.2, 0.75],
   ];
   for (const [x, y, z, s] of palmSpots) {
     const p = palm(gradientMap, s);
@@ -661,6 +737,9 @@ export function createHubIsland(gradientMap) {
     [-12, 0.4, 6, 1.2], [12, 0.35, 5, 1.4], [-13, 0.3, -4, 1.1], [13, 0.35, -3, 1.3],
     [-7, 0.4, 11, 0.9], [7, 0.35, 11.5, 1.0], [0, 0.3, 13, 1.2], [-10, 0.35, 9, 0.8],
     [10, 0.4, 9, 0.85], [2, 0.3, -12, 1.1], [-4, 0.35, -11, 0.95],
+    // east isle shore
+    [eastX - 3.5, 0.35, eastZ + 3.2, 0.9], [eastX + 3.8, 0.3, eastZ + 1.5, 1.1],
+    [eastX + 2.5, 0.35, eastZ - 3.5, 0.95], [eastX - 4.0, 0.3, eastZ - 2.0, 0.85],
   ];
   for (const [x, y, z, s] of rockSpots) {
     const r = rock(gradientMap, s);
@@ -676,7 +755,7 @@ export function createHubIsland(gradientMap) {
   }
 
   // Tiny sailboats offshore
-  for (const [x, z, rot] of [[-16, 8, 0.5], [17, 6, -0.8], [-14, -6, 1.2]]) {
+  for (const [x, z, rot] of [[-16, 8, 0.5], [28, 7, -0.8], [-14, -6, 1.2], [26, -5, 0.4]]) {
     const boat = new THREE.Group();
     const h = M(new THREE.BoxGeometry(1.4, 0.35, 0.5), 0x2c3a5a, gradientMap, 1.1);
     h.position.y = 0.15;
@@ -727,6 +806,7 @@ export function createHubIsland(gradientMap) {
     shop: new THREE.Object3D(),
     codex: new THREE.Object3D(),
     library: new THREE.Object3D(),
+    blackmarket: new THREE.Object3D(),
   };
   anchors.depart.position.set(0, 4.8, 9.5);
   anchors.prep.position.set(-8.5, 5.2, 1.2);
@@ -734,9 +814,10 @@ export function createHubIsland(gradientMap) {
   anchors.shop.position.set(8.5, 4.8, 1.5);
   anchors.codex.position.set(0, 5.6, -8.2);
   anchors.library.position.set(-6.0, 5.1, -3.8);
+  anchors.blackmarket.position.set(eastX, 4.4, eastZ + 0.35);
   Object.values(anchors).forEach((a) => root.add(a));
 
-  const hits = [port, yard, warehouse, shop, codex, library];
+  const hits = [port, yard, warehouse, shop, blackmarket, codex, library];
 
   function setHighlight(id) {
     hits.forEach((h) => {
@@ -769,9 +850,10 @@ export function createHubIsland(gradientMap) {
     const oy = root.position.y;
     const oz = root.position.z;
     const sway = Math.sin(t * 0.12) * 0.6;
+    // Slightly east + pulled back so main island + east black-market isle both read
     return {
-      pos: new THREE.Vector3(ox + 1 + sway * 0.3, oy + 14, oz + 24),
-      look: new THREE.Vector3(ox, oy + 2.5, oz + 1),
+      pos: new THREE.Vector3(ox + 4 + sway * 0.3, oy + 15.5, oz + 27),
+      look: new THREE.Vector3(ox + 3.5, oy + 2.2, oz + 0.5),
     };
   }
 

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { addOutline, toonMat, hash2 } from './stylekit.js';
+import { rollSalvageTyped } from './salvageTables.js?v=35d';
 
 /**
  * Floating salvage: black package / barrel / drift bottle
@@ -241,44 +242,9 @@ export function respawnFlotsam(obj, index) {
 }
 
 /**
- * Resolve salvage outcome.
- * @returns {{ type: 'supply'|'trap'|'event', supply?: string, amount?: number, name?: string, event?: object }}
+ * Resolve salvage outcome by flotsam type + zone.
+ * @returns {{ type: string, ... }}
  */
-export function rollSalvage(flotsamType) {
-  const r = Math.random();
-  let trapW = 0.18;
-  let eventW = 0.18;
-  if (flotsamType === 'bottle' || flotsamType === 'bubble') {
-    eventW = 0.35;
-    trapW = 0.1;
-  }
-  if (flotsamType === 'barrel') {
-    trapW = 0.08;
-    eventW = 0.12;
-  }
-  if (flotsamType === 'package') {
-    trapW = 0.28;
-  }
-
-  if (r < trapW) {
-    return { type: 'trap', damage: 20 };
-  }
-  if (r < trapW + eventW) {
-    return {
-      type: 'event',
-      event: {
-        title: '漂流瓶',
-        a: { label: '收下修理剂', key: 'repair' },
-        b: { label: '换取鱼饵×2', key: 'bait' },
-      },
-    };
-  }
-
-  const supplies = [
-    { supply: 'plank', name: '木板', amount: 1 },
-    { supply: 'bait', name: '鱼饵', amount: 1 + Math.floor(Math.random() * 2) },
-    { supply: 'repair', name: '修补剂', amount: 1 },
-  ];
-  const s = supplies[Math.floor(Math.random() * supplies.length)];
-  return { type: 'supply', ...s };
+export function rollSalvage(flotsamType, zoneId = 0) {
+  return rollSalvageTyped(flotsamType, zoneId);
 }

@@ -45,6 +45,7 @@ export function applyLoadoutToRun(boat, state, meta, gradientMap) {
     plank,
     repair,
     paste,
+    relics: [],
   };
 
   // Clear mounts

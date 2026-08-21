@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>浮骸 · 海上肉鸽</title>
-  <link rel="stylesheet" href="css/style.css?v=34b" />
+  <link rel="stylesheet" href="css/style.css?v=35g" />
 </head>
 <body>
   <div id="game-root">
@@ -96,6 +96,10 @@
             <button type="button" class="bp-tab" data-tab="supplies">
               <span class="bp-tab-icon bp-ico-box"></span>
               <span class="bp-tab-label">物资</span>
+            </button>
+            <button type="button" class="bp-tab" data-tab="relics">
+              <span class="bp-tab-icon bp-ico-box"></span>
+              <span class="bp-tab-label">宝物</span>
             </button>
             <p class="bp-nav-hint">Tab 关闭</p>
           </aside>
@@ -269,6 +273,10 @@
                   <span class="bp-tab-icon bp-ico-slot"></span>
                   <span class="bp-tab-label">怪物</span>
                 </button>
+                <button type="button" class="bp-tab" data-codex-tab="relic">
+                  <span class="bp-tab-icon bp-ico-box"></span>
+                  <span class="bp-tab-label">宝物</span>
+                </button>
               </nav>
               <p class="bp-nav-hint">Esc 关闭</p>
             </aside>
@@ -301,6 +309,9 @@
               </div>
               <div id="hub-shop-stage" class="hub-shop-stage hidden">
                 <div id="hub-shop" class="hub-shop"></div>
+              </div>
+              <div id="hub-blackmarket-stage" class="hub-shop-stage hidden">
+                <div id="hub-blackmarket" class="hub-shop"></div>
               </div>
               <div id="hub-library-stage" class="hub-library-stage hidden">
                 <aside class="bp-clip hub-library-clip">
@@ -340,6 +351,11 @@
                 <div id="hub-fs-left-shop" class="hub-clip-panel hidden">
                   <p class="bp-clip-empty">归航和卖鱼获得海图碎片。买船出航，沉船后需重买。木筏免费。</p>
                 </div>
+                <div id="hub-fs-left-blackmarket" class="hub-clip-panel hidden">
+                  <h3 class="hub-clip-h">黑市鉴宝</h3>
+                  <p class="hub-fs-blurb">未鉴定的黑色包裹一律花费 20 海图碎片鉴定。鉴定后才知道档位与售价，物品留在仓库，可自行出售。</p>
+                  <div id="hub-bm-detail" class="hub-shop-detail"></div>
+                </div>
                 <div id="hub-fs-left-codex" class="hub-clip-panel hidden">
                   <div id="hub-codex" class="hub-codex">
                     <aside class="codex-list" id="codex-list"></aside>
@@ -376,8 +392,8 @@
     window.addEventListener('unhandledrejection', (e) => show(e.reason && e.reason.stack || e.reason));
     const fileHint = '请勿直接双击 index.html。运行项目里的 play.bat，或打开 http://127.0.0.1:8787/\nChrome 在 file:// 下无法加载 ES 模块。';
     const urls = location.protocol === 'file:'
-      ? ['./js/main.js', './js/main.js?v=34b']
-      : ['./js/main.js?v=34b'];
+      ? ['./js/main.js', './js/main.js?v=35g']
+      : ['./js/main.js?v=35g'];
     if (location.protocol === 'file:') show(fileHint);
     let last = null;
     let ok = false;

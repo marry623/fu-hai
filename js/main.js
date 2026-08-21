@@ -9,7 +9,7 @@ import { createPaddleController } from './paddle.js?v=29n';
 import { createHull, updateCorrosion, damageHull, repairHull } from './hull.js?v=16c';
 import {
   createFlotsamField, updateFlotsam, findNearestFlotsam, respawnFlotsam, rollSalvage,
-} from './flotsam.js?v=29e';
+} from './flotsam.js?v=35d';
 import {
   createVortexField, updateVortices, findNearestVortex, createFishingController, CAST_AIM_DIST, tintVortexField, VORTEX_COUNT,
 } from './fishing.js?v=33c';
@@ -26,6 +26,8 @@ import { createGpuSparks } from './vfx/gpuSparks.js?v=32s';
 import { createBurstSystem, BurstMode } from './vfx/burstSphere.js?v=32s';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=31c';
+import { getRelicPortrait } from './relicPortrait.js?v=35c';
+import { RELIC_CARRY_CAP, trimRelicCarry } from './salvageTables.js?v=35d';
 import { getSeaMap, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=31y';
 import { getZone } from './zones.js?v=31y';
 import {
@@ -34,19 +36,19 @@ import {
   loadoutSuppliesPacked, clampBoatId, HULL_NAMES, equippedSkills, skillShopToVfx,
   skillLevel, scaledSkillCard, fishmongerGreenMul, ghostWakeCorrMul, talentLevel,
   chargeZoneTicket, canDepartZone, saveMeta,
-} from './meta.js?v=31y';
+} from './meta.js?v=35g';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=31h';
-import { createHub } from './hub.js?v=33f';
+import { createHub } from './hub.js?v=35g';
 import { createCoverScene } from './coverScene.js?v=28m';
-import { createHubIsland } from './hubIsland.js?v=31q';
+import { createHubIsland } from './hubIsland.js?v=35b';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=29q';
 import { createBpBoatStage } from './bpBoatStage.js?v=31d';
 import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=31y';
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=31g';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=34a';
-import { renderManualHtml } from './hubManual.js?v=32j';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=35g';
+import { renderManualHtml } from './hubManual.js?v=35a';
 import * as sfx from './audio.js?v=33f';
 
 const canvas = document.getElementById('c');
@@ -144,7 +146,7 @@ let hub = null;
 
 const state = {
   started: false,
-  inventory: { bait: 3, plank: 1, repair: 1 },
+  inventory: { bait: 3, plank: 1, repair: 1, paste: 0, relics: [] },
   fishHold: [],
   selectedFish: -1,
   selectedSlot: 'bow',
@@ -856,7 +858,18 @@ const bpBoatStage = createBpBoatStage({
   },
 });
 
-const playVisuals = [water, foam, boat, flotRoot, vRoot, hazards.root, skillVfx.root, seaWorld.root, worldClouds, duskSun, aimRing, bobberMesh, fishLine, weatherFx.root];
+const playVisuals = [
+  water, foam, boat, flotRoot, vRoot, hazards.root, skillVfx.root,
+  hitSparks.points, hitBursts.group,
+  seaWorld.root, worldClouds, duskSun, aimRing, bobberMesh, fishLine, weatherFx.root,
+];
+
+function clearCombatVfx() {
+  skillVfx.clear();
+  hitSparks.clear();
+  hitBursts.clear();
+  familyVfx.sync([]);
+}
 const duskBits = [];
 scene.traverse((o) => {
   if (o.name === 'duskSky') duskBits.push(o);
@@ -1457,36 +1470,41 @@ function trySalvage() {
   const obj = hit.item;
   obj.visible = false;
   obj.userData.collected = true;
-  const r = rollSalvage(obj.userData.type);
-  if (tut.active && r.type === 'event') {
+  const r = rollSalvage(obj.userData.type, startZone | 0);
+
+  if (tut.active) {
     grantBait(1, 'crude');
-    showToast('\u6253\u635e\u5230\u9c7c\u9972\uff08\u6559\u5b66\uff09');
+    showToast('打捞到鱼饵（教学）');
     updateInv();
     tut.salvaged = true;
   } else if (r.type === 'trap') {
-    if (tut.active) {
-      grantBait(1, 'crude');
-      showToast('\u6253\u635e\u5230\u9c7c\u9972\uff08\u6559\u5b66\uff09');
-      updateInv();
-      tut.salvaged = true;
+    applyDamage(r.damage || 20, r.flavor || '箱型海性');
+  } else if (r.type === 'bottleEvent') {
+    applyBottleEffect(r.event);
+  } else if (r.type === 'relic') {
+    if (!Array.isArray(state.inventory.relics)) state.inventory.relics = [];
+    state.inventory.relics.push(r.relic);
+    const { list, dropped } = trimRelicCarry(state.inventory.relics, RELIC_CARRY_CAP);
+    state.inventory.relics = list;
+    sfx.collect();
+    if (dropped > 0) {
+      showToast(`捞到黑色包裹 · 舱满丢弃最早的（${list.length}/${RELIC_CARRY_CAP}）`);
     } else {
-      applyDamage(20, '箱型海性');
+      showToast(`捞到黑色包裹（${list.length}/${RELIC_CARRY_CAP}）`);
     }
-  } else if (r.type === 'event') {
-    state.pendingEvent = r.event;
-    ui.eventTitle.textContent = r.event.title;
-    ui.eventDesc.textContent = '瓶中纸条让你选择…';
-    ui.eventA.textContent = r.event.a.label;
-    ui.eventB.textContent = r.event.b.label;
-    ui.eventModal.classList.remove('hidden');
+    updateInv();
+    if (state.fishPanelOpen && state.backpackTab === 'relics') renderBackpack();
   } else {
-    if (r.supply === 'bait') grantBait(r.amount, state.inventory.baitKind || 'fresh');
-    else state.inventory[r.supply] = (state.inventory[r.supply] || 0) + r.amount;
+    if (r.supply === 'bait') {
+      grantBait(r.amount, r.baitKind || state.inventory.baitKind || 'fresh');
+    } else {
+      state.inventory[r.supply] = (state.inventory[r.supply] || 0) + r.amount;
+    }
     sfx.collect();
     showToast(`打捞 ${r.name}×${r.amount}`);
     updateInv();
-    if (tut.active) tut.salvaged = true;
   }
+
   if (!tut.active) {
     setTimeout(() => {
       respawnFlotsam(obj, obj.userData.id);
@@ -1494,6 +1512,28 @@ function trySalvage() {
       obj.position.x = (Math.random() - 0.5) * 40;
     }, 8000);
   }
+}
+
+function applyBottleEffect(ev) {
+  if (!ev?.effect) {
+    showToast(ev?.toast || '空瓶');
+    return;
+  }
+  const fx = ev.effect;
+  if (fx.kind === 'supply') {
+    state.inventory[fx.supply] = (state.inventory[fx.supply] || 0) + (fx.amount || 1);
+    sfx.collect();
+  } else if (fx.kind === 'bait') {
+    grantBait(fx.amount || 1, fx.baitKind || state.inventory.baitKind || 'fresh');
+    sfx.collect();
+  } else if (fx.kind === 'heal') {
+    repairHull(hull, fx.amount || 10);
+    updateHp();
+  } else if (fx.kind === 'damage') {
+    applyDamage(fx.amount || 8, '瓶中怪味');
+  }
+  showToast(ev.toast || '漂流瓶');
+  updateInv();
 }
 
 function resolveEvent(which) {
@@ -1647,7 +1687,7 @@ function renderBackpack() {
   document.querySelectorAll('.bp-tab').forEach((el) => {
     el.classList.toggle('active', el.dataset.tab === tab);
   });
-  ui.bpMatTitle.textContent = tab === 'catch' ? '鱼获' : tab === 'slots' ? '船槽' : '物资';
+  ui.bpMatTitle.textContent = tab === 'catch' ? '鱼获' : tab === 'slots' ? '船槽' : tab === 'relics' ? '宝物' : '物资';
   ui.bpGrid.innerHTML = '';
   ui.bpSlotRow.innerHTML = '';
   if (tab !== 'slots') bpBoatStage?.setActive(false);
@@ -1707,6 +1747,24 @@ function renderBackpack() {
     ui.fishCount.textContent = String(SLOT_ORDER.filter((s) => state.slots[s]).length);
     bpBoatStage?.setActive(true);
     bpBoatStage?.sync(state.slots, selectedBoat, state.selectedSlot);
+  } else if (tab === 'relics') {
+    const relics = state.inventory.relics || [];
+    ui.fishCount.textContent = String(relics.length);
+    const cells = Math.max(10, Math.ceil((relics.length + 1) / 5) * 5);
+    for (let i = 0; i < cells; i++) {
+      const item = relics[i];
+      ui.bpGrid.appendChild(makePolaroidCell({
+        kind: 'relic',
+        index: i,
+        item: item ? { name: '黑色包裹', count: 1, color: 0x1a1a22, desc: `未鉴定。归航最多带出最近 ${RELIC_CARRY_CAP} 个；黑市鉴宝。` } : null,
+        selected: false,
+        onClick: item ? () => {
+          state.selectedFish = -1;
+          state.selectedSupply = null;
+          showToast('黑色包裹 · 归航后去黑市鉴定');
+        } : null,
+      }));
+    }
   } else {
     const baitKey = BAIT_KINDS[state.inventory.baitKind]?.key || 'baitFresh';
     const baitName = BAIT_KINDS[state.inventory.baitKind]?.name || '鱼饵';
@@ -1745,7 +1803,7 @@ function makePolaroidCell({ kind, index, item, selected, onClick, badge }) {
   btn.className = 'bp-cell'
     + (selected ? ' selected' : '')
     + (!item ? ' empty' : '')
-    + (kind === 'supply' ? ' bp-supply-card' : '');
+    + (kind === 'supply' || kind === 'relic' ? ' bp-supply-card' : '');
   btn.style.setProperty('--tilt', '0deg');
 
   if (!item) {
@@ -1756,12 +1814,17 @@ function makePolaroidCell({ kind, index, item, selected, onClick, badge }) {
   const rarity = item.rarity || 1;
   const name = kind === 'supply' ? `${item.name}×${item.count}` : item.name;
   let thumbInner;
-  if (kind === 'supply') {
+  if (kind === 'supply' || kind === 'relic') {
     try {
-      const src = getItemPortrait(item.portraitId || item.id);
-      thumbInner = `<img class="bp-thumb-fish" src="${src}" alt="" draggable="false" />`;
+      if (kind === 'supply') {
+        const src = getItemPortrait(item.portraitId || item.id);
+        thumbInner = `<img class="bp-thumb-fish" src="${src}" alt="" draggable="false" />`;
+      } else {
+        const src = getRelicPortrait(item.portraitId || 'blackPackage');
+        thumbInner = `<img class="bp-thumb-fish" src="${src}" alt="" draggable="false" />`;
+      }
     } catch (_) {
-      const color = hexColor(item.color);
+      const color = hexColor(item.color ?? 0x1a1a22);
       thumbInner = `<div class="bp-thumb-blob" style="background:${color}"></div>`;
     }
   } else if (item.defId) {
@@ -2147,6 +2210,7 @@ function finishRun(outcome) {
   tut.dismissed = true;
   tutMarker.visible = false;
   hideTutGuide();
+  clearCombatVfx();
   phase = 'settle';
   ui.lighthouseModal?.classList.add('hidden');
   ui.evacCountdown?.classList.add('hidden');
@@ -2155,6 +2219,9 @@ function finishRun(outcome) {
   // Practice bay is sandboxed — nothing transfers to warehouse
   const fishToStore = wasTutorial ? [] : (outcome === 'return' ? collectRunFish(state) : []);
   const suppliesToStore = wasTutorial ? null : (outcome === 'return' ? { ...state.inventory } : null);
+  const relicsToStore = wasTutorial ? null : (
+    outcome === 'return' ? [...(state.inventory.relics || [])] : null
+  );
   const { meta: m, gain, success, lostHull } = settleRun(meta, {
     distance: dist,
     mods: state.mods,
@@ -2163,6 +2230,7 @@ function finishRun(outcome) {
     outcome,
     fishToStore,
     suppliesToStore,
+    relicsToStore,
     startZone,
     boatId: selectedBoat,
   });
@@ -2226,6 +2294,7 @@ function openHub() {
   state.started = false;
   camInit = false;
   setSeaMapOpen(false);
+  clearCombatVfx();
   ui.sinkModal.classList.add('hidden');
   ui.settleModal?.classList.add('hidden');
   ui.lighthouseModal?.classList.add('hidden');
@@ -2315,6 +2384,7 @@ function startRun(fromCheckpoint = false) {
         plank: 1,
         repair: 1,
         paste: 0,
+        relics: [],
       };
       state.selectedFish = -1;
       syncDeckFish(boat, state.fishHold, gradientMap);
@@ -2323,6 +2393,7 @@ function startRun(fromCheckpoint = false) {
         meta = syncLoadoutSuppliesFromWarehouse(meta);
       }
       applyLoadoutToRun(boat, state, meta, gradientMap);
+      state.inventory.relics = [];
       meta = consumeLoadoutOnDepart(meta);
       if (meta.unlocks.cursedBoat) {
         const lv = talentLevel(meta, 'cursedBoat');
@@ -2361,10 +2432,9 @@ function startRun(fromCheckpoint = false) {
   state.shellBlocks = 0;
   state.ramCd = 0;
   lastFamilyKey = '';
-  familyVfx.sync([]);
   skillCdUntil[0] = skillCdUntil[1] = skillCdUntil[2] = 0;
   refreshWeaponChips();
-  skillVfx.clear();
+  clearCombatVfx();
   ui.sinkModal.classList.add('hidden');
   ui.settleModal?.classList.add('hidden');
   ui.lighthouseModal?.classList.add('hidden');
@@ -3080,15 +3150,17 @@ function tick() {
     updateWater(water, t, waterFocus);
   }
   if (state.seaMapOpen) drawSeaMapOverlay();
-  skillVfx.update(dt);
-  hitSparks.update(dt);
-  hitBursts.update(dt);
+  if (phase === 'play' || state.started) {
+    skillVfx.update(dt);
+    hitSparks.update(dt);
+    hitBursts.update(dt);
+    familyVfx.update(dt, paddle.state?.speed || 0);
+    updateFlotsam(flotsam, t);
+    updateVortices(vortices, t);
+    wake.update(dt);
+  }
   updateWeaponCds();
   bpBoatStage?.tick(t);
-  updateFlotsam(flotsam, t);
-  updateVortices(vortices, t);
-  wake.update(dt);
-  familyVfx.update(dt, paddle.state?.speed || 0);
   drawMinimap();
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
@@ -3331,7 +3403,7 @@ document.querySelectorAll('.bp-tab').forEach((el) => {
     state.selectedFish = state.backpackTab === 'catch' && state.fishHold.length
       ? Math.max(0, Math.min(state.selectedFish < 0 ? 0 : state.selectedFish, state.fishHold.length - 1))
       : -1;
-    if (state.backpackTab !== 'supplies') state.selectedSupply = null;
+    if (state.backpackTab !== 'supplies' && state.backpackTab !== 'relics') state.selectedSupply = null;
     renderBackpack();
   };
 });

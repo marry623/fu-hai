@@ -1,6 +1,14 @@
 /** Meta progression via localStorage — hub / warehouse / codex / zones */
 
 import { getFishDef, shopBuyCost, BAIT_KINDS } from './fishCatalog.js?v=34b';
+import {
+  APPRAISE_COST,
+  RELIC_CARRY_CAP,
+  getRelicDef,
+  rollSellPrice,
+  sealedSellPrice,
+  trimRelicCarry,
+} from './salvageTables.js?v=35d';
 
 const KEY = 'fuhai_meta_v1';
 
@@ -49,7 +57,9 @@ const DEFAULT = {
       { defId: 'food', name: '食物鱼', rarity: 1, category: 'food', color: 0x4ecdc4, vitality: 100, slot: null, eat: { heal: 20 } },
     ],
     supplies: { baitCrude: 0, baitFresh: 3, baitScale: 0, baitAbyss: 0, plank: 1, repair: 1, paste: 0 },
+    relics: [],
   },
+  relicCodex: {},
   loadout: {
     boatId: 'raft',
     slots: EMPTY_SLOTS(),
@@ -203,7 +213,9 @@ function normalizeMeta(data) {
     warehouse: {
       fish: Array.isArray(data.warehouse?.fish) ? data.warehouse.fish : [],
       supplies: normalizeSupplies(data.warehouse?.supplies),
+      relics: Array.isArray(data.warehouse?.relics) ? data.warehouse.relics : [],
     },
+    relicCodex: { ...(data.relicCodex || {}) },
     loadout: {
       boatId: (() => {
         const id = data.loadout?.boatId || 'raft';
@@ -279,6 +291,7 @@ export function settleRun(meta, {
   outcome = 'sink',
   fishToStore = [],
   suppliesToStore = null,
+  relicsToStore = null,
   startZone = 0,
   boatId = 'raft',
 }) {
@@ -290,7 +303,9 @@ export function settleRun(meta, {
     warehouse: {
       fish: [...(meta.warehouse?.fish || [])],
       supplies: { ...(meta.warehouse?.supplies || { bait: 0, plank: 0, repair: 0 }) },
+      relics: [...(meta.warehouse?.relics || [])],
     },
+    relicCodex: { ...(meta.relicCodex || {}) },
     unlockedZones: [...(meta.unlockedZones || [0])],
     tutorialDone: !!meta.tutorialDone,
     hubIntroDone: !!meta.hubIntroDone,
@@ -360,6 +375,21 @@ export function settleRun(meta, {
     m.warehouse.supplies = w;
   }
 
+  if (success && Array.isArray(relicsToStore) && relicsToStore.length) {
+    const { list: kept } = trimRelicCarry(relicsToStore, RELIC_CARRY_CAP);
+    for (const r of kept) {
+      if (!r) continue;
+      m.warehouse.relics.push({
+        uid: r.uid || `r_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+        defId: r.defId,
+        tier: r.tier | 0,
+        hidden: !!r.hidden,
+        sealed: r.sealed !== false,
+        sellPrice: r.sellPrice | 0,
+      });
+    }
+  }
+
   // Unlock the next sea only after a successful return from this one
   if (success) {
     const cur = startZone | 0;
@@ -375,7 +405,7 @@ export function settleRun(meta, {
 }
 
 export const SHOP_TABS = [
-  { id: 'sell', name: '出售鱼类' },
+  { id: 'sell', name: '出售' },
   { id: 'hull', name: '船体型号' },
   { id: 'supply', name: '物资' },
   { id: 'weapon', name: '技能牌' },
@@ -832,6 +862,156 @@ export function sellWarehouseFish(meta, warehouseIndex) {
   };
   saveMeta(m);
   return { ok: true, meta: m, msg: `售出 ${fish.name} +${price} 海图碎片`, price };
+}
+
+
+/** Sell every warehouse fish with rarity strictly below `belowRarity` (default: under 4★). */
+export function sellWarehouseFishBelowRarity(meta, belowRarity = 4) {
+  const list = meta.warehouse?.fish || [];
+  const keep = [];
+  let gained = 0;
+  let count = 0;
+  for (const fish of list) {
+    if (!fish) continue;
+    const r = fish.rarity | 0;
+    if (r > 0 && r < (belowRarity | 0)) {
+      gained += fishSellPrice(fish);
+      count += 1;
+    } else {
+      keep.push(fish);
+    }
+  }
+  if (!count) return { ok: false, meta, msg: '没有4星以下的鱼', count: 0, price: 0 };
+  const m = {
+    ...meta,
+    fragments: (meta.fragments || 0) + gained,
+    warehouse: { ...meta.warehouse, fish: keep },
+  };
+  saveMeta(m);
+  return {
+    ok: true,
+    meta: m,
+    count,
+    price: gained,
+    msg: `一键出售 ${count} 条 · +${gained} 海图碎片`,
+  };
+}
+
+
+export function discoverRelic(meta, defId) {
+  if (!defId || !getRelicDef(defId)) return { ok: false, meta, neu: false };
+  if (meta.relicCodex?.[defId]) return { ok: true, meta, neu: false };
+  const m = {
+    ...meta,
+    relicCodex: { ...(meta.relicCodex || {}), [defId]: true },
+  };
+  saveMeta(m);
+  return { ok: true, meta: m, neu: true };
+}
+
+export function appraiseRelic(meta, warehouseIndex) {
+  const list = [...(meta.warehouse?.relics || [])];
+  const item = list[warehouseIndex];
+  if (!item) return { ok: false, meta, msg: '无效宝物' };
+  if (!item.sealed) return { ok: false, meta, msg: '已经鉴定过了' };
+  const cost = APPRAISE_COST;
+  if ((meta.fragments | 0) < cost) return { ok: false, meta, msg: `碎片不足（需要 ${cost}）` };
+  const def = getRelicDef(item.defId);
+  if (!def) return { ok: false, meta, msg: '未知宝物' };
+  const sellPrice = rollSellPrice(def.sellMin, def.sellMax);
+  list[warehouseIndex] = {
+    ...item,
+    sealed: false,
+    sellPrice,
+    tier: def.tier,
+    hidden: !!def.hidden,
+  };
+  let m = {
+    ...meta,
+    fragments: (meta.fragments | 0) - cost,
+    warehouse: { ...meta.warehouse, relics: list },
+    relicCodex: { ...(meta.relicCodex || {}) },
+  };
+  const disc = discoverRelic(m, item.defId);
+  m = disc.meta;
+  saveMeta(m);
+  return {
+    ok: true,
+    meta: m,
+    msg: `鉴定为「${def.name}」· 估值 ${sellPrice}`,
+    relic: list[warehouseIndex],
+    def,
+    neu: disc.neu,
+  };
+}
+
+export function sellWarehouseRelic(meta, warehouseIndex) {
+  const list = [...(meta.warehouse?.relics || [])];
+  const item = list[warehouseIndex];
+  if (!item) return { ok: false, meta, msg: '无效宝物' };
+  let price;
+  let label;
+  if (item.sealed) {
+    price = item.sellPrice > 0 ? item.sellPrice : sealedSellPrice();
+    label = '黑色包裹';
+  } else {
+    const def = getRelicDef(item.defId);
+    price = item.sellPrice > 0
+      ? item.sellPrice
+      : (def ? rollSellPrice(def.sellMin, def.sellMax) : 20);
+    label = def?.name || '宝物';
+  }
+  list.splice(warehouseIndex, 1);
+  const m = {
+    ...meta,
+    fragments: (meta.fragments | 0) + price,
+    warehouse: { ...meta.warehouse, relics: list },
+  };
+  saveMeta(m);
+  return { ok: true, meta: m, msg: `售出 ${label} +${price} 海图碎片`, price };
+}
+
+/** Sell every warehouse relic with tier strictly below `belowTier` (default: under T3). */
+export function sellWarehouseRelicsBelowTier(meta, belowTier = 3) {
+  const list = meta.warehouse?.relics || [];
+  const keep = [];
+  let gained = 0;
+  let count = 0;
+  const limit = belowTier | 0;
+  for (const item of list) {
+    if (!item) continue;
+    const def = item.sealed ? null : getRelicDef(item.defId);
+    const tier = (item.tier | 0) || (def?.tier | 0) || 1;
+    if (tier > 0 && tier < limit) {
+      gained += relicSellPreview(item);
+      count += 1;
+    } else {
+      keep.push(item);
+    }
+  }
+  if (!count) return { ok: false, meta, msg: '没有 T3 以下的宝物', count: 0, price: 0 };
+  const m = {
+    ...meta,
+    fragments: (meta.fragments || 0) + gained,
+    warehouse: { ...meta.warehouse, relics: keep },
+  };
+  saveMeta(m);
+  return {
+    ok: true,
+    meta: m,
+    count,
+    price: gained,
+    msg: `一键出售 ${count} 件 · +${gained} 海图碎片`,
+  };
+}
+
+export function relicSellPreview(item) {
+  if (!item) return 0;
+  if (item.sealed) return item.sellPrice > 0 ? item.sellPrice : 20;
+  if (item.sellPrice > 0) return item.sellPrice;
+  const def = getRelicDef(item.defId);
+  if (!def) return 20;
+  return Math.floor((def.sellMin + def.sellMax) / 2);
 }
 
 export function tryUnlockZone(meta, zoneId) {

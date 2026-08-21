@@ -5,6 +5,7 @@ import { SLOT_ORDER, SLOT_LABELS, ramCdForRarity } from './slots.js?v=32e';
 import { getFishDef, FISH_CATALOG, RARITY, listShopBuyFishIds, shopBuyCost, BAIT_KINDS, rarityStars, familyOf, familyLabel } from './fishCatalog.js?v=34b';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=31c';
+import { getRelicPortrait, relicFaceHtml } from './relicPortrait.js?v=35c';
 import { listMonsterIds, getMonsterDef } from './monsterCatalog.js?v=31g';
 import { getMonsterPortrait } from './monsterPortrait.js?v=29p';
 import {
@@ -25,6 +26,11 @@ import {
   skillUpgradeCost,
   talentUpgradeCost,
   sellWarehouseFish,
+  sellWarehouseFishBelowRarity,
+  sellWarehouseRelic,
+  sellWarehouseRelicsBelowTier,
+  appraiseRelic,
+  relicSellPreview,
   hubFeedFish,
   equipFromWarehouse,
   unequipToWarehouse,
@@ -41,22 +47,29 @@ import {
   LOADOUT_BAG_SIZE,
   zoneTicketCost,
   canDepartZone,
-} from './meta.js?v=31y';
-import { HUB_SPOTS } from './hubIsland.js?v=31q';
-import { renderManualHtml } from './hubManual.js?v=32j';
+} from './meta.js?v=35g';
+import { HUB_SPOTS } from './hubIsland.js?v=35b';
+import { renderManualHtml } from './hubManual.js?v=35d';
 import * as sfx from './audio.js?v=33f';
+import {
+  APPRAISE_COST,
+  listRelicIds,
+  getRelicDef,
+  tierLabel,
+} from './salvageTables.js?v=35d';
 
 const TAB_TITLES = {
   prep: '整备',
   warehouse: '仓库',
   depart: '出港',
   shop: '商店',
+  blackmarket: '黑市',
   codex: '图鉴',
   library: '图书馆',
 };
 
 const SHIP_TABS = new Set(['prep', 'warehouse', 'depart']);
-const CLIP_KEYS = ['prep', 'warehouse', 'depart', 'shop', 'codex', 'library'];
+const CLIP_KEYS = ['prep', 'warehouse', 'depart', 'shop', 'blackmarket', 'codex', 'library'];
 const FEATURE_LABELS = {
   none: '初始海域',
   current: '水流会推船',
@@ -116,6 +129,9 @@ export function createHub(deps) {
     mapCanvas: document.getElementById('hub-map-canvas'),
     warehouseStage: document.getElementById('hub-warehouse-stage'),
     shopStage: document.getElementById('hub-shop-stage'),
+    blackmarketStage: document.getElementById('hub-blackmarket-stage'),
+    blackmarket: document.getElementById('hub-blackmarket'),
+    bmDetail: document.getElementById('hub-bm-detail'),
     libraryStage: document.getElementById('hub-library-stage'),
     libraryBody: document.getElementById('hub-library-body'),
     shipTabs: [...document.querySelectorAll('.hub-ship-tab')],
@@ -125,6 +141,7 @@ export function createHub(deps) {
       warehouse: document.getElementById('hub-fs-left-warehouse'),
       depart: document.getElementById('hub-fs-left-depart'),
       shop: document.getElementById('hub-fs-left-shop'),
+      blackmarket: document.getElementById('hub-fs-left-blackmarket'),
       codex: document.getElementById('hub-fs-left-codex'),
       library: document.getElementById('hub-fs-left-library'),
     },
@@ -143,6 +160,8 @@ export function createHub(deps) {
   let codexTab = 'fish';
   let selectedMonsterId = null;
   let shopTab = 'sell';
+  let shopSellTab = 'fish';
+  let bmSelected = -1;
   let shopSupplyZone = 'bait';
   let warehouseTab = 'fish';
   let shopDetail = null;
@@ -224,7 +243,7 @@ export function createHub(deps) {
       b.classList.toggle('hidden', !ship && id !== 'shop');
       b.classList.toggle('active', b.dataset.hubNav === id);
     });
-    if (id === 'shop' || id === 'codex' || id === 'library') {
+    if (id === 'shop' || id === 'blackmarket' || id === 'codex' || id === 'library') {
       els.shipTabs.forEach((b) => b.classList.add('hidden'));
     }
     els.codexTabsWrap?.classList.toggle('hidden', id !== 'codex');
@@ -234,18 +253,20 @@ export function createHub(deps) {
     els.warehouseStage?.classList.toggle('hidden', id !== 'warehouse');
     els.centerCodex?.classList.toggle('hidden', id !== 'codex');
     els.shopStage?.classList.toggle('hidden', id !== 'shop');
+    els.blackmarketStage?.classList.toggle('hidden', id !== 'blackmarket');
     els.libraryStage?.classList.toggle('hidden', id !== 'library');
 
     els.drawer?.classList.toggle('is-boat-view', drawerOpen && showBoat);
     els.drawerCard?.classList.toggle('is-ship', ship);
-    els.drawerCard?.classList.toggle('is-catalog', id === 'shop' || id === 'codex');
+    els.drawerCard?.classList.toggle('is-catalog', id === 'shop' || id === 'blackmarket' || id === 'codex');
     els.drawerCard?.classList.toggle('is-library', id === 'library');
     els.drawerCard?.classList.remove('hub-sea-gold');
     els.mat?.classList.toggle('is-boat', showBoat);
 
     if (els.drawerTitle) {
       if (id === 'codex') {
-        els.drawerTitle.textContent = codexTab === 'monster' ? '怪物图鉴' : '鱼种图鉴';
+        els.drawerTitle.textContent = codexTab === 'monster' ? '怪物图鉴'
+          : codexTab === 'relic' ? '宝物图鉴' : '鱼种图鉴';
       } else {
         els.drawerTitle.textContent = TAB_TITLES[id] || id;
       }
@@ -254,12 +275,12 @@ export function createHub(deps) {
       els.matMeta.textContent = id === 'prep'
         ? '配装预览'
         : id === 'warehouse'
-          ? '鱼获'
+          ? (warehouseTab === 'relics' ? '宝物' : '鱼获')
             : id === 'depart'
             ? '海域全貌'
             : id === 'library'
               ? '手册'
-              : (id === 'codex' ? '图鉴' : '商店');
+              : (id === 'codex' ? '图鉴' : id === 'blackmarket' ? '鉴宝' : '商店');
     }
 
     els.markers?.querySelectorAll('[data-hub-spot]').forEach((m) => {
@@ -302,8 +323,8 @@ export function createHub(deps) {
     const hint = root?.querySelector('.hub-island-hint');
     if (hint) {
       hint.textContent = meta.tutorialDone
-        ? '\u70b9\u51fb\u5efa\u7b51\u8fdb\u5165\u529f\u80fd \u00b7 \u6e2f\u53e3\u51fa\u6e2f \u00b7 \u8239\u57d9\u6574\u5907 \u00b7 \u5e02\u96c6\u5546\u5e97 \u00b7 \u5c55\u9986\u56fe\u9274 \u00b7 \u56fe\u4e66\u9986\u6559\u7a0b'
-        : '\u5148\u5b8c\u6210\u7ec3\u4e60\u6e7e\u5f52\u822a\u624d\u80fd\u51fa\u6d45\u6ee9\u3002\u53ef\u5148\u770b\u5e02\u96c6\u3001\u4ed3\u5e93\u3001\u6574\u5907\u4e0e\u56fe\u4e66\u9986\u3002';
+        ? '点击建筑进入功能 · 港口出港 · 轮轴整备 · 市集商店 · 黑市鉴宝 · 属性图鉴 · 图书馆教程'
+        : '先完成练习湾归航才能出浅滩。可先看市集、仓库、整备与图书馆。';
     }
     renderDepartSummary(meta);
     ensureWarehouseChrome();
@@ -313,6 +334,7 @@ export function createHub(deps) {
     renderCargo(meta);
     renderWarehouse(meta);
     renderShop(meta);
+    renderBlackMarket(meta);
     renderCodex(meta);
     if (drawerOpen && tab === 'prep') renderCallouts(meta);
   }
@@ -699,6 +721,7 @@ export function createHub(deps) {
         { id: 'bait', name: '鱼饵' },
         { id: 'repair', name: '修补' },
         { id: 'fish', name: '鱼类' },
+        { id: 'relics', name: '宝物' },
       ].map((z) => `<button type="button" class="hub-shop-tab${warehouseTab === z.id ? ' active' : ''}" data-wh-tab="${z.id}">${z.name}</button>`).join('');
       nav.querySelectorAll('[data-wh-tab]').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -746,6 +769,49 @@ export function createHub(deps) {
           } else {
             sfx.uiDeny();
           }
+        });
+      });
+      return;
+    }
+
+    if (warehouseTab === 'relics') {
+      const relics = meta.warehouse?.relics || [];
+      if (!relics.length) {
+        els.warehouse.innerHTML = '<p class="hub-empty">暂无宝物 · 出海捞黑色包裹并归航</p>';
+        return;
+      }
+      const cells = relics.map((item, i) => {
+        const def = item.sealed ? null : getRelicDef(item.defId);
+        const title = item.sealed ? '黑色包裹' : (def?.name || '宝物');
+        const price = relicSellPreview(item);
+        const sub = item.sealed
+          ? `未鉴定 · 可卖 ${price}`
+          : `${tierLabel(def?.tier || item.tier, def?.hidden || item.hidden)} · 售 ${price}`;
+        return `<div class="bp-cell hub-wh-cell">
+          <span class="bp-tape top"></span>
+          <div class="bp-polaroid">
+            <div class="bp-thumb">${relicFaceHtml(item)}</div>
+            <div class="bp-cell-name">${title}</div>
+            <div class="bp-rarity-bar r${Math.min(5, item.tier || 1)}"></div>
+            <div class="hub-wh-acts-inline">
+              <button type="button" class="bp-btn dim" data-sell-relic="${i}">出售 ${price}</button>
+            </div>
+            <span class="hub-fs-blurb" style="font-size:10px">${sub}</span>
+          </div>
+        </div>`;
+      });
+      els.warehouse.innerHTML = cells.join('');
+      els.warehouse.querySelectorAll('[data-sell-relic]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const idx = Number(btn.dataset.sellRelic);
+          const r = sellWarehouseRelic(deps.getMeta(), idx);
+          deps.toast(r.msg);
+          if (r.ok) {
+            sfx.uiSell();
+            deps.setMeta(r.meta);
+            render();
+          } else sfx.uiDeny();
         });
       });
       return;
@@ -886,7 +952,7 @@ export function createHub(deps) {
     if (!panel) return;
     const tabMeta = SHOP_TABS.find((t) => t.id === shopTab);
     const blurb = {
-      sell: '卖掉仓库鱼换碎片。卖价低于买价。',
+      sell: '卖掉仓库鱼或宝物换碎片。未鉴定包裹也可先卖。',
       hull: '木筏免费。重筏 / 冲锋船买的是一艘在港船，沉了要重买。',
       supply: '饵和修理剂入仓库，出港再装进 8 格背包。1–3 星鱼可直购。',
       weapon: '学会永久。出航带 3 张。可升到 3 级。',
@@ -930,6 +996,58 @@ export function createHub(deps) {
         } else {
           sfx.uiDeny();
         }
+        return;
+      }
+      if (act === 'sellBelow') {
+        const below = Number(actId) || 4;
+        const r = sellWarehouseFishBelowRarity(deps.getMeta(), below);
+        deps.toast(r.msg);
+        if (r.ok) {
+          sfx.uiSell();
+          shopDetail = {
+            title: '一键出售完成',
+            desc: `已卖掉 ${r.count} 条低星鱼`,
+            priceLine: `+${r.price} 海图碎片`,
+          };
+          deps.setMeta(r.meta);
+          render();
+        } else {
+          sfx.uiDeny();
+        }
+        return;
+      }
+      if (act === 'sellRelicBelow') {
+        const below = Number(actId) || 3;
+        const r = sellWarehouseRelicsBelowTier(deps.getMeta(), below);
+        deps.toast(r.msg);
+        if (r.ok) {
+          sfx.uiSell();
+          shopDetail = {
+            title: '一键出售完成',
+            desc: `已卖掉 ${r.count} 件 T${below} 以下宝物`,
+            priceLine: `+${r.price} 海图碎片`,
+          };
+          deps.setMeta(r.meta);
+          render();
+        } else {
+          sfx.uiDeny();
+        }
+        return;
+      }
+      if (act === 'sellRelic') {
+        const idx = Number(actId);
+        const r = sellWarehouseRelic(deps.getMeta(), idx);
+        deps.toast(r.msg);
+        if (r.ok) {
+          sfx.uiSell();
+          shopDetail = {
+            title: '已售出',
+            desc: '宝物换成海图碎片',
+            priceLine: `+${r.price} 海图碎片`,
+          };
+          deps.setMeta(r.meta);
+          render();
+        } else sfx.uiDeny();
         return;
       }
       if (act === 'supply') {
@@ -1007,20 +1125,52 @@ export function createHub(deps) {
 
     let cards = '';
     if (shopTab === 'sell') {
-      const fish = meta.warehouse?.fish || [];
-      if (!fish.length) {
-        cards = `<p class="hub-empty">仓库暂无鱼获可售</p>`;
+      const sellSub = ['fish', 'relics'].map((z) => {
+        const label = z === 'fish' ? '鱼类' : '宝物';
+        return `<button type="button" class="hub-shop-tab${shopSellTab === z ? ' active' : ''}" data-sell-zone="${z}">${label}</button>`;
+      }).join('');
+      if (shopSellTab === 'relics') {
+        const relics = meta.warehouse?.relics || [];
+        const bulkBar = `<div class="hub-shop-bulk">
+          <button type="button" class="bp-btn bright hub-shop-bulk-btn" data-sell-relic-below="3">一键出售 T3 以下</button>
+          <span class="hub-shop-bulk-hint">保留 T3 / 隐藏级</span>
+        </div>`;
+        if (!relics.length) {
+          cards = `<div class="hub-shop-subtabs">${sellSub}</div>${bulkBar}<p class="hub-empty">仓库暂无宝物可售</p>`;
+        } else {
+          cards = `<div class="hub-shop-subtabs">${sellSub}</div>${bulkBar}` + relics.map((item, i) => {
+            const def = item.sealed ? null : getRelicDef(item.defId);
+            const title = item.sealed ? '黑色包裹' : (def?.name || '宝物');
+            const price = relicSellPreview(item);
+            return shopCardHtml({
+              key: `sellrelic:${i}`,
+              title,
+              sub: `售价 ${price}`,
+              tone: '#2a2430',
+              faceHtml: relicFaceHtml(item),
+            });
+          }).join('');
+        }
       } else {
-        cards = fish.map((f, i) => {
-          const price = fishSellPrice(f);
-          return shopCardHtml({
-            key: `sell:${i}`,
-            title: f.name,
-            sub: `售价 ${price}`,
-            tone: `#${(f.color >>> 0).toString(16).padStart(6, '0')}`,
-            faceHtml: '',
-          });
-        }).join('');
+        const fish = meta.warehouse?.fish || [];
+        const bulkBar = `<div class="hub-shop-bulk">
+          <button type="button" class="bp-btn bright hub-shop-bulk-btn" data-sell-below="4">一键出售4星以下</button>
+          <span class="hub-shop-bulk-hint">保留 ★★★★ 及以上</span>
+        </div>`;
+        if (!fish.length) {
+          cards = `<div class="hub-shop-subtabs">${sellSub}</div>${bulkBar}<p class="hub-empty">仓库暂无鱼获可售</p>`;
+        } else {
+          cards = `<div class="hub-shop-subtabs">${sellSub}</div>${bulkBar}` + fish.map((f, i) => {
+            const price = fishSellPrice(f);
+            return shopCardHtml({
+              key: `sell:${i}`,
+              title: f.name,
+              sub: `售价 ${price}`,
+              tone: `#${(f.color >>> 0).toString(16).padStart(6, '0')}`,
+              faceHtml: '',
+            });
+          }).join('');
+        }
       }
     } else if (shopTab === 'hull') {
       cards = SHOP_HULLS.map((item) => {
@@ -1119,6 +1269,66 @@ export function createHub(deps) {
         renderShop(meta);
       });
     });
+    els.shop.querySelectorAll('[data-sell-zone]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sfx.uiClick();
+        shopSellTab = btn.dataset.sellZone;
+        shopDetail = null;
+        renderShop(meta);
+      });
+    });
+    els.shop.querySelectorAll('[data-sell-below]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const below = Number(btn.dataset.sellBelow) || 4;
+        const low = (deps.getMeta().warehouse?.fish || []).filter((f) => (f?.rarity | 0) > 0 && (f.rarity | 0) < below);
+        if (!low.length) {
+          sfx.uiDeny();
+          deps.toast('没有4星以下的鱼');
+          return;
+        }
+        const total = low.reduce((s, f) => s + fishSellPrice(f), 0);
+        shopDetail = {
+          title: '一键出售4星以下',
+          desc: `将卖掉仓库里全部 ★～★★★ 鱼（共 ${low.length} 条），保留四星及以上。`,
+          priceLine: `预计 +${total} 海图碎片`,
+          act: 'sellBelow',
+          actId: String(below),
+          actLabel: '确认一键出售',
+        };
+        sfx.uiClick();
+        renderShopDetail(deps.getMeta());
+      });
+    });
+    els.shop.querySelectorAll('[data-sell-relic-below]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const below = Number(btn.dataset.sellRelicBelow) || 3;
+        const low = (deps.getMeta().warehouse?.relics || []).filter((item) => {
+          if (!item) return false;
+          const def = item.sealed ? null : getRelicDef(item.defId);
+          const tier = (item.tier | 0) || (def?.tier | 0) || 1;
+          return tier > 0 && tier < below;
+        });
+        if (!low.length) {
+          sfx.uiDeny();
+          deps.toast('没有 T3 以下的宝物');
+          return;
+        }
+        const total = low.reduce((s, item) => s + relicSellPreview(item), 0);
+        shopDetail = {
+          title: '一键出售 T3 以下',
+          desc: `将卖掉仓库里全部 T1 / T2 宝物（共 ${low.length} 件），保留 T3 与隐藏级。`,
+          priceLine: `预计 +${total} 海图碎片`,
+          act: 'sellRelicBelow',
+          actId: String(below),
+          actLabel: '确认一键出售',
+        };
+        sfx.uiClick();
+        renderShopDetail(deps.getMeta());
+      });
+    });
 
     const catalog = [...SHOP_HULLS, ...SHOP_SUPPLIES, ...SHOP_WEAPONS, ...SHOP_TALENTS];
     els.shop.querySelectorAll('[data-shop-key]').forEach((btn) => {
@@ -1134,6 +1344,27 @@ export function createHub(deps) {
             desc: `稀有度 ${rarityStars(fish.rarity || 1)} · 卖掉仓库鱼换碎片。卖价低于买价。`,
             priceLine: `售价 ${fishSellPrice(fish)} 海图碎片`,
             act: 'sell',
+            actId: String(idx),
+            actLabel: '确认出售',
+          };
+          renderShopDetail(deps.getMeta());
+          return;
+        }
+        if (key.startsWith('sellrelic:')) {
+          const idx = Number(key.slice(10));
+          const item = meta.warehouse?.relics?.[idx];
+          if (!item) return;
+          const def = item.sealed ? null : getRelicDef(item.defId);
+          const title = item.sealed ? '黑色包裹' : (def?.name || '宝物');
+          const price = relicSellPreview(item);
+          const desc = item.sealed
+            ? '未鉴定包裹，可直接出售换碎片。'
+            : `${tierLabel(def?.tier || item.tier, def?.hidden || item.hidden)} · ${def?.blurb || '鉴定宝物'}`;
+          shopDetail = {
+            title,
+            desc,
+            priceLine: `售价 ${price} 海图碎片`,
+            act: 'sellRelic',
             actId: String(idx),
             actLabel: '确认出售',
           };
@@ -1263,10 +1494,75 @@ export function createHub(deps) {
     renderShopDetail(meta);
   }
 
+
+  function renderBlackMarket(meta) {
+    if (!els.blackmarket) return;
+    const relics = meta.warehouse?.relics || [];
+    const sealed = relics
+      .map((item, i) => ({ item, i }))
+      .filter((x) => x.item?.sealed);
+    let cards;
+    if (!sealed.length) {
+      cards = '<p class="hub-empty">没有未鉴定的黑色包裹。出海捞包裹并成功归航后再来。</p>';
+    } else {
+      cards = sealed.map(({ item, i }) => shopCardHtml({
+        key: `appraise:${i}`,
+        title: '黑色包裹',
+        sub: `鉴定 ${APPRAISE_COST}`,
+        tone: '#2a2430',
+        faceHtml: relicFaceHtml(item),
+      })).join('');
+    }
+    els.blackmarket.innerHTML = `
+      <div class="hub-shop-tabs"><span class="hub-shop-tab active">鉴宝</span></div>
+      <p class="hub-fs-blurb">一律 ${APPRAISE_COST} 碎片 · 鉴定前不知档位</p>
+      <div class="hub-shop-grid">${cards}</div>`;
+    els.blackmarket.querySelectorAll('[data-shop-key]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        sfx.uiClick();
+        const key = btn.dataset.shopKey || '';
+        if (!key.startsWith('appraise:')) return;
+        const idx = Number(key.slice(9));
+        bmSelected = idx;
+        const item = deps.getMeta().warehouse?.relics?.[idx];
+        if (!item) return;
+        if (els.bmDetail) {
+          els.bmDetail.innerHTML = `
+            <strong>黑色包裹</strong>
+            <p>花费 ${APPRAISE_COST} 海图碎片鉴定。鉴定后揭开名称与售价，物品仍留在仓库。</p>
+            <p class="hub-shop-detail-price">费用 ${APPRAISE_COST} · 余额 ${deps.getMeta().fragments || 0}</p>
+            <button type="button" class="bp-btn bright hub-shop-act" data-bm-appraise="${idx}">确认鉴定</button>`;
+          els.bmDetail.querySelector('[data-bm-appraise]')?.addEventListener('click', () => {
+            const r = appraiseRelic(deps.getMeta(), idx);
+            deps.toast(r.msg);
+            if (r.ok) {
+              sfx.uiBuy();
+              deps.setMeta(r.meta);
+              if (els.bmDetail && r.def) {
+                els.bmDetail.innerHTML = `
+                  <div class="hub-bm-result">
+                    <div class="hub-bm-result-face">${relicFaceHtml(r.relic)}</div>
+                    <div class="hub-bm-result-body">
+                      <strong>${r.def.name}</strong>
+                      <p>${tierLabel(r.def.tier, r.def.hidden)} · ${r.def.museum}</p>
+                      <p>${r.def.blurb}</p>
+                      <p class="hub-shop-detail-price">估值 ${r.relic.sellPrice}（${r.def.sellMin}–${r.def.sellMax}）</p>
+                    </div>
+                  </div>`;
+              }
+              render();
+            } else sfx.uiDeny();
+          });
+        }
+      });
+    });
+  }
+
   function renderCodex(meta) {
     if (!els.codexList) return;
     if (els.drawerTitle && tab === 'codex') {
-      els.drawerTitle.textContent = codexTab === 'monster' ? '怪物图鉴' : '鱼种图鉴';
+      els.drawerTitle.textContent = codexTab === 'monster' ? '怪物图鉴'
+        : codexTab === 'relic' ? '宝物图鉴' : '鱼种图鉴';
     }
     els.codexSwitch?.querySelectorAll('[data-codex-tab]').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.codexTab === codexTab);
@@ -1277,8 +1573,66 @@ export function createHub(deps) {
       };
     });
     if (codexTab === 'monster') renderMonsterCodex(meta);
+    else if (codexTab === 'relic') renderRelicCodex(meta);
     else renderFishCodex(meta);
   }
+
+  function renderRelicCodex(meta) {
+    const unlocked = meta.relicCodex || {};
+    const all = listRelicIds();
+    const found = all.filter((id) => unlocked[id]).length;
+    els.codexList.innerHTML = `
+      <p class="codex-progress">已鉴定 ${found} / ${all.length}</p>
+      <div class="codex-grid">
+        ${all.map((id) => {
+          const open = !!unlocked[id];
+          const d = getRelicDef(id);
+          const sel = selectedCodexId === id ? ' selected' : '';
+          const hid = d?.hidden ? ' relic-hidden' : '';
+          return `<button type="button" class="codex-entry polaroid${sel}${open ? '' : ' locked'}${hid}" data-codex="${id}">
+            <span class="codex-entry-face">${open ? `<img src="${getRelicPortrait(id)}" alt="" draggable="false" />` : '?'}</span>
+            <span class="codex-entry-name">${open ? d.name : '？？？'}</span>
+          </button>`;
+        }).join('')}
+      </div>`;
+    els.codexList.querySelectorAll('[data-codex]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        sfx.uiClick();
+        selectedCodexId = btn.dataset.codex;
+        renderCodex(meta);
+      });
+    });
+    if (!selectedCodexId || !all.includes(selectedCodexId)) {
+      selectedCodexId = all.find((id) => unlocked[id]) || all[0] || null;
+    }
+    fillRelicDossier(meta, selectedCodexId);
+  }
+
+  function fillRelicDossier(meta, id) {
+    const unlocked = meta.relicCodex || {};
+    const open = !!unlocked[id];
+    const d = getRelicDef(id);
+    if (els.codexSerial) els.codexSerial.textContent = open && d ? `No. ${listRelicIds().indexOf(id) + 1}` : 'No. —';
+    if (els.codexName) els.codexName.textContent = open && d ? d.name : '未鉴定';
+    if (els.codexTag) {
+      els.codexTag.textContent = open && d
+        ? `${tierLabel(d.tier, d.hidden)} · ${d.museum}`
+        : '黑市鉴定后解锁';
+    }
+    if (els.codexDesc) {
+      els.codexDesc.textContent = open && d
+        ? `${d.blurb} 售价约 ${d.sellMin}–${d.sellMax}。`
+        : '出海捞黑色包裹，归航后在黑市花费 20 碎片鉴定。';
+    }
+    if (els.codexPortrait) {
+      if (open) {
+        els.codexPortrait.innerHTML = `<img src="${getRelicPortrait(id)}" alt="" draggable="false" style="width:78%;height:78%;margin:auto;display:block;object-fit:contain;" />`;
+      } else {
+        els.codexPortrait.innerHTML = '<span class="codex-q">?</span>';
+      }
+    }
+  }
+
 
   function renderFishCodex(meta) {
     const unlocked = meta.codex || {};
