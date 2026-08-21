@@ -1,4 +1,4 @@
-import { getFishDef, activeFamilies, RARITY } from './fishCatalog.js?v=32h';
+import { getFishDef, activeFamilies, RARITY } from './fishCatalog.js?v=34b';
 import { createFishMesh, setFishVitalityVisual, animateFishMesh } from './fishMeshes.js?v=31c';
 
 export const SLOT_LABELS = {

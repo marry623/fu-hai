@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createToonGradient } from './stylekit.js';
-import { createMonsterMesh } from './monsterMeshes.js?v=29p';
+import { createMonsterMesh } from './monsterMeshes.js?v=34a';
 
 const cache = new Map();
 const PORTRAIT_PX = 256;

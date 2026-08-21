@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createToonGradient, clamp } from './stylekit.js';
+import { createToonGradient, clamp } from './stylekit.js?v=34a';
 import {
   createDuskSky, createSun, createClouds, createWater, updateWater,
   createFoamRings,
@@ -18,10 +18,10 @@ import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot, ramCdForRarity,
 } from './slots.js?v=32e';
-import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS, familyOf, familyLabel } from './fishCatalog.js?v=32h';
+import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS, familyOf, familyLabel } from './fishCatalog.js?v=34b';
 import { createFamilyVfx } from './familyVfx.js?v=32p';
 import { createFishMesh } from './fishMeshes.js?v=31c';
-import { beginHitFlash, beginDeathAnim } from './monsterMeshes.js?v=32s';
+import { beginHitFlash, beginDeathAnim } from './monsterMeshes.js?v=34a';
 import { createGpuSparks } from './vfx/gpuSparks.js?v=32s';
 import { createBurstSystem, BurstMode } from './vfx/burstSphere.js?v=32s';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
@@ -45,7 +45,7 @@ import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=31g';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=33f';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=34a';
 import { renderManualHtml } from './hubManual.js?v=32j';
 import * as sfx from './audio.js?v=33f';
 

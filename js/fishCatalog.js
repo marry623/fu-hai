@@ -6,7 +6,7 @@ export const RARITY = {
   3: { stars: 3, label: '史诗', cycle: 0.7, green: 0.25, hits: 3, decayPerMin: 3 },
   4: { stars: 4, label: '史诗+', cycle: 0.68, green: 0.20, hits: 4, decayPerMin: 2.5 },
   5: { stars: 5, label: '传说', cycle: 0.68, green: 0.20, hits: 5, decayPerMin: 1.5 },
-  6: { stars: 6, label: '隐藏六星', cycle: 0.50, green: 0.12, hits: 6, decayPerMin: 1.0 },
+  6: { stars: 6, label: '隐藏六星', cycle: 0.68, green: 0.20, hits: 5, decayPerMin: 1.0 },
 };
 
 /** Zone rarity weights: [★, ★★, ★★★, ★★★★, ★★★★★, 隐藏] — locked tiers stay 0 */

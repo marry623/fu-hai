@@ -1,7 +1,7 @@
 /** Low-poly monster meshes for combat + bestiary portraits */
 
 import * as THREE from 'three';
-import { addOutline, toonMat } from './stylekit.js';
+import { addOutline, toonMat, ensureOutlineMaterials } from './stylekit.js?v=34a';
 import { resolveMonsterId, monsterHp } from './monsterCatalog.js?v=31g';
 
 function addPart(g, mesh, outlineScale = 1.08) {
@@ -817,6 +817,9 @@ export function tickDeathAnim(mesh, dt) {
   const op = Math.max(0, 1 - fadeU * 1.05);
   mesh.traverse((o) => {
     if (!o.isMesh || !o.material) return;
+    // Shared outline mats — never fade them or every model loses outlines.
+    if (o.userData.isOutline || o.userData.skipOutline) return;
+    if (o.material.userData?.isOutlineMat) return;
     if (o.parent?.name === 'hpBar' || o.name === 'hpBar') return;
     if (o.material.opacity != null) {
       const base = o.material.userData.deathBaseOp ?? 1;
@@ -841,13 +844,19 @@ export function finishDeathAnim(mesh) {
   mesh.rotation.x = mesh.userData.deathBaseRotX || 0;
   mesh.traverse((o) => {
     if (!o.isMesh || !o.material) return;
+    if (o.userData.isOutline || o.material.userData?.isOutlineMat) return;
     if (o.material.userData?.hitBaseColor) {
       o.material.color.copy(o.material.userData.hitBaseColor);
     }
     if (o.material.userData?.deathBaseOp != null) {
       o.material.opacity = o.material.userData.deathBaseOp;
+      if (o.material.userData.deathBaseOp >= 1) {
+        o.material.transparent = false;
+        o.material.depthWrite = true;
+      }
     }
   });
+  ensureOutlineMaterials();
 }
 
 function makeDmgTexture(text, kill) {

@@ -2,7 +2,7 @@
 
 import { ZONES } from './zones.js?v=31y';
 import { SLOT_ORDER, SLOT_LABELS, ramCdForRarity } from './slots.js?v=32e';
-import { getFishDef, FISH_CATALOG, RARITY, listShopBuyFishIds, shopBuyCost, BAIT_KINDS, rarityStars, familyOf, familyLabel } from './fishCatalog.js?v=32h';
+import { getFishDef, FISH_CATALOG, RARITY, listShopBuyFishIds, shopBuyCost, BAIT_KINDS, rarityStars, familyOf, familyLabel } from './fishCatalog.js?v=34b';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=31c';
 import { listMonsterIds, getMonsterDef } from './monsterCatalog.js?v=31g';

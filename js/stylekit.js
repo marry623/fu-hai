@@ -26,12 +26,25 @@ const outlineMatCache = new Map();
 
 function getOutlineMat(color = 0x000000) {
   if (!outlineMatCache.has(color)) {
-    outlineMatCache.set(color, new THREE.MeshBasicMaterial({
+    const mat = new THREE.MeshBasicMaterial({
       color,
       side: THREE.BackSide,
-    }));
+    });
+    // Shared across all outlines — mark so fade/hit code never mutates opacity.
+    mat.userData.isOutlineMat = true;
+    outlineMatCache.set(color, mat);
   }
   return outlineMatCache.get(color);
+}
+
+/** Restore shared outline mats if something accidentally faded them. */
+export function ensureOutlineMaterials() {
+  for (const mat of outlineMatCache.values()) {
+    mat.transparent = false;
+    mat.opacity = 1;
+    mat.visible = true;
+    mat.depthWrite = true;
+  }
 }
 
 /**

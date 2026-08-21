@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createToonGradient } from './stylekit.js';
 import { createFishMesh } from './fishMeshes.js?v=31c';
-import { foodEatKey, foodEatColor } from './fishCatalog.js?v=31u';
+import { foodEatKey, foodEatColor } from './fishCatalog.js?v=34b';
 
 /** One shared portrait size — CSS scales for thumb vs detail. */
 const PORTRAIT_PX = 256;

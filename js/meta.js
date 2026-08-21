@@ -1,6 +1,6 @@
 /** Meta progression via localStorage — hub / warehouse / codex / zones */
 
-import { getFishDef, shopBuyCost, BAIT_KINDS } from './fishCatalog.js?v=31u';
+import { getFishDef, shopBuyCost, BAIT_KINDS } from './fishCatalog.js?v=34b';
 
 const KEY = 'fuhai_meta_v1';
 

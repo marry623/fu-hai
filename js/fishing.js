@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { addOutline, toonMat, hash2 } from './stylekit.js';
-import { pickFishForZone, qteForFish } from './fishCatalog.js?v=31u';
+import { pickFishForZone, qteForFish } from './fishCatalog.js?v=34b';
 import { zoneIndexFromDistance as zDist } from './zones.js';
 
 /** Dense fish schools across a large sea */
