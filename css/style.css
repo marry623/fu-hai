@@ -3770,19 +3770,3 @@ button.hub-bp-card {
   .cover-actions { animation: none; opacity: 1; }
 }
 
-#sfx-toggle {
-  position: fixed;
-  left: 10px;
-  bottom: 10px;
-  z-index: 40;
-  width: 40px;
-  height: 40px;
-  border: 3px solid #000;
-  border-radius: 10px;
-  background: rgba(8, 12, 18, 0.88);
-  color: #fff;
-  font-size: 18px;
-  cursor: pointer;
-  box-shadow: 0 3px 0 #000;
-}
-#sfx-toggle.muted { opacity: 0.42; }

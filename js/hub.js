@@ -44,6 +44,7 @@ import {
 } from './meta.js?v=31y';
 import { HUB_SPOTS } from './hubIsland.js?v=31q';
 import { renderManualHtml } from './hubManual.js?v=32j';
+import * as sfx from './audio.js?v=33f';
 
 const TAB_TITLES = {
   prep: '整备',
@@ -183,8 +184,11 @@ export function createHub(deps) {
   }
 
   function openSpot(id) {
+    const wasDrawer = drawerOpen;
     setTab(id);
     openDrawer();
+    if (wasDrawer) sfx.uiClick();
+    else sfx.uiOpen();
     deps.onSpotOpen?.(id);
   }
 
@@ -196,12 +200,14 @@ export function createHub(deps) {
   }
 
   function closeDrawer() {
+    const was = drawerOpen;
     drawerOpen = false;
     els.drawer?.classList.add('hidden');
     root?.classList.remove('drawer-open');
     els.drawer?.classList.remove('is-boat-view');
     deps.boatPreview?.setVisible(false);
     deps.onSpotOpen?.(null);
+    if (was) sfx.uiClose();
   }
 
   function setTab(id) {
@@ -369,15 +375,19 @@ export function createHub(deps) {
         const f = (deps.getMeta().loadout?.slots || {})[slot];
         if (!f) {
           deps.toast(`${SLOT_LABELS[slot]}为空 — 去仓库绑鱼`);
+          sfx.uiDeny();
           if (tab !== 'warehouse') setTab('warehouse');
           return;
         }
         const r = unequipToWarehouse(deps.getMeta(), slot);
         deps.toast(r.msg || (r.ok ? '已卸下' : '失败'));
         if (r.ok) {
+          sfx.uiEquip();
           deps.setMeta(r.meta);
           render();
           refreshCenter();
+        } else {
+          sfx.uiDeny();
         }
       });
     });
@@ -549,6 +559,7 @@ export function createHub(deps) {
     root.querySelectorAll('[data-boat]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = btn.dataset.boat;
+        sfx.uiClick();
         deps.setBoat(id);
         const m = saveLoadout(deps.getMeta(), { ...deps.getMeta().loadout, boatId: id });
         deps.setMeta(m);
@@ -560,6 +571,7 @@ export function createHub(deps) {
     root.querySelectorAll('[data-skill-slot]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const slot = Number(btn.dataset.skillSlot);
+        sfx.uiClick();
         const m = cycleSkillSlot(deps.getMeta(), slot);
         deps.setMeta(m);
         render();
@@ -569,14 +581,26 @@ export function createHub(deps) {
       btn.addEventListener('click', () => {
         const r = unpackSupply(deps.getMeta(), btn.dataset.unpack);
         deps.toast(r.msg);
-        if (r.ok) { deps.setMeta(r.meta); render(); }
+        if (r.ok) {
+          sfx.uiEquip();
+          deps.setMeta(r.meta);
+          render();
+        } else {
+          sfx.uiDeny();
+        }
       });
     });
     root.querySelectorAll('[data-uncargo]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const r = returnCargoToWarehouse(deps.getMeta(), Number(btn.dataset.uncargo));
         deps.toast(r.ok ? '已放回仓库' : (r.msg || '失败'));
-        if (r.ok) { deps.setMeta(r.meta); render(); }
+        if (r.ok) {
+          sfx.uiEquip();
+          deps.setMeta(r.meta);
+          render();
+        } else {
+          sfx.uiDeny();
+        }
       });
     });
   }
@@ -618,7 +642,11 @@ export function createHub(deps) {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const id = Number(btn.dataset.pickZone);
-        if (!canDepartZone(meta, id).ok) return;
+        if (!canDepartZone(meta, id).ok) {
+          sfx.uiDeny();
+          return;
+        }
+        sfx.uiClick();
         deps.setStartZone(id);
         render();
         deps.drawHubMap?.(els.mapCanvas);
@@ -646,7 +674,13 @@ export function createHub(deps) {
     els.cargo.querySelectorAll('[data-uncargo]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const r = returnCargoToWarehouse(meta, Number(btn.dataset.uncargo));
-        if (r.ok) { deps.setMeta(r.meta); render(); }
+        if (r.ok) {
+          sfx.uiEquip();
+          deps.setMeta(r.meta);
+          render();
+        } else {
+          sfx.uiDeny();
+        }
       });
     });
   }
@@ -668,6 +702,7 @@ export function createHub(deps) {
       ].map((z) => `<button type="button" class="hub-shop-tab${warehouseTab === z.id ? ' active' : ''}" data-wh-tab="${z.id}">${z.name}</button>`).join('');
       nav.querySelectorAll('[data-wh-tab]').forEach((btn) => {
         btn.addEventListener('click', () => {
+          sfx.uiClick();
           warehouseTab = btn.dataset.whTab;
           render();
         });
@@ -704,7 +739,13 @@ export function createHub(deps) {
           e.stopPropagation();
           const r = packSupply(deps.getMeta(), btn.dataset.pack);
           deps.toast(r.msg);
-          if (r.ok) { deps.setMeta(r.meta); render(); }
+          if (r.ok) {
+            sfx.uiEquip();
+            deps.setMeta(r.meta);
+            render();
+          } else {
+            sfx.uiDeny();
+          }
         });
       });
       return;
@@ -754,7 +795,13 @@ export function createHub(deps) {
         e.stopPropagation();
         const r = equipFromWarehouse(meta, Number(btn.dataset.eq), btn.dataset.slot);
         deps.toast(r.msg || (r.ok ? '已绑槽' : '失败'));
-        if (r.ok) { deps.setMeta(r.meta); render(); }
+        if (r.ok) {
+          sfx.uiEquip();
+          deps.setMeta(r.meta);
+          render();
+        } else {
+          sfx.uiDeny();
+        }
       });
     });
     els.warehouse.querySelectorAll('[data-cargo]').forEach((btn) => {
@@ -762,7 +809,13 @@ export function createHub(deps) {
         e.stopPropagation();
         const r = moveWarehouseToLoadoutCargo(meta, Number(btn.dataset.cargo));
         deps.toast(r.msg || (r.ok ? '已加入携带' : '失败'));
-        if (r.ok) { deps.setMeta(r.meta); render(); }
+        if (r.ok) {
+          sfx.uiEquip();
+          deps.setMeta(r.meta);
+          render();
+        } else {
+          sfx.uiDeny();
+        }
       });
     });
     els.warehouse.querySelectorAll('[data-feed]').forEach((btn) => {
@@ -770,7 +823,13 @@ export function createHub(deps) {
         e.stopPropagation();
         const r = hubFeedFish(meta, Number(btn.dataset.feed));
         deps.toast(r.msg);
-        if (r.ok) { deps.setMeta(r.meta); render(); }
+        if (r.ok) {
+          sfx.uiEquip();
+          deps.setMeta(r.meta);
+          render();
+        } else {
+          sfx.uiDeny();
+        }
       });
     });
   }
@@ -793,6 +852,7 @@ export function createHub(deps) {
     `;
     els.supplies.querySelectorAll('[data-bait-kind]').forEach((btn) => {
       btn.addEventListener('click', () => {
+        sfx.uiClick();
         const m = setLoadoutBaitKind(deps.getMeta(), btn.dataset.baitKind);
         deps.setMeta(m);
         render();
@@ -859,6 +919,7 @@ export function createHub(deps) {
         const r = sellWarehouseFish(deps.getMeta(), idx);
         deps.toast(r.msg);
         if (r.ok) {
+          sfx.uiSell();
           shopDetail = {
             title: fish?.name || '已售出',
             desc: '已换成海图碎片',
@@ -866,37 +927,64 @@ export function createHub(deps) {
           };
           deps.setMeta(r.meta);
           render();
+        } else {
+          sfx.uiDeny();
         }
         return;
       }
       if (act === 'supply') {
         const r = buySupply(deps.getMeta(), actId);
         deps.toast(r.msg);
-        if (r.ok) { deps.setMeta(r.meta); render(); }
+        if (r.ok) {
+          sfx.uiBuy();
+          deps.setMeta(r.meta);
+          render();
+        } else {
+          sfx.uiDeny();
+        }
         return;
       }
       if (act === 'buyFish') {
         const r = buyWarehouseFish(deps.getMeta(), actId);
         deps.toast(r.msg);
-        if (r.ok) { deps.setMeta(r.meta); render(); }
+        if (r.ok) {
+          sfx.uiBuy();
+          deps.setMeta(r.meta);
+          render();
+        } else {
+          sfx.uiDeny();
+        }
         return;
       }
       if (act === 'upgradeSkill') {
         const r = upgradeSkill(deps.getMeta(), actId);
         deps.toast(r.msg);
-        if (r.ok) { deps.setMeta(r.meta); render(); }
+        if (r.ok) {
+          sfx.uiBuy();
+          deps.setMeta(r.meta);
+          render();
+        } else {
+          sfx.uiDeny();
+        }
         return;
       }
       if (act === 'upgradeTalent') {
         const r = upgradeTalent(deps.getMeta(), actId);
         deps.toast(r.msg);
-        if (r.ok) { deps.setMeta(r.meta); render(); }
+        if (r.ok) {
+          sfx.uiBuy();
+          deps.setMeta(r.meta);
+          render();
+        } else {
+          sfx.uiDeny();
+        }
         return;
       }
       if (act === 'buy') {
         const r = tryUnlock(deps.getMeta(), actId);
         deps.toast(r.msg);
         if (r.ok) {
+          sfx.uiBuy();
           shopDetail = { ...shopDetail, act: null, priceLine: '已入手' };
           deps.setMeta(r.meta);
           if (SHOP_HULLS.some((h) => h.id === actId)) {
@@ -904,6 +992,8 @@ export function createHub(deps) {
             deps.boatPreview?.syncLoadout?.(r.meta);
           }
           render();
+        } else {
+          sfx.uiDeny();
         }
       }
     });
@@ -1014,6 +1104,7 @@ export function createHub(deps) {
 
     els.shop.querySelectorAll('[data-shop-tab]').forEach((btn) => {
       btn.addEventListener('click', () => {
+        sfx.uiClick();
         shopTab = btn.dataset.shopTab;
         shopDetail = null;
         renderShop(meta);
@@ -1022,6 +1113,7 @@ export function createHub(deps) {
     els.shop.querySelectorAll('[data-supply-zone]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
+        sfx.uiClick();
         shopSupplyZone = btn.dataset.supplyZone;
         shopDetail = null;
         renderShop(meta);
@@ -1031,6 +1123,7 @@ export function createHub(deps) {
     const catalog = [...SHOP_HULLS, ...SHOP_SUPPLIES, ...SHOP_WEAPONS, ...SHOP_TALENTS];
     els.shop.querySelectorAll('[data-shop-key]').forEach((btn) => {
       btn.addEventListener('click', () => {
+        sfx.uiClick();
         const key = btn.dataset.shopKey || '';
         if (key.startsWith('sell:')) {
           const idx = Number(key.slice(5));
@@ -1178,6 +1271,7 @@ export function createHub(deps) {
     els.codexSwitch?.querySelectorAll('[data-codex-tab]').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.codexTab === codexTab);
       btn.onclick = () => {
+        sfx.uiClick();
         codexTab = btn.dataset.codexTab;
         renderCodex(meta);
       };
@@ -1222,6 +1316,7 @@ export function createHub(deps) {
     });
     els.codexList.querySelectorAll('[data-codex]').forEach((btn) => {
       btn.addEventListener('click', () => {
+        sfx.uiClick();
         selectedCodexId = btn.dataset.codex;
         renderCodex(meta);
       });
@@ -1263,6 +1358,7 @@ export function createHub(deps) {
     });
     els.codexList.querySelectorAll('[data-monster]').forEach((btn) => {
       btn.addEventListener('click', () => {
+        sfx.uiClick();
         selectedMonsterId = btn.dataset.monster;
         renderCodex(meta);
       });
@@ -1434,7 +1530,10 @@ export function createHub(deps) {
   }
 
   els.btnClose?.addEventListener('click', () => closeDrawer());
-  els.btnDepart?.addEventListener('click', () => deps.onDepart());
+  els.btnDepart?.addEventListener('click', () => {
+    sfx.uiConfirm();
+    deps.onDepart();
+  });
   els.shipTabs.forEach((btn) => {
     btn.addEventListener('click', () => openSpot(btn.dataset.hubNav));
   });

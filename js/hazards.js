@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
 import { pointInPoly, EVAC_RADIUS, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=31y';
 import { pickMonsterForZone, getMonsterDef, monstersForZone, monsterHp, hullTouchDamage, hullShotDamage, wrapDps, wrapCountForZone } from './monsterCatalog.js?v=31g';
-import { createCombatMonster, createMonsterMesh, syncHpBar } from './monsterMeshes.js?v=30c';
+import { createCombatMonster, createMonsterMesh, syncHpBar, tickHitFlash, tickDeathAnim, finishDeathAnim } from './monsterMeshes.js?v=32s';
 
 export { createMonsterMesh, EVAC_RADIUS, EVAC_HOLD };
 
@@ -28,7 +28,7 @@ const C = {
  * Hazards: ram / wrap / ranged + planks + external lighthouses
  * Territory AI: patrol anchors, limited chasers, no full swarm.
  */
-export function createHazards(gradientMap, scene) {
+export function createHazards(gradientMap, scene, hitFx = null) {
   const root = new THREE.Group();
   scene.add(root);
   const enemies = [];
@@ -36,6 +36,11 @@ export function createHazards(gradientMap, scene) {
   const planks = [];
   const shots = [];
   const inkShots = [];
+  /** Shared opts for the next damage batch (from / dir / element). */
+  let hitOpts = {};
+  function setHitOpts(o = {}) {
+    hitOpts = o || {};
+  }
   /** @type {any[]} */
   let spawnPoints = [];
   /** @type {THREE.Object3D[]} */
@@ -406,6 +411,18 @@ export function createHazards(gradientMap, scene) {
         e.userData.chasing = false;
         continue;
       }
+      if (e.userData.dying) {
+        if (tickDeathAnim(e, dt)) {
+          finishDeathAnim(e);
+          e.visible = false;
+          e.userData.dead = true;
+          e.userData.chasing = false;
+          e.userData.respawnIn = 0;
+          e.userData.hp = e.userData.maxHp ?? monsterHp(e.userData.catalogId || e.userData.kind);
+          syncHpBar(e, null);
+        }
+        continue;
+      }
       if (e.userData.dead) continue;
       if (e.userData.respawnIn != null && e.userData.respawnIn > 0) {
         e.userData.respawnIn -= dt;
@@ -553,6 +570,21 @@ export function createHazards(gradientMap, scene) {
     }
 
     for (const w of wraps) {
+      if (w.userData.dying) {
+        if (tickDeathAnim(w, dt)) {
+          finishDeathAnim(w);
+          w.userData.active = false;
+          w.visible = false;
+          w.userData.cd = 8;
+          w.userData.hp = w.userData.maxHp ?? monsterHp(w.userData.catalogId);
+          if (w.userData.anchor) {
+            w.position.x = w.userData.anchor.x;
+            w.position.z = w.userData.anchor.z;
+          }
+          syncHpBar(w, null);
+        }
+        continue;
+      }
       w.userData.cd -= dt;
       const ax = w.userData.anchor?.x ?? w.position.x;
       const az = w.userData.anchor?.z ?? w.position.z;
@@ -597,7 +629,7 @@ export function createHazards(gradientMap, scene) {
         if (opts.cutWrap && d < 5) {
           w.userData.cutCd = (w.userData.cutCd || 0) - dt;
           if (w.userData.cutCd <= 0) {
-            damageWrap(w, 28, opts.onKill);
+            damageWrap(w, 28, opts.onKill, { from: boatPos });
             w.userData.cutCd = 0.4;
           }
         }
@@ -673,7 +705,7 @@ export function createHazards(gradientMap, scene) {
         for (const e of enemies) {
           if (!e.visible) continue;
           if (Math.hypot(s.mesh.position.x - e.position.x, s.mesh.position.z - e.position.z) < 2.2) {
-            damageEnemy(e, s.dmg || 10, opts.onKill);
+            damageEnemy(e, s.dmg || 10, opts.onKill, { from: s.mesh.position });
             s.life = 0;
             break;
           }
@@ -737,8 +769,14 @@ export function createHazards(gradientMap, scene) {
       }
     }
 
-    for (const e of enemies) syncHpBar(e, boatPos);
-    for (const w of wraps) syncHpBar(w, boatPos);
+    for (const e of enemies) {
+      syncHpBar(e, boatPos);
+      tickHitFlash(e);
+    }
+    for (const w of wraps) {
+      syncHpBar(w, boatPos);
+      tickHitFlash(w);
+    }
   }
 
   function fireIce(from, to, catalogId = 'lightningSnake') {
@@ -795,7 +833,7 @@ export function createHazards(gradientMap, scene) {
     let best = null;
     let bestD = max;
     for (const e of enemies) {
-      if (!e.visible) continue;
+      if (!e.visible || e.userData.dead || e.userData.dying) continue;
       const d = Math.hypot(e.position.x - pos.x, e.position.z - pos.z);
       if (d < bestD) { bestD = d; best = e; }
     }
@@ -808,51 +846,86 @@ export function createHazards(gradientMap, scene) {
     const amount = dmg ?? 12 * (mul || 1);
     let n = 0;
     for (const e of enemies) {
-      if (!e.visible || e.userData.dead) continue;
+      if (!e.visible || e.userData.dead || e.userData.dying) continue;
       if (Math.hypot(e.position.x - pos.x, e.position.z - pos.z) < 3.5 * mul) {
-        damageEnemy(e, amount, onKill);
+        damageEnemy(e, amount, onKill, { from: pos });
         n++;
       }
     }
     return n;
   }
 
-  function damageEnemy(e, amount, onKill) {
-    if (!e || !e.visible || e.userData.dead) return false;
+  function reactHit(target, amount, killed, opts = {}) {
+    if (!target || !hitFx?.pulse) return;
+    const quiet = !!opts.quiet;
+    const now = performance.now();
+    if (quiet && now - (target.userData.lastHitFxAt || 0) < 120) return;
+    target.userData.lastHitFxAt = now;
+    hitFx.pulse(target, {
+      amount,
+      killed,
+      quiet,
+      from: opts.from ?? hitOpts.from,
+      dir: opts.dir ?? hitOpts.dir,
+      element: opts.element ?? hitOpts.element,
+      kind: opts.kind ?? target.userData.kind,
+      intensity: opts.intensity ?? 1,
+    });
+  }
+
+  function deathIntensityFor(mesh) {
+    const hp = mesh.userData.maxHp || 80;
+    if (hp <= 40) return 0.85;
+    if (hp <= 100) return 1;
+    return 1.25;
+  }
+
+  function damageEnemy(e, amount, onKill, opts = {}) {
+    if (!e || !e.visible || e.userData.dead || e.userData.dying) return false;
     const cap = e.userData.maxHp ?? monsterHp(e.userData.catalogId || e.userData.kind);
     if (e.userData.hp == null) e.userData.hp = cap;
-    e.userData.hp -= amount;
+    const dealt = Math.max(0, amount);
+    e.userData.hp -= dealt;
     if (e.userData.hp > 0) {
       syncHpBar(e, null);
+      reactHit(e, dealt, false, opts);
       return false;
     }
-    e.visible = false;
-    e.userData.chasing = false;
+    // Count immediately; delay hide for death VFX
     e.userData.dead = true;
-    e.userData.respawnIn = 0;
-    e.userData.hp = cap;
+    e.userData.chasing = false;
+    e.userData.dying = true;
+    e.userData.hp = 0;
     syncHpBar(e, null);
+    reactHit(e, dealt, true, {
+      ...opts,
+      kind: e.userData.kind,
+      intensity: deathIntensityFor(e),
+    });
     onKill?.(e.userData.catalogId || e.userData.kind || 'kill');
     return true;
   }
 
-  function damageWrap(w, amount, onKill) {
-    if (!w?.userData.active) return false;
+  function damageWrap(w, amount, onKill, opts = {}) {
+    if (!w?.userData.active || w.userData.dying) return false;
     const cap = w.userData.maxHp ?? monsterHp(w.userData.catalogId);
     if (w.userData.hp == null) w.userData.hp = cap;
-    w.userData.hp -= amount;
+    const dealt = Math.max(0, amount);
+    w.userData.hp -= dealt;
     if (w.userData.hp > 0) {
       syncHpBar(w, null);
+      reactHit(w, dealt, false, opts);
       return false;
     }
+    w.userData.dying = true;
     w.userData.active = false;
-    w.visible = false;
-    w.userData.cd = 8;
-    w.userData.hp = cap;
-    if (w.userData.anchor) {
-      w.position.x = w.userData.anchor.x;
-      w.position.z = w.userData.anchor.z;
-    }
+    w.userData.hp = 0;
+    syncHpBar(w, null);
+    reactHit(w, dealt, true, {
+      ...opts,
+      kind: w.userData.kind || 'wrap',
+      intensity: deathIntensityFor(w),
+    });
     onKill?.(w.userData.catalogId || 'wrap');
     return true;
   }
@@ -872,7 +945,7 @@ export function createHazards(gradientMap, scene) {
     if (!e) return null;
     e.userData.rootUntil = clockTime + duration;
     e.userData.chasing = false;
-    if (dmg) damageEnemy(e, dmg, onKill);
+    if (dmg) damageEnemy(e, dmg, onKill, { from: pos });
     return e;
   }
 
@@ -882,7 +955,7 @@ export function createHazards(gradientMap, scene) {
     const amount = dmg ?? 9999;
     const scored = [];
     for (const e of enemies) {
-      if (!e.visible) continue;
+      if (!e.visible || e.userData.dead || e.userData.dying) continue;
       const dx = e.position.x - origin.x;
       const dz = e.position.z - origin.z;
       const proj = dx * dirX + dz * dirZ;
@@ -893,9 +966,10 @@ export function createHazards(gradientMap, scene) {
     scored.sort((a, b) => a.proj - b.proj);
     const hits = [];
     const killed = [];
+    const hitO = { from: origin, dir: { x: dirX, z: dirZ } };
     for (const s of scored.slice(0, maxHits)) {
       hits.push(s.e);
-      if (damageEnemy(s.e, amount, onKill)) killed.push(s.e);
+      if (damageEnemy(s.e, amount, onKill, hitO)) killed.push(s.e);
     }
     hits.killed = killed.length;
     return hits;
@@ -904,10 +978,11 @@ export function createHazards(gradientMap, scene) {
   function blastRadius(pos, r, onKill, dmg) {
     const amount = dmg ?? 9999;
     let n = 0;
+    const hitO = { from: pos };
     for (const e of enemies) {
-      if (!e.visible) continue;
+      if (!e.visible || e.userData.dead || e.userData.dying) continue;
       if (Math.hypot(e.position.x - pos.x, e.position.z - pos.z) < r) {
-        if (damageEnemy(e, amount, onKill)) n++;
+        if (damageEnemy(e, amount, onKill, hitO)) n++;
       }
     }
     return n;
@@ -936,7 +1011,7 @@ export function createHazards(gradientMap, scene) {
         if (Math.hypot(e.position.x - p.x, e.position.z - p.z) < radius) {
           e.userData.chasing = false;
           e.userData.slowUntil = clockTime + 1.8;
-          if (dps && dt) damageEnemy(e, dps * dt, onKill);
+          if (dps && dt) damageEnemy(e, dps * dt, onKill, { quiet: true, from: p });
           n++;
           break;
         }
@@ -965,6 +1040,9 @@ export function createHazards(gradientMap, scene) {
   }
 
   function stunAlongLine(origin, yaw, maxDist, duration, clockTime, width = 3.2, dmg = 0, onKill = null, once = null) {
+    const dirX = Math.sin(yaw);
+    const dirZ = Math.cos(yaw);
+    const hitO = { from: origin, dir: { x: dirX, z: dirZ } };
     return affectAlongLine(origin, yaw, maxDist, width, (e) => {
       e.userData.stunUntil = clockTime + duration;
       e.userData.chasing = false;
@@ -973,7 +1051,7 @@ export function createHazards(gradientMap, scene) {
           if (once.has(e)) return;
           once.add(e);
         }
-        damageEnemy(e, dmg, onKill);
+        damageEnemy(e, dmg, onKill, hitO);
       }
     });
   }
@@ -1006,7 +1084,7 @@ export function createHazards(gradientMap, scene) {
       const perp = Math.abs(dx * dirZ - dz * dirX);
       if (perp < width) {
         once?.add(w);
-        if (damageWrap(w, dmg, null)) {
+        if (damageWrap(w, dmg, null, { from: origin, dir: { x: dirX, z: dirZ } })) {
           n++;
           ids.push(w.userData.catalogId || 'voidOctopus');
         }
@@ -1021,7 +1099,7 @@ export function createHazards(gradientMap, scene) {
     for (const w of wraps) {
       if (!w.userData.active) continue;
       if (Math.hypot(w.position.x - pos.x, w.position.z - pos.z) < dist) {
-        if (damageWrap(w, dmg, null)) {
+        if (damageWrap(w, dmg, null, { from: pos })) {
           n++;
           ids.push(w.userData.catalogId || 'voidOctopus');
         }
@@ -1034,7 +1112,7 @@ export function createHazards(gradientMap, scene) {
     for (const w of wraps) {
       if (!w.userData.active) continue;
       if (Math.hypot(w.position.x - pos.x, w.position.z - pos.z) < 5) {
-        if (damageWrap(w, dmg, null)) {
+        if (damageWrap(w, dmg, null, { from: pos })) {
           return { cut: true, kind: 'wrap', catalogId: w.userData.catalogId || 'voidOctopus' };
         }
         return { cut: false, kind: 'wrap', catalogId: w.userData.catalogId || 'voidOctopus' };
@@ -1059,7 +1137,7 @@ export function createHazards(gradientMap, scene) {
     root, enemies, wraps, planks,
     get lighthouses() { return lighthouses; },
     update, shootInk, nearestEnemy, ramKill, cutNearestWrap, setSpawnLayout, spawnScattered, spawnAroundVortices,
-    setTutorialReveal,
+    setTutorialReveal, setHitOpts,
     stunEnemy, rootNearest, pierceLine, blastRadius, shoveWraps, disperseNearPoints,
     stunAlongLine, cutWrapsAlongLine, cutWrapsInRadius, stunInRadius,
     getEvacStatus,

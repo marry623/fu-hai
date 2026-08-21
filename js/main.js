@@ -12,8 +12,8 @@ import {
 } from './flotsam.js?v=29e';
 import {
   createVortexField, updateVortices, findNearestVortex, createFishingController, CAST_AIM_DIST, tintVortexField, VORTEX_COUNT,
-} from './fishing.js?v=31c';
-import { createHazards } from './hazards.js?v=32d';
+} from './fishing.js?v=33c';
+import { createHazards } from './hazards.js?v=32s';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot, ramCdForRarity,
@@ -21,6 +21,9 @@ import {
 import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS, familyOf, familyLabel } from './fishCatalog.js?v=32h';
 import { createFamilyVfx } from './familyVfx.js?v=32p';
 import { createFishMesh } from './fishMeshes.js?v=31c';
+import { beginHitFlash, beginDeathAnim } from './monsterMeshes.js?v=32s';
+import { createGpuSparks } from './vfx/gpuSparks.js?v=32s';
+import { createBurstSystem, BurstMode } from './vfx/burstSphere.js?v=32s';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=31c';
 import { getSeaMap, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=31y';
@@ -33,7 +36,7 @@ import {
   chargeZoneTicket, canDepartZone, saveMeta,
 } from './meta.js?v=31y';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=31h';
-import { createHub } from './hub.js?v=32f';
+import { createHub } from './hub.js?v=33f';
 import { createCoverScene } from './coverScene.js?v=28m';
 import { createHubIsland } from './hubIsland.js?v=31q';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=29q';
@@ -42,9 +45,9 @@ import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=31g';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=32p';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=33f';
 import { renderManualHtml } from './hubManual.js?v=32j';
-import * as sfx from './audio.js?v=29y';
+import * as sfx from './audio.js?v=33f';
 
 const canvas = document.getElementById('c');
 const minimapCtx = document.getElementById('minimap').getContext('2d');
@@ -669,7 +672,104 @@ const { root: flotRoot, list: flotsam } = createFlotsamField(gradientMap, 22);
 scene.add(flotRoot);
 const { root: vRoot, list: vortices } = createVortexField(gradientMap, VORTEX_COUNT);
 scene.add(vRoot);
-const hazards = createHazards(gradientMap, scene);
+
+const hitSparks = createGpuSparks(scene);
+const hitBursts = createBurstSystem(scene);
+/** Camera shake: amp decays over time (stronger on kill). */
+const camShake = { amp: 0, until: 0 };
+function addCamShake(amp, ms = 220) {
+  camShake.amp = Math.min(0.85, Math.max(camShake.amp, amp));
+  camShake.until = Math.max(camShake.until, performance.now() + ms);
+}
+const monsterHitFx = {
+  pulse(target, { amount, killed, quiet, from, dir, element, kind, intensity }) {
+    if (!target) return;
+    const k = kind || target.userData.kind || 'ram';
+    const inten = intensity ?? 1;
+    if (killed) {
+      beginDeathAnim(target, { kind: k, intensity: inten });
+      if (!quiet) sfx.monsterKill();
+    } else {
+      beginHitFlash(target, 180);
+      if (!quiet) sfx.monsterHit();
+    }
+    const canNudge = !killed && k !== 'wrap' && k !== 'static';
+    if (canNudge) {
+      let dx = 0;
+      let dz = 0;
+      if (dir && (dir.x || dir.z)) {
+        dx = dir.x;
+        dz = dir.z;
+      } else if (from) {
+        dx = target.position.x - from.x;
+        dz = target.position.z - from.z;
+      }
+      const len = Math.hypot(dx, dz) || 1;
+      target.position.x += (dx / len) * 0.55;
+      target.position.z += (dz / len) * 0.55;
+    }
+    const y = (target.position.y || 0) + 1.15;
+    const px = target.position.x;
+    const pz = target.position.z;
+    if (!killed) {
+      hitSparks.emit(22, {
+        x: px, y, z: pz,
+        color: 0xffe8c8,
+        size: 24,
+        life: 0.55,
+        speed: 2.8,
+        spread: 1.0,
+        gravity: 0.35,
+        radius: 0.6,
+      });
+      if (!quiet) addCamShake(0.12, 110);
+      return;
+    }
+
+    // Kill: flash→burst→gone (body anim runs in hazards update)
+    const mode = element === 'frost'
+      ? BurstMode.FROST
+      : (element === 'fire' || k === 'suction')
+        ? BurstMode.FIRE
+        : BurstMode.STORM;
+    const endR = (k === 'suction' ? 4.2 : 3.6) * inten;
+    hitBursts.spawn(mode, px, y, pz, {
+      radius: 0.6 * inten,
+      endRadius: endR,
+      life: 0.7,
+      squash: k === 'ram' ? 0.42 : 0.5,
+      intensity: 1.25 * inten,
+      opacity: 0.95,
+      colorA: k === 'wrap' ? 0xf0e0c8 : undefined,
+      colorB: k === 'wrap' ? 0xd4c4a0 : undefined,
+    });
+    hitSparks.emit(Math.round(36 * inten), {
+      x: px, y, z: pz,
+      color: k === 'ranged' ? 0xc8e8ff : 0xffe8c8,
+      size: 30,
+      life: 0.7,
+      speed: 3.6,
+      spread: 1.15,
+      gravity: 0.3,
+      radius: 0.9,
+    });
+    // Aftermath ripple sparks at ~0.35s mark via delayed small burst feel: second pop now (short life)
+    hitSparks.emit(Math.round(14 * inten), {
+      x: px, y: 0.35, z: pz,
+      color: 0xffffff,
+      size: 14,
+      life: 0.5,
+      speed: 2.2,
+      spread: 1.2,
+      gravity: 0.15,
+      radius: 1.1,
+      vy: 0.3,
+    });
+    const shakeAmp = (k === 'suction' ? 0.72 : 0.55) * inten;
+    addCamShake(Math.min(0.85, shakeAmp), 380);
+  },
+};
+const hazards = createHazards(gradientMap, scene, monsterHitFx);
 const skillVfx = createSkillVfx({ scene });
 const skillRay = new THREE.Raycaster();
 const skillPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -787,6 +887,7 @@ function setWorldMode(mode) {
     sun.color.setHex(0xffd2a0);
     sun.intensity = 1.1;
     ambLight.color.setHex(0xfff0e8);
+    sfx.setBgmTheme(mode === 'cover' ? 'cover' : 'hub');
   }
 
   if (mode === 'cover') {
@@ -1177,7 +1278,6 @@ function applyDamage(amount, reason, quiet = false) {
   if (b.blockFrac > 0) dmg *= (1 - b.blockFrac);
   if (t < legendFx.obsidianBreakUntil) dmg *= 1.5;
   damageHull(hull, dmg);
-  if (!quiet && amount >= 2) sfx.damage();
   if (slotHas('heatPump')) {
     legendFx.heatPumpUntil = t + 1.9;
     if (!quiet && amount >= 2) showToast('热泵：伤转推力');
@@ -1208,6 +1308,9 @@ function updateInv() {
 
 const fishing = createFishingController({
   toast: showToast,
+  onMiss() {
+    sfx.fishMiss();
+  },
   onPhase(ph) {
     if (ph === 'qte') {
       ui.qte.classList.remove('hidden');
@@ -1268,7 +1371,7 @@ const fishing = createFishingController({
       }
     }
     state.fishHold.push(fish);
-    sfx.fishCatch(fish.rarity);
+    sfx.fishCatch();
     state.selectedFish = state.fishHold.length - 1;
     syncDeckFish(boat, state.fishHold, gradientMap);
     showCatchLift(fish);
@@ -1357,7 +1460,6 @@ function trySalvage() {
   const r = rollSalvage(obj.userData.type);
   if (tut.active && r.type === 'event') {
     grantBait(1, 'crude');
-    sfx.collect();
     showToast('\u6253\u635e\u5230\u9c7c\u9972\uff08\u6559\u5b66\uff09');
     updateInv();
     tut.salvaged = true;
@@ -1500,9 +1602,13 @@ function categoryLabel(cat) {
 function setBackpackOpen(open) {
   if (!open && tut.active && tut.step === 3 && (state.mods | 0) < 1) {
     showToast('\u5148\u5b8c\u6210\u7ed1\u9c7c\u6539\u88c5');
+    sfx.uiDeny();
     return;
   }
-  state.fishPanelOpen = !!open;
+  const next = !!open;
+  if (next && !state.fishPanelOpen) sfx.uiOpen();
+  else if (!next && state.fishPanelOpen) sfx.uiClose();
+  state.fishPanelOpen = next;
   ui.backpack.classList.toggle('hidden', !open);
   ui.backpack.setAttribute('aria-hidden', open ? 'false' : 'true');
   ui.btnBackpack?.classList.toggle('open', !!open);
@@ -1568,6 +1674,7 @@ function renderBackpack() {
       : `只能绑在${SLOT_LABELS[exclusiveSlot]}`;
     if (allowed) {
       b.onclick = () => {
+        sfx.uiClick();
         state.selectedSlot = slot;
         refreshSlots();
         renderBackpack();
@@ -1682,7 +1789,7 @@ function makePolaroidCell({ kind, index, item, selected, onClick, badge }) {
       <div class="bp-cell-name">${name}</div>
       <div class="bp-rarity-bar r${rarity}"></div>
     </div>`;
-  if (onClick) btn.onclick = onClick;
+  if (onClick) btn.onclick = (e) => { sfx.uiClick(); onClick(e); };
   return btn;
 }
 
@@ -2159,6 +2266,7 @@ function startRun(fromCheckpoint = false) {
   hub?.hide();
   setWorldMode('play');
   phase = 'run';
+  sfx.setBgmTheme(startZone);
   camInit = false;
   fishing.reset();
   hideFishingFx();
@@ -2779,6 +2887,7 @@ function tick() {
 
     if (state.started) {
       if ((b.hasRam || b.hasPuffer) && state.ramCd <= 0) {
+        hazards.setHitOpts?.({ from: boatPos(), element: 'storm' });
         const hits = hazards.ramKill(boatPos(), phys.speed, b.ramMul, (id) => {
           state.kills++;
           registerMonster(id);
@@ -2790,6 +2899,7 @@ function tick() {
           }
         }, b.ramDmg || 12);
         if (hits > 0) {
+          sfx.ramHit();
           state.ramCd = b.ramCd || 3.4;
           if ((b.families || []).some((f) => f.id === 'rift')) familyVfx.pulse('rift');
         }
@@ -2854,10 +2964,10 @@ function tick() {
       },
       onEvacuate: () => {
         if (!state.started || hull.sunk) return;
+        sfx.evacuateSuccess();
         repairHull(hull, hull.maxDurability);
         updateHp();
         showToast('灯塔归航！耐久已回满', 2200);
-        sfx.evacuateSuccess();
         finishRun('return');
       },
       cutWrap: equippedRunCard(state.weapon).id === 'thunder',
@@ -2916,6 +3026,17 @@ function tick() {
     );
     if (!camInit) { camera.position.copy(desired); camInit = true; }
     else camera.position.lerp(desired, 1 - Math.pow(0.0003, dt));
+    // Hit / kill camera shake (decay)
+    if (performance.now() < camShake.until && camShake.amp > 0.01) {
+      const k = (camShake.until - performance.now()) / 320;
+      const a = camShake.amp * Math.max(0, k);
+      camera.position.x += (Math.random() - 0.5) * a * 1.4;
+      camera.position.y += (Math.random() - 0.5) * a * 0.9;
+      camera.position.z += (Math.random() - 0.5) * a * 1.4;
+      camShake.amp *= Math.pow(0.08, dt);
+    } else {
+      camShake.amp = 0;
+    }
     camera.lookAt(phys.x, 1.6, phys.z + Math.cos(phys.yaw) * 3);
 
     if (state.toastTimer > 0) {
@@ -2960,6 +3081,8 @@ function tick() {
   }
   if (state.seaMapOpen) drawSeaMapOverlay();
   skillVfx.update(dt);
+  hitSparks.update(dt);
+  hitBursts.update(dt);
   updateWeaponCds();
   bpBoatStage?.tick(t);
   updateFlotsam(flotsam, t);
@@ -3057,6 +3180,14 @@ function applySkillHit(card, origin, dir, range, impact, extra = {}) {
   const clockT = clock.elapsedTime;
   const lineYaw = Math.atan2(dir.x, dir.z);
   const dmg = Number(card.dmg) || 20;
+  const element = card.id === 'ice' || card.id === 'glacier'
+    ? 'frost'
+    : (card.id === 'meteor' || card.id === 'phoenix' ? 'fire' : 'storm');
+  hazards.setHitOpts?.({
+    from: origin,
+    dir: { x: dir.x, z: dir.z },
+    element,
+  });
   const onKill = (id) => {
     state.kills++;
     registerMonster(id);
@@ -3130,9 +3261,9 @@ function tryCastSkill() {
   const dir = { x: dx / dist, z: dz / dist };
   const range = dist;
   const impact = { x: hit.x, z: hit.z };
-  sfx.skill(card.id);
   skillCdUntil[state.weapon] = t + card.cd;
   updateWeaponCds();
+  sfx.skill();
   if (card.id === 'ice') {
     let iceAnnounced = false;
     const hitEnemies = new Set();
@@ -3176,8 +3307,8 @@ canvas.addEventListener('pointerdown', (e) => {
   tryCastSkill();
 });
 
-ui.btnFish.onclick = () => { if (!state.fishPanelOpen && !state.lighthouseOpen && !state.seaMapOpen) onSpace(); };
-ui.btnSalvage.onclick = () => { if (!state.fishPanelOpen && !state.lighthouseOpen && !state.seaMapOpen) trySalvage(); };
+ui.btnFish.onclick = () => { if (!state.fishPanelOpen && !state.lighthouseOpen && !state.seaMapOpen) { sfx.uiClick(); onSpace(); } };
+ui.btnSalvage.onclick = () => { if (!state.fishPanelOpen && !state.lighthouseOpen && !state.seaMapOpen) { sfx.uiClick(); trySalvage(); } };
 ui.btnCloseBp.onclick = () => setBackpackOpen(false);
 ui.btnBackpack.onclick = (e) => {
   e.stopPropagation();
@@ -3188,13 +3319,14 @@ ui.backpack.addEventListener('click', (e) => {
 });
 canvas.addEventListener('click', () => canvas.focus?.());
 canvas.tabIndex = 0;
-ui.btnDiscard.onclick = discardFish;
-ui.btnUse.onclick = useSupply;
-ui.btnEat.onclick = eatOrRepair;
-ui.btnEquip.onclick = doEquip;
-ui.btnFeed.onclick = doFeed;
+ui.btnDiscard.onclick = () => { sfx.uiClick(); discardFish(); };
+ui.btnUse.onclick = () => { sfx.uiClick(); useSupply(); };
+ui.btnEat.onclick = () => { sfx.uiClick(); eatOrRepair(); };
+ui.btnEquip.onclick = () => { sfx.uiClick(); doEquip(); };
+ui.btnFeed.onclick = () => { sfx.uiClick(); doFeed(); };
 document.querySelectorAll('.bp-tab').forEach((el) => {
   el.onclick = () => {
+    sfx.uiClick();
     state.backpackTab = el.dataset.tab;
     state.selectedFish = state.backpackTab === 'catch' && state.fishHold.length
       ? Math.max(0, Math.min(state.selectedFish < 0 ? 0 : state.selectedFish, state.fishHold.length - 1))
@@ -3203,16 +3335,18 @@ document.querySelectorAll('.bp-tab').forEach((el) => {
     renderBackpack();
   };
 });
-ui.eventA.onclick = () => resolveEvent('a');
-ui.eventB.onclick = () => resolveEvent('b');
-ui.btnRetry.onclick = () => openHub();
-ui.btnSettleHub?.addEventListener('click', () => openHub());
+ui.eventA.onclick = () => { sfx.uiClick(); resolveEvent('a'); };
+ui.eventB.onclick = () => { sfx.uiClick(); resolveEvent('b'); };
+ui.btnRetry.onclick = () => { sfx.uiClick(); openHub(); };
+ui.btnSettleHub?.addEventListener('click', () => { sfx.uiClick(); openHub(); });
 ui.btnLhContinue?.addEventListener('click', () => {
+  sfx.uiClick();
   state.lighthouseOpen = false;
   ui.lighthouseModal?.classList.add('hidden');
   showToast('继续向深海航行…');
 });
 ui.btnLhReturn?.addEventListener('click', () => {
+  sfx.uiConfirm();
   state.lighthouseOpen = false;
   finishRun('return');
 });
@@ -3241,6 +3375,9 @@ hub = createHub({
 });
 
 ui.btnCoverStart?.addEventListener('click', () => {
+  sfx.unlockAudio();
+  sfx.uiConfirm();
+  sfx.setBgmTheme('cover');
   if (!meta.tutorialDone) {
     startZone = -1;
     startRun(false);
@@ -3252,17 +3389,24 @@ ui.btnCoverStart?.addEventListener('click', () => {
 if (ui.coverManualBody) ui.coverManualBody.innerHTML = renderManualHtml();
 
 ui.btnCoverTutorial?.addEventListener('click', () => {
+  sfx.unlockAudio();
+  sfx.uiOpen();
+  sfx.setBgmTheme('cover');
   ui.coverTutorial?.classList.remove('hidden');
 });
 ui.tutGuideNext?.addEventListener('click', (e) => {
   e.preventDefault();
   e.stopPropagation();
+  sfx.uiClick();
   onTutGuideNext();
 });
 ui.btnTutorialClose?.addEventListener('click', () => {
+  sfx.uiClose();
   ui.coverTutorial?.classList.add('hidden');
 });
 ui.btnCoverQuit?.addEventListener('click', () => {
+  sfx.unlockAudio();
+  sfx.uiClick();
   const card = document.createElement('div');
   card.className = 'cover-quit-msg';
   card.textContent = '感谢游玩「浮骸」— 可以关闭本页了';
@@ -3276,19 +3420,24 @@ canvas.addEventListener('pointerdown', (e) => {
   if (phase !== 'hub') return;
   if (hub?.drawerOpen) return;
   const id = pickHubBuilding(e.clientX, e.clientY);
-  if (id) hub?.openSpot(id);
+  if (id) {
+    sfx.unlockAudio();
+    hub?.openSpot(id);
+  }
 });
 
 document.querySelectorAll('.slot-chip[data-slot]').forEach((el) => {
-  el.onclick = () => { state.selectedSlot = el.dataset.slot; refreshSlots(); };
+  el.onclick = () => { sfx.uiClick(); state.selectedSlot = el.dataset.slot; refreshSlots(); };
 });
 document.querySelectorAll('.weapon-chip').forEach((el) => {
   el.onclick = () => {
     const w = Number(el.dataset.w);
     if (!hasWeaponUnlock(meta, w)) {
+      sfx.uiDeny();
       showToast('没有这张技能牌');
       return;
     }
+    sfx.uiClick();
     state.weapon = w;
     document.querySelectorAll('.weapon-chip').forEach((x) => x.classList.toggle('active', x === el));
   };
@@ -3310,18 +3459,6 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-{
-  const btn = document.createElement('button');
-  btn.id = 'sfx-toggle';
-  btn.type = 'button';
-  btn.textContent = '🔊';
-  btn.addEventListener('click', () => {
-    sfx.setEnabled(!sfx.isEnabled());
-    btn.textContent = sfx.isEnabled() ? '🔊' : '🔇';
-    btn.classList.toggle('muted', !sfx.isEnabled());
-  });
-  document.body.appendChild(btn);
-}
 applyZoneVisual(getZone(0, startZone));
 refreshWeaponChips();
 refreshTitleMeta();

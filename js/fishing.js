@@ -246,6 +246,7 @@ export function createFishingController(hooks) {
         hooks.onFishingEnd?.();
       }
     } else {
+      hooks.onMiss?.();
       hooks.toast?.('脱钩了！');
       reset();
       hooks.onRod?.(false);

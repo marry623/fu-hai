@@ -662,3 +662,263 @@ export function createCombatMonster(monsterId, gm, index = 0) {
   attachHpBar(g);
   return g;
 }
+
+const _flashWhite = new THREE.Color(0xffffff);
+
+/** Brief white flash + scale punch on body mats (skips outline / HP bar). */
+export function beginHitFlash(mesh, ms = 160) {
+  if (!mesh) return;
+  mesh.userData.hitFlashUntil = performance.now() + ms;
+  if (mesh.userData.hitBaseScale == null) {
+    mesh.userData.hitBaseScale = mesh.scale.x;
+  }
+  mesh.scale.setScalar(mesh.userData.hitBaseScale * 1.07);
+  mesh.traverse((o) => {
+    if (!o.isMesh) return;
+    if (o.userData.isOutline || o.userData.skipOutline) return;
+    if (o.parent?.name === 'hpBar' || o.name === 'hpBar') return;
+    const mat = o.material;
+    if (!mat?.color || mat.userData?.isHpMat) return;
+    if (!mat.userData.hitBaseColor) mat.userData.hitBaseColor = mat.color.clone();
+    mat.color.copy(mat.userData.hitBaseColor).lerp(_flashWhite, 0.7);
+  });
+}
+
+export function tickHitFlash(mesh, now = performance.now()) {
+  if (!mesh?.userData?.hitFlashUntil) return;
+  if (mesh.userData.dying) return;
+  const until = mesh.userData.hitFlashUntil;
+  const baseS = mesh.userData.hitBaseScale;
+  if (now < until) {
+    if (baseS != null) {
+      const u = 1 - (until - now) / 180;
+      const punch = 1.07 - 0.07 * Math.min(1, Math.max(0, u) * 1.8);
+      mesh.scale.setScalar(baseS * punch);
+    }
+    return;
+  }
+  mesh.userData.hitFlashUntil = 0;
+  if (baseS != null) mesh.scale.setScalar(baseS);
+  mesh.traverse((o) => {
+    if (!o.isMesh || !o.material?.userData?.hitBaseColor) return;
+    o.material.color.copy(o.material.userData.hitBaseColor);
+  });
+}
+
+/**
+ * Start a short death sequence (body visible ~0.55s).
+ * @param {THREE.Object3D} mesh
+ * @param {{ kind?: string, intensity?: number }} profile
+ */
+export function beginDeathAnim(mesh, profile = {}) {
+  if (!mesh) return;
+  const kind = profile.kind || mesh.userData.kind || 'ram';
+  const intensity = profile.intensity ?? 1;
+  if (mesh.userData.hitBaseScale == null) mesh.userData.hitBaseScale = mesh.scale.x;
+  mesh.userData.dying = true;
+  mesh.userData.dyingT = 0;
+  mesh.userData.dyingDur = 0.52;
+  mesh.userData.deathKind = kind;
+  mesh.userData.deathIntensity = intensity;
+  mesh.userData.deathBaseY = mesh.position.y;
+  mesh.userData.deathBaseRotZ = mesh.rotation.z;
+  mesh.userData.deathBaseRotX = mesh.rotation.x;
+  mesh.userData.hitFlashUntil = performance.now() + 90;
+  // Snap bright for freeze beat
+  mesh.scale.setScalar(mesh.userData.hitBaseScale * 1.12);
+  mesh.traverse((o) => {
+    if (!o.isMesh) return;
+    if (o.userData.isOutline || o.userData.skipOutline) return;
+    if (o.parent?.name === 'hpBar' || o.name === 'hpBar') return;
+    const mat = o.material;
+    if (!mat) return;
+    if (mat.color && !mat.userData.hitBaseColor) mat.userData.hitBaseColor = mat.color.clone();
+    if (mat.color) mat.color.copy(mat.userData.hitBaseColor).lerp(_flashWhite, 0.85);
+    if (mat.opacity != null) {
+      if (mat.userData.deathBaseOp == null) mat.userData.deathBaseOp = mat.opacity;
+      mat.transparent = true;
+      mat.depthWrite = false;
+    }
+  });
+  const bar = mesh.userData.hpBar;
+  if (bar) bar.visible = false;
+}
+
+/** @returns {boolean} true when death finished and mesh can be hidden */
+export function tickDeathAnim(mesh, dt) {
+  if (!mesh?.userData?.dying) return false;
+  const dur = mesh.userData.dyingDur || 0.52;
+  mesh.userData.dyingT = (mesh.userData.dyingT || 0) + dt;
+  const t = Math.min(1, mesh.userData.dyingT / dur);
+  const kind = mesh.userData.deathKind || 'ram';
+  const baseS = mesh.userData.hitBaseScale ?? 1;
+  const baseY = mesh.userData.deathBaseY ?? 0;
+  const inten = mesh.userData.deathIntensity ?? 1;
+
+  // 0–0.15 freeze, 0.15–0.7 burst motion, 0.7–1 fade
+  const freeze = Math.min(1, t / 0.15);
+  const burstU = t < 0.15 ? 0 : Math.min(1, (t - 0.15) / 0.55);
+  const fadeU = t < 0.55 ? 0 : Math.min(1, (t - 0.55) / 0.45);
+
+  let sx = 1;
+  let sy = 1;
+  let sz = 1;
+  let yOff = 0;
+  let rotZ = mesh.userData.deathBaseRotZ || 0;
+  let rotX = mesh.userData.deathBaseRotX || 0;
+
+  if (kind === 'ram') {
+    sx = 1.12 - burstU * 0.55;
+    sy = 1.12 - burstU * 0.75;
+    sz = 1.12 - burstU * 0.4;
+    yOff = -burstU * 1.1 * inten;
+    rotZ = (mesh.userData.deathBaseRotZ || 0) + burstU * 0.85;
+  } else if (kind === 'ranged') {
+    const lift = Math.sin(burstU * Math.PI) * 0.85 * inten;
+    yOff = lift - fadeU * 0.6;
+    sx = 1.1 + burstU * 0.25 - fadeU * 0.9;
+    sy = 1.15 + burstU * 0.4 - fadeU * 1.0;
+    sz = sx;
+  } else if (kind === 'wrap') {
+    sx = 1.15 + burstU * 0.45 - fadeU * 1.2;
+    sy = 1.15 - burstU * 0.85;
+    sz = sx;
+    yOff = -burstU * 0.25;
+  } else if (kind === 'static') {
+    const pop = burstU < 0.35 ? burstU / 0.35 : 1 - (burstU - 0.35) / 0.65;
+    sx = 1.12 + pop * 0.55 * inten;
+    sy = sx;
+    sz = sx;
+    yOff = pop * 0.15;
+  } else if (kind === 'suction') {
+    sx = 1.1 - burstU * 0.35;
+    sy = 1.2 + burstU * 0.9 * inten - fadeU * 1.4;
+    sz = 1.1 - burstU * 0.35;
+    yOff = -burstU * 0.5;
+    rotX = (mesh.userData.deathBaseRotX || 0) + burstU * 0.35;
+  } else {
+    sx = 1.12 - burstU * 0.7;
+    sy = sx;
+    sz = sx;
+    yOff = -burstU * 0.8;
+  }
+
+  // Hold freeze scale briefly
+  if (freeze < 1 && burstU === 0) {
+    sx = sy = sz = 1.12;
+  }
+
+  const fadeScale = 1 - fadeU * 0.85;
+  mesh.scale.set(baseS * sx * fadeScale, baseS * sy * fadeScale, baseS * sz * fadeScale);
+  mesh.position.y = baseY + yOff;
+  mesh.rotation.z = rotZ;
+  mesh.rotation.x = rotX;
+
+  const op = Math.max(0, 1 - fadeU * 1.05);
+  mesh.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    if (o.parent?.name === 'hpBar' || o.name === 'hpBar') return;
+    if (o.material.opacity != null) {
+      const base = o.material.userData.deathBaseOp ?? 1;
+      o.material.transparent = true;
+      o.material.opacity = base * op;
+    }
+  });
+
+  return t >= 1;
+}
+
+/** Reset transform/mats after death so the pool entry can respawn clean. */
+export function finishDeathAnim(mesh) {
+  if (!mesh) return;
+  const baseS = mesh.userData.hitBaseScale ?? mesh.scale.x;
+  mesh.userData.dying = false;
+  mesh.userData.dyingT = 0;
+  mesh.userData.hitFlashUntil = 0;
+  mesh.scale.setScalar(baseS);
+  if (mesh.userData.deathBaseY != null) mesh.position.y = mesh.userData.deathBaseY;
+  mesh.rotation.z = mesh.userData.deathBaseRotZ || 0;
+  mesh.rotation.x = mesh.userData.deathBaseRotX || 0;
+  mesh.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    if (o.material.userData?.hitBaseColor) {
+      o.material.color.copy(o.material.userData.hitBaseColor);
+    }
+    if (o.material.userData?.deathBaseOp != null) {
+      o.material.opacity = o.material.userData.deathBaseOp;
+    }
+  });
+}
+
+function makeDmgTexture(text, kill) {
+  const c = document.createElement('canvas');
+  c.width = 160;
+  c.height = 80;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.font = kill ? 'bold 44px sans-serif' : 'bold 36px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = 'rgba(20,12,8,0.85)';
+  ctx.strokeText(text, 80, 40);
+  ctx.fillStyle = kill ? '#ffe8a0' : '#fff6e8';
+  ctx.fillText(text, 80, 40);
+  const tex = new THREE.CanvasTexture(c);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/** Floating damage numbers above monsters (discrete hits only). */
+export function createDamageFloats(parent) {
+  const root = new THREE.Group();
+  root.name = 'dmgFloats';
+  parent.add(root);
+  const active = [];
+
+  function spawn(x, y, z, amount, kill = false) {
+    const n = Math.max(1, Math.round(amount));
+    if (n < 1) return;
+    const label = kill ? `${n}!` : String(n);
+    const tex = makeDmgTexture(label, kill);
+    const mat = new THREE.SpriteMaterial({
+      map: tex,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    mat.userData.skipOutline = true;
+    const spr = new THREE.Sprite(mat);
+    spr.position.set(x, y, z);
+    spr.scale.set(kill ? 1.35 : 1.05, kill ? 0.68 : 0.52, 1);
+    spr.renderOrder = 30;
+    spr.userData.skipOutline = true;
+    root.add(spr);
+    active.push({
+      spr,
+      life: kill ? 0.75 : 0.58,
+      max: kill ? 0.75 : 0.58,
+      vy: kill ? 1.35 : 1.1,
+    });
+  }
+
+  function update(dt) {
+    for (let i = active.length - 1; i >= 0; i--) {
+      const f = active[i];
+      f.life -= dt;
+      f.spr.position.y += f.vy * dt;
+      f.vy *= 0.98;
+      const a = Math.max(0, f.life / f.max);
+      f.spr.material.opacity = a;
+      if (f.life <= 0) {
+        root.remove(f.spr);
+        f.spr.material.map?.dispose();
+        f.spr.material.dispose();
+        active.splice(i, 1);
+      }
+    }
+  }
+
+  return { root, spawn, update };
+}
