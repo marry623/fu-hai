@@ -2318,6 +2318,103 @@ html, body {
   outline: 3px solid var(--teal);
   outline-offset: 1px;
 }
+
+/* Prep slot bind picker — same-screen fish list beside callout */
+.hub-slot-bind-pop {
+  position: absolute;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(280px, 70%);
+  padding: 8px 8px 10px;
+  border: 3px solid var(--ink);
+  border-radius: 6px;
+  background: var(--polaroid, #f7f1e4);
+  box-shadow: 4px 4px 0 var(--wood-edge, #5a3a22);
+  pointer-events: auto;
+  overflow: hidden;
+}
+.hub-slot-bind-pop.hidden {
+  display: none;
+}
+.hub-slot-bind-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.hub-slot-bind-head strong {
+  font-weight: 700;
+}
+.hub-slot-bind-close {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background: #efe6d4;
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.hub-slot-bind-close:hover {
+  background: #e0d4bc;
+}
+.hub-slot-bind-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  overflow-y: auto;
+  padding-right: 2px;
+  min-height: 0;
+}
+.hub-slot-bind-cell {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.hub-slot-bind-cell:hover .hub-slot-bind-polaroid {
+  outline: 2px solid var(--teal);
+  outline-offset: 1px;
+}
+.hub-slot-bind-polaroid {
+  padding: 4px 4px 6px;
+}
+.hub-slot-bind-polaroid .bp-thumb {
+  height: 52px;
+}
+.hub-slot-bind-polaroid .bp-cell-name {
+  font-size: 11px;
+  line-height: 1.2;
+  margin-top: 2px;
+}
+.hub-slot-bind-cell .bp-family-chip {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  z-index: 1;
+  font-size: 9px;
+  padding: 1px 4px;
+}
+.hub-slot-bind-empty {
+  margin: 4px 2px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #5a4a3a;
+  opacity: 0.9;
+}
+
 .hub-callout-cap {
   font-size: 10px;
   font-weight: 900;

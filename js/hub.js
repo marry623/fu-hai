@@ -167,6 +167,8 @@ export function createHub(deps) {
   let bmSelected = -1;
   let shopSupplyZone = 'bait';
   let warehouseTab = 'fish';
+  /** Prep callout bind picker: target slot id, or null when closed */
+  let bindPickSlot = null;
   let shopDetail = null;
 
   if (els.libraryBody) els.libraryBody.innerHTML = renderManualHtml();
@@ -223,6 +225,7 @@ export function createHub(deps) {
 
   function closeDrawer() {
     const was = drawerOpen;
+    closeSlotBindPicker();
     drawerOpen = false;
     els.drawer?.classList.add('hidden');
     root?.classList.remove('drawer-open');
@@ -233,6 +236,7 @@ export function createHub(deps) {
   }
 
   function setTab(id) {
+    closeSlotBindPicker();
     tab = id;
     const ship = isShipTab(id);
     const showBoat = id === 'prep';
@@ -363,6 +367,131 @@ export function createHub(deps) {
     }
   }
 
+  function ensureSlotBindPop() {
+    if (!els.boatStage) return null;
+    let pop = els.boatStage.querySelector('#hub-slot-bind-pop');
+    if (!pop) {
+      pop = document.createElement('div');
+      pop.id = 'hub-slot-bind-pop';
+      pop.className = 'hub-slot-bind-pop hidden';
+      pop.setAttribute('role', 'dialog');
+      pop.setAttribute('aria-label', '选择绑定鱼');
+      els.boatStage.appendChild(pop);
+    }
+    return pop;
+  }
+
+  function closeSlotBindPicker() {
+    bindPickSlot = null;
+    const pop = els.boatStage?.querySelector('#hub-slot-bind-pop');
+    if (pop) {
+      pop.classList.add('hidden');
+      pop.innerHTML = '';
+    }
+    els.callouts?.querySelectorAll('.hub-callout.selected').forEach((el) => {
+      el.classList.remove('selected');
+    });
+  }
+
+  function positionSlotBindPop(pop, anchorBtn) {
+    if (!els.boatStage || !pop || !anchorBtn) return;
+    const stage = els.boatStage.getBoundingClientRect();
+    const btn = anchorBtn.getBoundingClientRect();
+    const side = CALLOUT_LAYOUT[bindPickSlot]?.side || 'L';
+    const popW = Math.min(220, Math.max(160, stage.width * 0.38));
+    pop.style.width = `${popW}px`;
+
+    let left = side === 'L'
+      ? btn.right - stage.left + 8
+      : btn.left - stage.left - popW - 8;
+    let top = btn.top - stage.top - 4;
+    left = Math.max(8, Math.min(left, stage.width - popW - 8));
+    top = Math.max(8, Math.min(top, stage.height - 120));
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+  }
+
+  function renderSlotBindPicker(meta, anchorBtn) {
+    const pop = ensureSlotBindPop();
+    if (!pop || !bindPickSlot) return;
+    const slot = bindPickSlot;
+    const label = SLOT_LABELS[slot] || slot;
+    const fish = meta.warehouse?.fish || [];
+    const matches = [];
+    fish.forEach((f, i) => {
+      const def = getFishDef(f.defId);
+      if (def?.slot === slot) matches.push({ f, i, def });
+    });
+
+    const cells = matches.map(({ f, i, def }) => {
+      let thumb = '';
+      try {
+        thumb = `<img class="bp-thumb-fish" src="${getFishPortrait(f.defId, f)}" alt="" draggable="false" />`;
+      } catch (_) {
+        thumb = '<div class="bp-thumb-blob" style="background:#4a90a4"></div>';
+      }
+      const fam = familyOf(f.defId);
+      const famChip = fam
+        ? `<span class="bp-family-chip fam-${fam.id}" style="--fam:${fam.color}">${fam.name}</span>`
+        : '';
+      return `<button type="button" class="hub-slot-bind-cell" data-bind-eq="${i}">
+        ${famChip}
+        <div class="bp-polaroid hub-slot-bind-polaroid">
+          <div class="bp-thumb">${thumb}</div>
+          <div class="bp-cell-name">${f.name}</div>
+          <div class="bp-rarity-bar r${def.rarity || 1}"></div>
+        </div>
+      </button>`;
+    }).join('');
+
+    const body = matches.length
+      ? `<div class="hub-slot-bind-grid">${cells}</div>`
+      : `<p class="hub-slot-bind-empty">仓库暂无适合${label}的鱼</p>`;
+
+    pop.innerHTML = `<div class="hub-slot-bind-head">
+        <strong>绑到 · ${label}</strong>
+        <button type="button" class="hub-slot-bind-close" aria-label="关闭">×</button>
+      </div>${body}`;
+    pop.classList.remove('hidden');
+    positionSlotBindPop(pop, anchorBtn);
+
+    pop.querySelector('.hub-slot-bind-close')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeSlotBindPicker();
+    });
+    pop.querySelectorAll('[data-bind-eq]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = Number(btn.dataset.bindEq);
+        const r = equipFromWarehouse(deps.getMeta(), idx, slot);
+        deps.toast(r.msg || (r.ok ? '已绑槽' : '失败'));
+        if (r.ok) {
+          sfx.uiEquip();
+          deps.setMeta(r.meta);
+          closeSlotBindPicker();
+          render();
+          refreshCenter();
+        } else {
+          sfx.uiDeny();
+        }
+      });
+    });
+  }
+
+  function openSlotBindPicker(slot, anchorBtn) {
+    if (bindPickSlot === slot) {
+      closeSlotBindPicker();
+      return;
+    }
+    bindPickSlot = slot;
+    els.callouts?.querySelectorAll('.hub-callout.selected').forEach((el) => {
+      el.classList.remove('selected');
+    });
+    anchorBtn?.classList.add('selected');
+    sfx.uiClick();
+    renderSlotBindPicker(deps.getMeta(), anchorBtn);
+  }
+
   function renderCallouts(meta) {
     if (!els.callouts) return;
     const slots = meta.loadout?.slots || {};
@@ -371,7 +500,8 @@ export function createHub(deps) {
       const f = slots[slot];
       const empty = !f?.defId;
       const status = empty ? '可绑' : '已绑';
-      return `<button type="button" class="hub-callout${empty ? ' empty' : ' filled'}" data-slot="${slot}"
+      const sel = bindPickSlot === slot ? ' selected' : '';
+      return `<button type="button" class="hub-callout${empty ? ' empty' : ' filled'}${sel}" data-slot="${slot}"
         style="left:${lay.x}%;top:${lay.y}%">
         <span class="hub-callout-cap">${status} · ${SLOT_LABELS[slot]}</span>
         <span class="hub-callout-face" data-face-slot="${slot}">${empty ? '?' : ''}</span>
@@ -399,11 +529,10 @@ export function createHub(deps) {
         const slot = btn.dataset.slot;
         const f = (deps.getMeta().loadout?.slots || {})[slot];
         if (!f) {
-          deps.toast(`${SLOT_LABELS[slot]}为空 — 去仓库绑鱼`);
-          sfx.uiDeny();
-          if (tab !== 'warehouse') setTab('warehouse');
+          openSlotBindPicker(slot, btn);
           return;
         }
+        closeSlotBindPicker();
         const r = unequipToWarehouse(deps.getMeta(), slot);
         deps.toast(r.msg || (r.ok ? '已卸下' : '失败'));
         if (r.ok) {
@@ -416,6 +545,15 @@ export function createHub(deps) {
         }
       });
     });
+
+    if (bindPickSlot) {
+      const anchor = els.callouts.querySelector(`[data-slot="${bindPickSlot}"]`);
+      if (anchor && !(slots[bindPickSlot]?.defId)) {
+        renderSlotBindPicker(meta, anchor);
+      } else if (slots[bindPickSlot]?.defId) {
+        closeSlotBindPicker();
+      }
+    }
   }
 
   /** Elbow polylines from callout boxes to projected mounts */
@@ -1931,6 +2069,18 @@ export function createHub(deps) {
   });
   els.shipTabs.forEach((btn) => {
     btn.addEventListener('click', () => openSpot(btn.dataset.hubNav));
+  });
+
+  document.addEventListener('pointerdown', (e) => {
+    if (!bindPickSlot) return;
+    const pop = els.boatStage?.querySelector('#hub-slot-bind-pop');
+    if (pop && pop.contains(e.target)) return;
+    if (e.target.closest?.('.hub-callout')) return;
+    closeSlotBindPicker();
+  }, true);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && bindPickSlot) closeSlotBindPicker();
   });
 
   return {
