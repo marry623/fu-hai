@@ -1,7 +1,7 @@
 /** Hub boat showcase — loadout preview with mount projections for callouts */
 
 import * as THREE from 'three';
-import { createBoat, setBoatVariant, BOAT_WATERLINE_Y } from './boat.js?v=28l';
+import { createBoat, setBoatVariant, BOAT_WATERLINE_Y } from './boat.js?v=36g';
 import { getFishDef } from './fishCatalog.js?v=34b';
 import { equipFish, SLOT_ORDER } from './slots.js?v=32e';
 
@@ -16,7 +16,7 @@ export function createHubBoatPreview(scene, gradientMap) {
   boat.name = 'hubShowBoat';
   boat.visible = false;
   boat.position.set(-0.2, BOAT_WATERLINE_Y || 0.72, 16);
-  boat.rotation.y = -Math.PI * 0.35;
+  boat.rotation.y = Math.PI * 1.65;
   boat.scale.setScalar(1.35);
   scene.add(boat);
 
@@ -75,8 +75,8 @@ export function createHubBoatPreview(scene, gradientMap) {
     const sway = Math.sin(t * 0.15) * 0.25;
     const p = boat.position;
     return {
-      pos: new THREE.Vector3(p.x + 7.2 + sway, p.y + 5.4, p.z + 8.8),
-      look: new THREE.Vector3(p.x - 0.2, p.y + 1.6, p.z - 0.4),
+      pos: new THREE.Vector3(p.x + 10.0 + sway, p.y + 10.5, p.z + 15.6),
+      look: new THREE.Vector3(p.x + 2.0, p.y + 5.5, p.z - 0.4),
     };
   }
 

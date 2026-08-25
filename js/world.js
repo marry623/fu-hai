@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from '../vendor/three/GLTFLoader.js';
 import { addOutline, toonMat } from './stylekit.js';
 
 export function createDuskSky() {
@@ -54,52 +55,43 @@ export function createDuskSky() {
   return sky;
 }
 
-export function createSun() {
-  const group = new THREE.Group();
-  const disc = new THREE.Mesh(
-    new THREE.CircleGeometry(28, 6),
-    new THREE.MeshBasicMaterial({ color: 0xffc56b, side: THREE.DoubleSide })
-  );
-  disc.position.set(-180, 28, -420);
-  disc.lookAt(0, 20, 0);
-  addOutline(disc, 1.12);
-  group.add(disc);
-
-  const glow = new THREE.Mesh(
-    new THREE.CircleGeometry(48, 6),
-    new THREE.MeshBasicMaterial({
-      color: 0xff7a3a,
-      transparent: true,
-      opacity: 0.28,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    })
-  );
-  glow.position.copy(disc.position);
-  glow.lookAt(0, 20, 0);
-  glow.userData.skipOutline = true;
-  group.add(glow);
-
-  group.userData.setBiome = (biome) => {
-    disc.material.color.setHex(biome.sun);
-    glow.material.color.setHex(biome.accent);
-    glow.material.opacity = biome.id >= 2 ? 0.18 : 0.28;
-    group.visible = biome.sunIntensity >= 0.55;
-  };
-  const look = new THREE.Vector3();
-  group.userData.follow = (pos) => {
-    group.position.x = pos.x;
-    group.position.z = pos.z;
-    look.set(pos.x, 20, pos.z);
-    disc.lookAt(look);
-    glow.lookAt(look);
-  };
-  return group;
-}
-
 export function createClouds(gradientMap) {
   const root = new THREE.Group();
   root.name = 'worldClouds';
+
+  const cloudUrls = [
+    './models/claude_cloud1.glb?v=1',
+    './models/claude_cloud2.glb?v=1',
+    './models/claude_cloud3.glb?v=1',
+  ];
+  const templates = [];
+  const loader = new GLTFLoader();
+
+  for (const url of cloudUrls) {
+    loader.load(
+      url,
+      (gltf) => {
+        const tpl = bakeCloudTemplate(gltf.scene, gradientMap);
+        templates.push(tpl);
+        // fill pending placeholders
+        for (const slot of root.children) {
+          if (slot.userData.pending) {
+            const cloud = tpl.clone(true);
+            cloud.position.copy(slot.position);
+            cloud.userData.baseY = slot.userData.baseY;
+            cloud.userData.baseScale = slot.userData.baseScale;
+            cloud.rotation.y = slot.userData.rotY;
+            cloud.scale.setScalar(slot.userData.baseScale);
+            slot.parent.add(cloud);
+            slot.parent.remove(slot);
+          }
+        }
+      },
+      undefined,
+      (err) => console.error('cloud GLB load failed:', err),
+    );
+  }
+
   const positions = [
     [-80, 42, -120], [40, 48, -160], [120, 38, -90],
     [-140, 50, -40], [20, 55, 140], [-60, 44, 160],
@@ -110,20 +102,38 @@ export function createClouds(gradientMap) {
     [280, 46, -60], [-40, 54, 280],
   ];
 
-  for (const [x, y, z] of positions) {
-    const cloud = makeCloud(gradientMap);
-    cloud.position.set(x, y, z);
-    cloud.userData.baseY = y;
-    cloud.userData.baseScale = 0.8 + Math.random() * 1.4;
-    cloud.rotation.y = Math.random() * Math.PI;
-    cloud.scale.setScalar(cloud.userData.baseScale);
-    root.add(cloud);
+  for (let i = 0; i < positions.length; i++) {
+    const [x, y, z] = positions[i];
+    const baseScale = 0.8 + Math.random() * 1.4;
+    const rotY = Math.random() * Math.PI;
+    const tplIdx = i % 3;
+
+    if (templates[tplIdx]) {
+      const cloud = templates[tplIdx].clone(true);
+      cloud.position.set(x, y, z);
+      cloud.userData.baseY = y;
+      cloud.userData.baseScale = baseScale;
+      cloud.rotation.y = rotY;
+      cloud.scale.setScalar(baseScale);
+      root.add(cloud);
+    } else {
+      // placeholder slot — will be filled when GLB arrives
+      const slot = new THREE.Group();
+      slot.position.set(x, y, z);
+      slot.userData.pending = true;
+      slot.userData.baseY = y;
+      slot.userData.baseScale = baseScale;
+      slot.userData.rotY = rotY;
+      root.add(slot);
+    }
   }
 
   root.userData.setBiome = (biome) => {
-    const n = Math.max(0, Math.min(root.children.length, biome.cloudCount ?? 12));
-    root.children.forEach((cloud, i) => {
-      cloud.visible = i < n;
+    const n = Math.max(0, Math.min(positions.length, biome.cloudCount ?? 12));
+    let visIdx = 0;
+    root.children.forEach((cloud) => {
+      cloud.visible = visIdx < n;
+      if (cloud.visible) visIdx++;
       cloud.position.y = biome.cloudY ?? cloud.userData.baseY;
       cloud.scale.setScalar((cloud.userData.baseScale || 1) * (biome.cloudScale ?? 1));
       tintCloud(cloud, biome.cloudTint, biome.cloudShade);
@@ -139,36 +149,41 @@ export function createClouds(gradientMap) {
 function tintCloud(cloud, tint, shade) {
   cloud.traverse((m) => {
     if (!m.isMesh || m.userData.isOutline || !m.material?.color) return;
-    m.material.color.setHex(m.userData.cloudLayer === 'bot' ? shade : tint);
+    m.material.color.setHex(tint);
   });
 }
 
-function makeCloud(gradientMap) {
-  const g = new THREE.Group();
-  const top = toonMat(0xffe8d4, gradientMap);
-  const bot = toonMat(0xd080b8, gradientMap);
+function bakeCloudTemplate(source, gradientMap) {
+  const root = new THREE.Group();
+  source.updateMatrixWorld(true);
 
-  const blobs = [
-    [0, 0, 0, 5, 2.2, 4],
-    [4, -0.3, 1, 4, 2, 3.5],
-    [-4, -0.4, 0.5, 3.8, 1.8, 3.2],
-    [1.5, 1.2, -1, 3.2, 1.6, 2.8],
-    [-2, 0.8, 1.5, 2.8, 1.4, 2.5],
-  ];
+  source.traverse((o) => {
+    if (!o.isMesh) return;
+    const geo = o.geometry.clone();
+    geo.applyMatrix4(o.matrixWorld);
+    geo.computeVertexNormals();
+    const mat = toonMat(0xfff5e8, gradientMap, { flatShading: true, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.userData.cloudLayer = 'top';
+    root.add(mesh);
+  });
 
-  for (let i = 0; i < blobs.length; i++) {
-    const [bx, by, bz, sx, sy, sz] = blobs[i];
-    const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 5, 4),
-      i < 3 ? top : bot
-    );
-    mesh.userData.cloudLayer = i < 3 ? 'top' : 'bot';
-    mesh.position.set(bx, by, bz);
-    mesh.scale.set(sx, sy, sz);
-    g.add(mesh);
-    addOutline(mesh, 1.09);
-  }
-  return g;
+  const box = new THREE.Box3().setFromObject(root);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const baseSize = Math.max(size.x, size.y, size.z, 1e-6);
+  root.userData.baseSize = baseSize;
+
+  // center and ground
+  root.position.x -= (box.min.x + box.max.x) * 0.5;
+  root.position.z -= (box.min.z + box.max.z) * 0.5;
+  root.position.y -= box.min.y;
+
+  // normalize to ~12-unit size
+  const norm = 12 / baseSize;
+  root.scale.setScalar(norm);
+
+  return root;
 }
 
 export function createWater() {

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>浮骸 · 怪物概念设定</title>
+<style>
+  body {
+    background: #e9dfc8;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 36px 20px 60px; margin: 0;
+  }
+  h1 { color: #4a3a28; letter-spacing: 6px; margin: 0; font-size: 30px; }
+  .sub { color: #8a7458; margin: 10px 0 30px; font-size: 15px; letter-spacing: 2px; }
+  .row { display: flex; gap: 40px; flex-wrap: wrap; justify-content: center; }
+  .card {
+    background: #f8f1de;
+    border: 4px solid #6b5136;
+    outline: 2px dashed rgba(107, 81, 54, .35);
+    outline-offset: -12px;
+    border-radius: 20px;
+    padding: 20px 20px 18px;
+    width: 440px;
+    box-shadow: 0 8px 0 rgba(107, 81, 54, .22);
+  }
+  .name { font-size: 27px; font-weight: 700; color: #3a2c1c; text-align: center; margin-top: 6px; }
+  .stars { text-align: center; color: #e0a83a; font-size: 17px; letter-spacing: 4px; margin-top: 2px; }
+  .skill { text-align: center; margin-top: 10px; }
+  .chip {
+    display: inline-block; background: #2e4a56; color: #ffe9b8;
+    border-radius: 999px; padding: 6px 18px; font-size: 15px; letter-spacing: 1px;
+  }
+  .chip.pink { background: #b8433c; }
+  .desc { text-align: center; color: #7a6448; font-size: 14px; margin-top: 10px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<h1>浮 骸 · 怪物概念设定</h1>
+<div class="sub">2D 卡通手绘风 · 按游戏内图鉴模型绘制</div>
+<div class="row">
+
+  <!-- ============ 巨口鲨 ============ -->
+  <div class="card">
+    <svg viewBox="0 0 400 380" width="100%" role="img" aria-label="巨口鲨">
+      <defs>
+        <radialGradient id="seaWash" cx="50%" cy="45%" r="62%">
+          <stop offset="0%" stop-color="#cdeef5"/>
+          <stop offset="70%" stop-color="#b5e2ee"/>
+          <stop offset="100%" stop-color="#f8f1de"/>
+        </radialGradient>
+        <linearGradient id="sharkBody" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#3d5478"/>
+          <stop offset="100%" stop-color="#2a3a5a"/>
+        </linearGradient>
+      </defs>
+
+      <circle cx="200" cy="180" r="165" fill="url(#seaWash)"/>
+
+      <!-- 粉色礁石剪影（呼应游戏粉崖） -->
+      <path d="M18 348 Q30 300 58 296 Q84 300 80 348 Z" fill="#e88aa8" opacity=".38"/>
+      <path d="M330 352 Q346 306 372 308 Q392 314 386 352 Z" fill="#e88aa8" opacity=".3"/>
+
+      <!-- 波浪 -->
+      <path d="M40 306 q20 -12 40 0 t40 0 t40 0 t40 0 t40 0 t40 0" fill="none" stroke="#8fd0e0" stroke-width="6" stroke-linecap="round" opacity=".65"/>
+      <path d="M78 336 q20 -12 40 0 t40 0 t40 0 t40 0 t40 0" fill="none" stroke="#8fd0e0" stroke-width="5" stroke-linecap="round" opacity=".45"/>
+
+      <!-- 地面阴影 -->
+      <ellipse cx="205" cy="320" rx="110" ry="14" fill="#2e4a56" opacity=".15"/>
+
+      <!-- 图鉴同款碎晶底座 -->
+      <g fill="#e2f1f8" stroke="#9fc4d8" stroke-width="3" stroke-linejoin="round">
+        <path d="M106 322 L118 296 L130 322 Z"/>
+        <path d="M134 324 L150 292 L166 324 Z"/>
+        <path d="M172 322 L182 300 L192 322 Z"/>
+        <path d="M212 322 L232 310 L226 326 Z"/>
+      </g>
+
+      <!-- 速度线（冲撞技能，跟在尾后） -->
+      <g stroke="#22304e" stroke-width="7" stroke-linecap="round" opacity=".7">
+        <line x1="370" y1="106" x2="396" y2="100"/>
+        <line x1="374" y1="126" x2="398" y2="124"/>
+        <line x1="370" y1="150" x2="394" y2="154"/>
+      </g>
+
+      <!-- 背鳍（低多边形尖角） -->
+      <path d="M282 102 L304 66 L320 104 Z" fill="#24344f" stroke="#22304e" stroke-width="6" stroke-linejoin="round"/>
+
+      <!-- 身体 + 上颚（方块楔形轮廓，锯齿状头顶，对照模型） -->
+      <path d="M84 156 L116 106 L146 88 L172 98 L198 84 L224 96 L250 90 L272 110 L308 102 L334 118 L356 96 L346 126 L358 152 L330 146 L302 166 L264 190 L232 206 L186 198 L158 176 Z"
+            fill="url(#sharkBody)" stroke="#22304e" stroke-width="7" stroke-linejoin="round"/>
+
+      <!-- 体块分面线（呼应低多边形） -->
+      <g stroke="#22304e" stroke-width="3" stroke-linecap="round" opacity=".22">
+        <path d="M146 90 L158 130"/>
+        <path d="M224 98 L232 140"/>
+        <path d="M306 106 L302 150"/>
+      </g>
+
+      <!-- 腹部浅色块 -->
+      <path d="M252 184 L296 162 L306 172 L268 194 Z"
+            fill="#a7bad9" stroke="#22304e" stroke-width="3" stroke-linejoin="round" opacity=".9"/>
+
+      <!-- 口腔（标志性大红嘴，占半张脸） -->
+      <path d="M84 156 L158 176 L148 212 L96 208 Q76 180 84 156 Z"
+            fill="#b8433c" stroke="#22304e" stroke-width="6" stroke-linejoin="round"/>
+      <path d="M100 170 L146 182 L138 204 L106 200 Q94 184 100 170 Z" fill="#8a2e2e" opacity=".75"/>
+      <path d="M96 196 q14 -6 19 4 q-12 10 -19 -4 Z" fill="#e0685f"/>
+
+      <!-- 上排牙 -->
+      <g fill="#fff8ee" stroke="#22304e" stroke-width="3" stroke-linejoin="round">
+        <path d="M88 157 l11 2 l-6 13 Z"/>
+        <path d="M102 160 l11 2 l-6 13 Z"/>
+        <path d="M116 163 l11 2 l-6 13 Z"/>
+        <path d="M130 166 l11 2 l-6 13 Z"/>
+        <path d="M144 169 l11 2 l-6 13 Z"/>
+      </g>
+
+      <!-- 下颚 -->
+      <path d="M96 208 L148 212 L186 198 L176 234 L124 244 Q94 228 96 208 Z"
+            fill="#24344f" stroke="#22304e" stroke-width="6" stroke-linejoin="round"/>
+
+      <!-- 下排牙 -->
+      <g fill="#fff8ee" stroke="#22304e" stroke-width="3" stroke-linejoin="round">
+        <path d="M100 207 l11 1 l-5 -12 Z"/>
+        <path d="M114 209 l11 1 l-5 -12 Z"/>
+        <path d="M128 210 l11 1 l-5 -12 Z"/>
+      </g>
+
+      <!-- 眼睛 + 怒眉 -->
+      <circle cx="138" cy="128" r="9.5" fill="#ffffff" stroke="#22304e" stroke-width="4"/>
+      <circle cx="140" cy="130" r="4.5" fill="#1c2333"/>
+      <path d="M120 108 L158 118" stroke="#22304e" stroke-width="7" stroke-linecap="round"/>
+
+      <!-- 鳃 -->
+      <g stroke="#22304e" stroke-width="4" fill="none" stroke-linecap="round" opacity=".5">
+        <path d="M232 148 q7 13 0 26"/>
+        <path d="M246 150 q7 13 0 26"/>
+      </g>
+
+      <!-- 红色胸鳍（模型同款） -->
+      <path d="M236 196 L282 238 L260 254 L220 210 Z"
+            fill="#a03a42" stroke="#22304e" stroke-width="6" stroke-linejoin="round"/>
+
+      <!-- 身体高光星 -->
+      <path d="M290 118 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 Z" fill="#cfe0f2" opacity=".8"/>
+
+      <!-- 冲撞爆星（技能命中点，嘴边） -->
+      <g transform="translate(38,196)">
+        <path d="M0 -42 L10 -14 L38 -20 L16 0 L30 26 L0 12 L-28 30 L-16 0 L-38 -16 L-10 -14 Z"
+              fill="#ffd34d" stroke="#d97b2e" stroke-width="5" stroke-linejoin="round"/>
+        <path d="M0 -18 L4 -5 L17 -8 L7 2 L12 14 L0 7 L-11 15 L-6 2 L-16 -6 L-4 -5 Z" fill="#fff3c4"/>
+      </g>
+
+      <!-- 水花 -->
+      <g fill="#a8ddf0">
+        <circle cx="26" cy="142" r="7"/>
+        <circle cx="14" cy="188" r="5"/>
+        <circle cx="34" cy="254" r="6"/>
+        <circle cx="92" cy="112" r="5"/>
+      </g>
+
+      <!-- 气泡 -->
+      <g fill="none" stroke="#ffffff" stroke-width="3" opacity=".8">
+        <circle cx="318" cy="72" r="8"/>
+        <circle cx="340" cy="50" r="5"/>
+        <circle cx="300" cy="40" r="6"/>
+      </g>
+    </svg>
+    <div class="name">巨口鲨</div>
+    <div class="stars">★ ★ ★</div>
+    <div class="skill"><span class="chip pink">冲撞 · 撞击船体</span></div>
+    <div class="desc">张开巨口全速撞向船体。<br>看到它压低身子冲过来，立刻转向保持距离。</div>
+  </div>
+
+  <!-- ============ 冰霜海蛇 ============ -->
+  <div class="card">
+    <svg viewBox="0 0 400 380" width="100%" role="img" aria-label="冰霜海蛇">
+      <defs>
+        <radialGradient id="iceWash" cx="50%" cy="42%" r="65%">
+          <stop offset="0%" stop-color="#dff0f8"/>
+          <stop offset="70%" stop-color="#c4e2f0"/>
+          <stop offset="100%" stop-color="#f8f1de"/>
+        </radialGradient>
+        <radialGradient id="boltGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#ffffff"/>
+          <stop offset="55%" stop-color="#bfe9ff"/>
+          <stop offset="100%" stop-color="rgba(191,233,255,0)"/>
+        </radialGradient>
+        <linearGradient id="snakeBody" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#6b8f9e"/>
+          <stop offset="100%" stop-color="#4a6a7a"/>
+        </linearGradient>
+      </defs>
+
+      <circle cx="200" cy="180" r="165" fill="url(#iceWash)"/>
+
+      <!-- 背景小雪花 -->
+      <g stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" opacity=".85">
+        <g transform="translate(320,88)"><path d="M-8 0 H8 M-4 -7 L4 7 M4 -7 L-4 7"/></g>
+        <g transform="translate(80,272)"><path d="M-7 0 H7 M-3.5 -6 L3.5 6 M3.5 -6 L-3.5 6"/></g>
+        <g transform="translate(336,236)"><path d="M-8 0 H8 M-4 -7 L4 7 M4 -7 L-4 7"/></g>
+        <g transform="translate(76,320)"><path d="M-6 0 H6 M-3 -5 L3 5 M3 -5 L-3 5"/></g>
+        <g transform="translate(268,54)"><path d="M-6 0 H6 M-3 -5 L3 5 M3 -5 L-3 5"/></g>
+      </g>
+
+      <!-- 地面阴影 -->
+      <ellipse cx="222" cy="342" rx="102" ry="13" fill="#2e4a56" opacity=".15"/>
+
+      <!-- 图鉴同款碎晶底座 -->
+      <g fill="#e2f1f8" stroke="#9fc4d8" stroke-width="3" stroke-linejoin="round">
+        <path d="M108 352 L120 326 L132 352 Z"/>
+        <path d="M136 354 L152 322 L168 354 Z"/>
+        <path d="M176 352 L186 330 L196 352 Z"/>
+        <path d="M322 350 L332 330 L342 350 Z"/>
+        <path d="M344 352 L352 336 L360 352 Z"/>
+      </g>
+
+      <!-- 盘绕的尾部（对照模型底座盘圈） -->
+      <ellipse cx="250" cy="312" rx="68" ry="30"
+               fill="#4f7383" stroke="#2e4a56" stroke-width="7"/>
+      <ellipse cx="250" cy="305" rx="40" ry="16" fill="#415f6e" opacity=".85"/>
+
+      <!-- 身体（S 形直立，对照图鉴姿态） -->
+      <path d="M132 96 Q170 92 184 130 Q206 168 204 206 Q202 252 230 286 Q252 306 300 310 Q318 314 312 328 Q258 336 222 306 Q192 278 186 240 Q180 202 158 174 Q136 150 124 128 Q114 106 132 96 Z"
+            fill="url(#snakeBody)" stroke="#2e4a56" stroke-width="7" stroke-linejoin="round"/>
+
+      <!-- 体节环纹（对照模型分节） -->
+      <g stroke="#3a5563" stroke-width="4" stroke-linecap="round" opacity=".55">
+        <path d="M150 128 L180 144"/>
+        <path d="M176 176 L206 188"/>
+        <path d="M184 224 L214 234"/>
+        <path d="M202 268 L232 282"/>
+        <path d="M242 300 L272 312"/>
+      </g>
+
+      <!-- 腹部 -->
+      <path d="M138 148 Q170 190 180 240 Q192 292 236 320"
+            fill="none" stroke="#d9e6ea" stroke-width="14" stroke-linecap="round"/>
+      <g stroke="#9fb8c0" stroke-width="3" stroke-linecap="round">
+        <path d="M146 158 L164 178"/>
+        <path d="M164 196 L184 220"/>
+        <path d="M176 240 L196 264"/>
+        <path d="M196 282 L218 300"/>
+      </g>
+
+      <!-- 背部冰晶（沿脊生长） -->
+      <g fill="#b9e4f2" stroke="#f2fdff" stroke-width="3" stroke-linejoin="round">
+        <path d="M186 128 L210 106 L214 134 Z"/>
+        <path d="M208 172 L240 180 L212 198 Z"/>
+        <path d="M218 244 L250 256 L224 272 Z"/>
+        <path d="M262 288 L296 296 L272 314 Z"/>
+      </g>
+
+      <!-- 头顶冰晶冠（模型同款，一簇冰晶） -->
+      <g fill="#bfe6f2" stroke="#f2fdff" stroke-width="3" stroke-linejoin="round">
+        <path d="M122 94 L110 56 L138 84 Z"/>
+        <path d="M140 90 L152 50 L166 88 Z"/>
+        <path d="M164 90 L180 62 L186 94 Z"/>
+      </g>
+
+      <!-- 眼睛 + 怒眉 -->
+      <circle cx="146" cy="110" r="9" fill="#ffffff" stroke="#2e4a56" stroke-width="4"/>
+      <circle cx="148" cy="112" r="4" fill="#17303c"/>
+      <path d="M128 96 L162 104" stroke="#2e4a56" stroke-width="6" stroke-linecap="round"/>
+
+      <!-- 鼻孔 -->
+      <circle cx="121" cy="102" r="2.2" fill="#2e4a56"/>
+      <circle cx="128" cy="106" r="2.2" fill="#2e4a56"/>
+
+      <!-- 张开的嘴 + 冰牙 -->
+      <path d="M116 114 Q132 120 142 134 Q126 140 112 128 Z"
+            fill="#5c2830" stroke="#2e4a56" stroke-width="4" stroke-linejoin="round"/>
+      <g fill="#ffffff" stroke="#2e4a56" stroke-width="2" stroke-linejoin="round">
+        <path d="M120 116 l9 2 l-6 9 Z"/>
+        <path d="M118 126 l8 1 l-5 7 Z"/>
+      </g>
+
+      <!-- 冰霜弹弹道 -->
+      <g fill="#cfeeff" stroke="#ffffff" stroke-width="2">
+        <path d="M100 104 L105 109 L100 114 L95 109 Z"/>
+        <path d="M88 90 L95 97 L88 104 L81 97 Z"/>
+        <path d="M74 75 L82 83 L74 91 L66 83 Z"/>
+      </g>
+
+      <!-- 冰霜弹（技能） -->
+      <circle cx="56" cy="58" r="36" fill="url(#boltGlow)"/>
+      <g stroke-linecap="round">
+        <g stroke="#8fd0f0" stroke-width="10">
+          <path d="M30 58 H82 M43 36 L69 81 M43 81 L69 36"/>
+        </g>
+        <g stroke="#ffffff" stroke-width="5">
+          <path d="M30 58 H82 M43 36 L69 81 M43 81 L69 36"/>
+          <path d="M78 58 l-8 -6 M78 58 l-8 6 M34 58 l8 -6 M34 58 l8 6"/>
+          <path d="M66 76 l-10 2 M66 76 l-2 -10 M46 40 l10 -2 M46 40 l2 10"/>
+          <path d="M66 40 l-2 10 M66 40 l-10 -2 M46 76 l2 -10 M46 76 l10 2"/>
+        </g>
+      </g>
+    </svg>
+    <div class="name">冰霜海蛇</div>
+    <div class="stars">★ ★ ★</div>
+    <div class="skill"><span class="chip">远程 · 冰霜弹</span></div>
+    <div class="desc">昂起身躯喷吐冰霜弹，冰晶沿着脊背生长。<br>拉开距离用技能或冲撞处理它。</div>
+  </div>
+
+</div>
+</body>
+</html>

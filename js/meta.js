@@ -47,6 +47,10 @@ const DEFAULT = {
     cursedBoat: false,
     fishmongerEye: false,
     ghostWake: false,
+    driftNose: false,
+    deepLedger: false,
+    ramBlacksmith: false,
+    rustReceipt: false,
   },
   bestDistance: 0,
   codex: {},
@@ -226,6 +230,7 @@ function normalizeMeta(data) {
       cargo: Array.isArray(data.loadout?.cargo) ? data.loadout.cargo : [],
       supplies: normalizeLoadoutSupplies(data.loadout?.supplies),
       skills: Array.isArray(data.loadout?.skills) ? data.loadout.skills : [],
+      talents: Array.isArray(data.loadout?.talents) ? data.loadout.talents : [],
     },
     skillLevels: { skillFrost: 1, skillStorm: 1, skillMeteor: 1, ...(data.skillLevels || {}) },
     talentLevels: { ...(data.talentLevels || {}) },
@@ -241,6 +246,7 @@ function normalizeMeta(data) {
   }
   m.loadout.boatId = clampBoatId(m.unlocks, m.loadout.boatId);
   m.loadout.skills = normalizeSkills(m.unlocks, m.loadout.skills);
+  m.loadout.talents = normalizeTalents(m.unlocks, m.loadout.talents);
   delete m.unlocks.weaponHarpoon;
   delete m.unlocks.weaponKnife;
   delete m.unlocks.weaponSling;
@@ -294,6 +300,7 @@ export function settleRun(meta, {
   relicsToStore = null,
   startZone = 0,
   boatId = 'raft',
+  runTalents = null,
 }) {
   const m = {
     ...meta,
@@ -328,7 +335,8 @@ export function settleRun(meta, {
   // Voyage paycheck — distance is the main term; mods no longer pay (was re-equip farmable).
   // Sink pays 0 fragments so wrecking cannot farm the return formula.
   const base = 40 + Math.floor(distance / 15) + Math.floor(kills / 3) * 10 + newFishCount * 10;
-  const gain = success ? base : 0;
+  const talentMul = rustReceiptGainMul(meta, runTalents);
+  const gain = success ? Math.floor(base * talentMul) : 0;
   m.fragments += gain;
   m.bestDistance = Math.max(m.bestDistance || 0, distance);
 
@@ -519,10 +527,67 @@ export function cycleSkillSlot(meta, slotIndex) {
   return saveLoadout(meta, { ...meta.loadout, skills });
 }
 
+export function ownsTalent(unlocks, id) {
+  if (!id) return false;
+  return SHOP_TALENTS.some((t) => t.id === id) && !!unlocks?.[id];
+}
+
+export function ownedTalentIds(unlocks) {
+  return SHOP_TALENTS.filter((t) => !!unlocks?.[t.id]).map((t) => t.id);
+}
+
+/** Up to 3 talent slots; unused slots are null (no free fill-ins). */
+export function normalizeTalents(unlocks, talents) {
+  const owned = ownedTalentIds(unlocks);
+  const out = [];
+  const used = new Set();
+  const src = Array.isArray(talents) ? talents : [];
+  for (const id of src) {
+    if (out.length >= 3) break;
+    if (!id || !ownsTalent(unlocks, id) || used.has(id)) continue;
+    out.push(id);
+    used.add(id);
+  }
+  for (const id of owned) {
+    if (out.length >= 3) break;
+    if (used.has(id)) continue;
+    out.push(id);
+    used.add(id);
+  }
+  while (out.length < 3) out.push(null);
+  return out;
+}
+
+export function equippedTalents(meta) {
+  return normalizeTalents(meta?.unlocks, meta?.loadout?.talents);
+}
+
+export function cycleTalentSlot(meta, slotIndex) {
+  const i = slotIndex | 0;
+  if (i < 0 || i > 2) return meta;
+  const owned = ownedTalentIds(meta.unlocks);
+  if (!owned.length) return meta;
+  const current = equippedTalents(meta);
+  const used = new Set(current.filter((id, n) => n !== i && id));
+  const pool = owned.filter((id) => !used.has(id));
+  if (!pool.length) return meta;
+  const cur = current[i];
+  const idx = cur ? Math.max(0, pool.indexOf(cur)) : -1;
+  const next = pool[(idx + 1) % pool.length];
+  if (next === cur) return meta;
+  const talents = [...current];
+  talents[i] = next;
+  return saveLoadout(meta, { ...meta.loadout, talents });
+}
+
 export const SHOP_TALENTS = [
-  { id: 'fishmongerEye', name: '鱼贩子的眼睛', cost: 160, tone: '#c45c1a', desc: '永久。钓鱼绿区 +20% / +32% / +45%。' },
-  { id: 'cursedBoat', name: '怪谈低语', cost: 180, tone: '#6a2a8a', desc: '永久。每航次随机一条怪鱼。升级不另写数字。' },
-  { id: 'ghostWake', name: '鬼影航迹', cost: 140, tone: '#3a5a7a', desc: '永久。腐蚀 ×0.82 / ×0.70 / ×0.58。' },
+  { id: 'fishmongerEye', name: '鱼贩子的眼睛', cost: 160, tone: '#c45c1a', desc: '整备配装携带。钓鱼绿区 +20% / +32% / +45%。' },
+  { id: 'cursedBoat', name: '怪谈低语', cost: 180, tone: '#6a2a8a', desc: '整备配装携带。每航次随机一条怪鱼。升级不另写数字。' },
+  { id: 'ghostWake', name: '鬼影航迹', cost: 140, tone: '#3a5a7a', desc: '整备配装携带。腐蚀 ×0.82 / ×0.70 / ×0.58。' },
+  { id: 'driftNose', name: '漂流嗅觉', cost: 145, tone: '#5a9aaa', desc: '整备配装携带。木桶/瓶物资与饵获得量 ×1.2 / ×1.35 / ×1.5。陷阱不变。' },
+  { id: 'deepLedger', name: '深饵账本', cost: 150, tone: '#8a7040', desc: '整备配装携带。出航粗饵额外 +4 / +7 / +10。' },
+  { id: 'ramBlacksmith', name: '撞角黑工', cost: 165, tone: '#c07040', desc: '整备配装携带。撞击伤 ×1.12 / ×1.22 / ×1.35。' },
+  { id: 'rustReceipt', name: '锈蚀回执', cost: 170, tone: '#6a8a5a', desc: '整备配装携带。成功归航碎片 ×1.08 / ×1.14 / ×1.22。' },
 ];
 
 /** Flat unlock catalog (hull / weapon / talent) */
@@ -758,14 +823,46 @@ export function skillShopDesc(shopId) {
 
 for (const w of SHOP_WEAPONS) w.desc = skillShopDesc(w.id);
 
-export function fishmongerGreenMul(meta) {
+export function fishmongerGreenMul(meta, equipped = null) {
+  const ids = Array.isArray(equipped) ? equipped : equippedTalents(meta);
+  if (!ids.includes('fishmongerEye')) return 1;
   const lv = talentLevel(meta, 'fishmongerEye');
   return [1, 1.2, 1.32, 1.45][lv] || 1;
 }
 
-export function ghostWakeCorrMul(meta) {
+export function ghostWakeCorrMul(meta, equipped = null) {
+  const ids = Array.isArray(equipped) ? equipped : equippedTalents(meta);
+  if (!ids.includes('ghostWake')) return 1;
   const lv = talentLevel(meta, 'ghostWake');
   return [1, 0.82, 0.7, 0.58][lv] || 1;
+}
+
+export function driftSalvageMul(meta, equipped = null) {
+  const ids = Array.isArray(equipped) ? equipped : equippedTalents(meta);
+  if (!ids.includes('driftNose')) return 1;
+  const lv = talentLevel(meta, 'driftNose');
+  return [1, 1.2, 1.35, 1.5][lv] || 1;
+}
+
+export function deepLedgerBonusBait(meta, equipped = null) {
+  const ids = Array.isArray(equipped) ? equipped : equippedTalents(meta);
+  if (!ids.includes('deepLedger')) return 0;
+  const lv = talentLevel(meta, 'deepLedger');
+  return [0, 4, 7, 10][lv] || 0;
+}
+
+export function ramBlacksmithMul(meta, equipped = null) {
+  const ids = Array.isArray(equipped) ? equipped : equippedTalents(meta);
+  if (!ids.includes('ramBlacksmith')) return 1;
+  const lv = talentLevel(meta, 'ramBlacksmith');
+  return [1, 1.12, 1.22, 1.35][lv] || 1;
+}
+
+export function rustReceiptGainMul(meta, equipped = null) {
+  const ids = Array.isArray(equipped) ? equipped : equippedTalents(meta);
+  if (!ids.includes('rustReceipt')) return 1;
+  const lv = talentLevel(meta, 'rustReceipt');
+  return [1, 1.08, 1.14, 1.22][lv] || 1;
 }
 
 export function baitStock(supplies, kind) {

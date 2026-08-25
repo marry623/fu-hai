@@ -4,7 +4,7 @@ import { ZONES } from './zones.js?v=31y';
 import { SLOT_ORDER, SLOT_LABELS, ramCdForRarity } from './slots.js?v=32e';
 import { getFishDef, FISH_CATALOG, RARITY, listShopBuyFishIds, shopBuyCost, BAIT_KINDS, rarityStars, familyOf, familyLabel } from './fishCatalog.js?v=34b';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
-import { getItemPortrait } from './itemPortrait.js?v=31c';
+import { getItemPortrait } from './itemPortrait.js?v=37a';
 import { getRelicPortrait, relicFaceHtml } from './relicPortrait.js?v=35c';
 import { listMonsterIds, getMonsterDef } from './monsterCatalog.js?v=31g';
 import { getMonsterPortrait } from './monsterPortrait.js?v=29p';
@@ -39,6 +39,9 @@ import {
   saveLoadout,
   equippedSkills,
   cycleSkillSlot,
+  equippedTalents,
+  cycleTalentSlot,
+  ownedTalentIds,
   totalBait,
   baitStock,
   setLoadoutBaitKind,
@@ -47,9 +50,9 @@ import {
   LOADOUT_BAG_SIZE,
   zoneTicketCost,
   canDepartZone,
-} from './meta.js?v=35g';
+} from './meta.js?v=35l';
 import { HUB_SPOTS } from './hubIsland.js?v=35b';
-import { renderManualHtml } from './hubManual.js?v=35d';
+import { renderManualHtml } from './hubManual.js?v=35l';
 import * as sfx from './audio.js?v=33f';
 import {
   APPRAISE_COST,
@@ -81,12 +84,12 @@ const FEATURE_LABELS = {
 
 /** Left 1–3 / Right 4–6 — avoids crossing leader lines */
 const CALLOUT_LAYOUT = {
-  bow: { x: 12, y: 22, n: 1, side: 'L' },
-  sideL: { x: 12, y: 48, n: 2, side: 'L' },
-  keel: { x: 12, y: 74, n: 3, side: 'L' },
-  sail: { x: 88, y: 22, n: 4, side: 'R' },
-  sideR: { x: 88, y: 48, n: 5, side: 'R' },
-  stern: { x: 88, y: 74, n: 6, side: 'R' },
+  bow:   { x: 12, y: 26, n: 1, side: 'L' },
+  sideL: { x: 12, y: 54, n: 2, side: 'L' },
+  keel:  { x: 12, y: 82, n: 3, side: 'L' },
+  sail:  { x: 65, y: 14, n: 4, side: 'R' },
+  sideR: { x: 65, y: 48, n: 5, side: 'R' },
+  stern: { x: 65, y: 82, n: 6, side: 'R' },
 };
 
 function listFishIds() {
@@ -537,6 +540,28 @@ export function createHub(deps) {
         </button>`;
     });
 
+    const talentEquipped = equippedTalents(meta);
+    const talentSlotCards = talentEquipped.map((tid, i) => {
+      if (!tid) {
+        return `
+          <button type="button" class="hub-bp-card empty" data-kind="talent" data-talent-slot="${i}">
+            <div class="hub-bp-card-face"><span class="hub-bp-q">?</span></div>
+            <div class="hub-bp-card-cap">${i + 1}. 空<span>局外天赋</span></div>
+          </button>`;
+      }
+      const item = SHOP_TALENTS.find((t) => t.id === tid);
+      const name = item?.name || tid;
+      let face = '<span class="hub-bp-q">赋</span>';
+      try {
+        face = `<img src="${getItemPortrait(tid)}" alt="" draggable="false" />`;
+      } catch (_) { /* keep */ }
+      return `
+        <button type="button" class="hub-bp-card" data-kind="talent" data-talent-slot="${i}">
+          <div class="hub-bp-card-face">${face}</div>
+          <div class="hub-bp-card-cap">${i + 1}. ${name}<span>出港天赋</span></div>
+        </button>`;
+    });
+
     const cargoCards = [];
     for (let i = 0; i < 8; i++) {
       const f = cargo[i];
@@ -575,6 +600,8 @@ export function createHub(deps) {
       <div class="hub-bp-grid">${modCards}</div>
       <p class="hub-bp-sec">技能牌 · 点按切换</p>
       <div class="hub-bp-grid">${skillSlotCards.join('')}</div>
+      <p class="hub-bp-sec">局外天赋 · 点按切换</p>
+      <div class="hub-bp-grid">${talentSlotCards.join('')}</div>
       <p class="hub-bp-sec">携带</p>
       <div class="hub-bp-grid">${cargoCards.join('')}</div>`;
 
@@ -595,6 +622,20 @@ export function createHub(deps) {
         const slot = Number(btn.dataset.skillSlot);
         sfx.uiClick();
         const m = cycleSkillSlot(deps.getMeta(), slot);
+        deps.setMeta(m);
+        render();
+      });
+    });
+    root.querySelectorAll('[data-talent-slot]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const slot = Number(btn.dataset.talentSlot);
+        if (!ownedTalentIds(deps.getMeta().unlocks).length) {
+          sfx.uiDeny();
+          deps.toast('市集购买局外天赋后再装配');
+          return;
+        }
+        sfx.uiClick();
+        const m = cycleTalentSlot(deps.getMeta(), slot);
         deps.setMeta(m);
         render();
       });

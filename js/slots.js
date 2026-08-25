@@ -207,10 +207,20 @@ export function computeBonuses(slotsState) {
 export function syncDeckFish(boat, fishHold, gradientMap) {
   const hold = boat.userData.cargoHold;
   while (hold.children.length) hold.remove(hold.children[0]);
+  // Slots alternate forward/aft so small catches spread evenly across the deck.
+  // Cockpit visible range: Z≈0.3 (cabin companionway) to Z≈2.5 (stern).
+  // Each pair: [x, z].
+  const slots = [
+    [-0.22,  0.5], [ 0.22,  1.8],
+    [ 0.22,  0.5], [-0.22,  1.8],
+    [-0.22,  1.0], [ 0.22,  2.1],
+    [ 0.22,  1.0], [-0.22,  2.1],
+  ];
   fishHold.slice(0, 8).forEach((f, i) => {
     const m = createFishMesh(f.defId, gradientMap, 0.45, f.defId === 'food' ? f.color : null);
-    m.position.set(((i % 3) - 1) * 0.55, Math.floor(i / 3) * 0.35, (Math.floor(i / 3) % 2) * 0.2);
-    m.rotation.y = i * 0.4;
+    const [x, z] = slots[i];
+    m.position.set(x, 0.25, z);
+    m.rotation.y = i * 0.9;
     hold.add(m);
   });
 }

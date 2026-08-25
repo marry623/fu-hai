@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { createToonGradient, clamp } from './stylekit.js?v=34a';
 import {
-  createDuskSky, createSun, createClouds, createWater, updateWater,
+  createDuskSky, createClouds, createWater, updateWater,
   createFoamRings,
 } from './world.js';
-import { createBoat, createWakeSystem, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, resetRodPose } from './boat.js?v=29n';
+import { createBoat, createWakeSystem, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, resetRodPose } from './boat.js?v=36h';
 import { createPaddleController } from './paddle.js?v=29n';
 import { createHull, updateCorrosion, damageHull, repairHull } from './hull.js?v=16c';
 import {
@@ -17,38 +17,40 @@ import { createHazards } from './hazards.js?v=32s';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot, ramCdForRarity,
-} from './slots.js?v=32e';
+} from './slots.js?v=33c';
 import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS, familyOf, familyLabel } from './fishCatalog.js?v=34b';
 import { createFamilyVfx } from './familyVfx.js?v=32p';
 import { createFishMesh } from './fishMeshes.js?v=31c';
-import { beginHitFlash, beginDeathAnim } from './monsterMeshes.js?v=34a';
+import { beginHitFlash, beginDeathAnim } from './monsterMeshes.js?v=35j';
 import { createGpuSparks } from './vfx/gpuSparks.js?v=32s';
 import { createBurstSystem, BurstMode } from './vfx/burstSphere.js?v=32s';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
-import { getItemPortrait } from './itemPortrait.js?v=31c';
+import { getItemPortrait } from './itemPortrait.js?v=37a';
 import { getRelicPortrait } from './relicPortrait.js?v=35c';
 import { RELIC_CARRY_CAP, trimRelicCarry } from './salvageTables.js?v=35d';
-import { getSeaMap, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=31y';
+import { getSeaMap, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=32y';
 import { getZone } from './zones.js?v=31y';
 import {
   loadMeta, settleRun, hullMaxForBoat, thrustMulForBoat, hasWeaponUnlock,
   discoverFish, discoverMonster, syncLoadoutSuppliesFromWarehouse, consumeLoadoutOnDepart,
   loadoutSuppliesPacked, clampBoatId, HULL_NAMES, equippedSkills, skillShopToVfx,
   skillLevel, scaledSkillCard, fishmongerGreenMul, ghostWakeCorrMul, talentLevel,
+  equippedTalents, driftSalvageMul, ramBlacksmithMul,
   chargeZoneTicket, canDepartZone, saveMeta,
-} from './meta.js?v=35g';
-import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=31h';
-import { createHub } from './hub.js?v=35g';
+} from './meta.js?v=35l';
+import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=35l';
+import { createHub } from './hub.js?v=38h';
 import { createCoverScene } from './coverScene.js?v=28m';
 import { createHubIsland } from './hubIsland.js?v=35b';
-import { createHubBoatPreview } from './hubBoatPreview.js?v=29q';
-import { createBpBoatStage } from './bpBoatStage.js?v=31d';
-import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=31y';
+import { createHubBoatPreview } from './hubBoatPreview.js?v=38h';
+import { createBpBoatStage } from './bpBoatStage.js?v=31e';
+import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=37m';
+import { ensureAllPropGlbsLoading } from './propGlb.js?v=36k';
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=31g';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=35g';
-import { renderManualHtml } from './hubManual.js?v=35a';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=38s';
+import { renderManualHtml } from './hubManual.js?v=35l';
 import * as sfx from './audio.js?v=33f';
 
 const canvas = document.getElementById('c');
@@ -154,6 +156,8 @@ const state = {
   weapon: 0,
   /** Shop skill ids snapshotted at depart — in-run casts must not reread hub loadout. */
   runSkills: null,
+  /** Equipped talent ids snapshotted at depart. */
+  runTalents: null,
   toastTimer: 0,
   shellBlocks: 0,
   speedBuffUntil: 0,
@@ -175,7 +179,6 @@ const state = {
   kills: 0,
   mods: 0,
   zone: 0,
-  captainLocal: new THREE.Vector3(0, 0.45, 0.6),
 };
 
 /** Runtime monster status effects */
@@ -573,8 +576,6 @@ scene.add(ambLight);
 
 const duskSky = createDuskSky();
 scene.add(duskSky);
-const duskSun = createSun();
-scene.add(duskSun);
 const worldClouds = createClouds(gradientMap);
 scene.add(worldClouds);
 const water = createWater();
@@ -787,6 +788,7 @@ function mouseOnWater() {
   return skillRay.ray.intersectPlane(skillPlane, skillHit) ? skillHit : null;
 }
 
+ensureAllPropGlbsLoading();
 const seaWorld = createSeaWorld();
 scene.add(seaWorld.root);
 
@@ -861,7 +863,7 @@ const bpBoatStage = createBpBoatStage({
 const playVisuals = [
   water, foam, boat, flotRoot, vRoot, hazards.root, skillVfx.root,
   hitSparks.points, hitBursts.group,
-  seaWorld.root, worldClouds, duskSun, aimRing, bobberMesh, fishLine, weatherFx.root,
+  seaWorld.root, worldClouds, aimRing, bobberMesh, fishLine, weatherFx.root,
 ];
 
 function clearCombatVfx() {
@@ -869,6 +871,7 @@ function clearCombatVfx() {
   hitSparks.clear();
   hitBursts.clear();
   familyVfx.sync([]);
+  resetMonsterFx();
 }
 const duskBits = [];
 scene.traverse((o) => {
@@ -1443,7 +1446,11 @@ function grantBait(n, kind) {
 function onSpace() {
   if (hull.sunk) return;
   if (fishing.phase === 'qte') { fishing.onSpace(); return; }
-  if (fishing.phase === 'wait' || fishing.phase === 'cast') return;
+  if (fishing.phase === 'wait' || fishing.phase === 'cast') {
+    fishing.interrupt('reel');
+    showToast('收杆');
+    return;
+  }
   let baitKind = 'crude';
   if (tut.active) {
     baitKind = 'crude';
@@ -1456,7 +1463,7 @@ function onSpace() {
     baitKind = used;
     updateInv();
   }
-  const greenBonus = fishmongerGreenMul(meta);
+  const greenBonus = fishmongerGreenMul(meta, state.runTalents);
   const aim = aimPointFromBoat();
   fishing.tryCast(true, state.runDistance, greenBonus, startZone, aim.x, aim.z, baitKind);
   sfx.fishCast();
@@ -1495,13 +1502,15 @@ function trySalvage() {
     updateInv();
     if (state.fishPanelOpen && state.backpackTab === 'relics') renderBackpack();
   } else {
+    const salvageMul = driftSalvageMul(meta, state.runTalents);
+    const amt = Math.max(1, Math.round((r.amount || 1) * salvageMul));
     if (r.supply === 'bait') {
-      grantBait(r.amount, r.baitKind || state.inventory.baitKind || 'fresh');
+      grantBait(amt, r.baitKind || state.inventory.baitKind || 'fresh');
     } else {
-      state.inventory[r.supply] = (state.inventory[r.supply] || 0) + r.amount;
+      state.inventory[r.supply] = (state.inventory[r.supply] || 0) + amt;
     }
     sfx.collect();
-    showToast(`打捞 ${r.name}×${r.amount}`);
+    showToast(`打捞 ${r.name}×${amt}`);
     updateInv();
   }
 
@@ -1520,11 +1529,14 @@ function applyBottleEffect(ev) {
     return;
   }
   const fx = ev.effect;
+  const salvageMul = driftSalvageMul(meta, state.runTalents);
   if (fx.kind === 'supply') {
-    state.inventory[fx.supply] = (state.inventory[fx.supply] || 0) + (fx.amount || 1);
+    const amt = Math.max(1, Math.round((fx.amount || 1) * salvageMul));
+    state.inventory[fx.supply] = (state.inventory[fx.supply] || 0) + amt;
     sfx.collect();
   } else if (fx.kind === 'bait') {
-    grantBait(fx.amount || 1, fx.baitKind || state.inventory.baitKind || 'fresh');
+    const amt = Math.max(1, Math.round((fx.amount || 1) * salvageMul));
+    grantBait(amt, fx.baitKind || state.inventory.baitKind || 'fresh');
     sfx.collect();
   } else if (fx.kind === 'heal') {
     repairHull(hull, fx.amount || 10);
@@ -2233,6 +2245,7 @@ function finishRun(outcome) {
     relicsToStore,
     startZone,
     boatId: selectedBoat,
+    runTalents: state.runTalents,
   });
   meta = m;
   selectedBoat = clampBoatId(meta.unlocks, meta.loadout?.boatId || selectedBoat);
@@ -2357,8 +2370,12 @@ function startRun(fromCheckpoint = false) {
     state.runSkills = isTut
       ? ['skillFrost', 'skillStorm', 'skillMeteor']
       : equippedSkills(meta);
+    state.runTalents = isTut ? [] : equippedTalents(meta).filter(Boolean);
   } else if (!Array.isArray(state.runSkills) || !state.runSkills.length) {
     state.runSkills = equippedSkills(meta);
+    if (!Array.isArray(state.runTalents)) {
+      state.runTalents = equippedTalents(meta).filter(Boolean);
+    }
   }
   state.runDistance = fromCheckpoint ? state.runDistance : 0;
   state.maxZ = paddle.state.z;
@@ -2395,7 +2412,7 @@ function startRun(fromCheckpoint = false) {
       applyLoadoutToRun(boat, state, meta, gradientMap);
       state.inventory.relics = [];
       meta = consumeLoadoutOnDepart(meta);
-      if (meta.unlocks.cursedBoat) {
+      if ((state.runTalents || []).includes('cursedBoat')) {
         const lv = talentLevel(meta, 'cursedBoat');
         const baitKind = state.inventory.baitKind || 'fresh';
         const grant = (fish) => {
@@ -2483,7 +2500,6 @@ function applyZoneVisual(z) {
   sun.intensity = biome.sunIntensity;
   ambLight.color.setHex(biome.ambient);
   duskSky.userData.setBiome?.(biome);
-  duskSun.userData.setBiome?.(biome);
   worldClouds.userData.setBiome?.(biome);
   weatherFx.setPreset(biome);
   ui.zoneName.textContent = z.name;
@@ -2493,6 +2509,47 @@ function setSeaMapOpen(open) {
   state.seaMapOpen = !!open;
   ui.seaMapModal?.classList.toggle('hidden', !open);
   if (open) drawSeaMapOverlay();
+}
+
+function drawBoatIcon(ctx, bx, by, yaw, size = 8) {
+  ctx.save();
+  ctx.translate(bx, by);
+  ctx.rotate(-yaw); // canvas Y 翻转，yaw 取反
+  const s = size / 8;
+  // hull
+  ctx.fillStyle = '#c48a4a';
+  ctx.beginPath();
+  ctx.moveTo(0, -8 * s);
+  ctx.lineTo(3 * s, -4 * s);
+  ctx.lineTo(4 * s, 3 * s);
+  ctx.lineTo(2.5 * s, 6 * s);
+  ctx.lineTo(-2.5 * s, 6 * s);
+  ctx.lineTo(-4 * s, 3 * s);
+  ctx.lineTo(-3 * s, -4 * s);
+  ctx.closePath();
+  ctx.fill();
+  // sail
+  ctx.fillStyle = '#f0e6d0';
+  ctx.beginPath();
+  ctx.moveTo(0, -7 * s);
+  ctx.lineTo(0, 2 * s);
+  ctx.lineTo(4.5 * s, 2 * s);
+  ctx.closePath();
+  ctx.fill();
+  // outline
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, -8 * s);
+  ctx.lineTo(3 * s, -4 * s);
+  ctx.lineTo(4 * s, 3 * s);
+  ctx.lineTo(2.5 * s, 6 * s);
+  ctx.lineTo(-2.5 * s, 6 * s);
+  ctx.lineTo(-4 * s, 3 * s);
+  ctx.lineTo(-3 * s, -4 * s);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawSeaMapOnto(canvas, map, opts = {}) {
@@ -2560,12 +2617,7 @@ function drawSeaMapOnto(canvas, map, opts = {}) {
   if (opts.showBoat) {
     const bx = tx(opts.boatX ?? 0);
     const by = tz(opts.boatZ ?? 0);
-    ctx.fillStyle = '#ff6b4a';
-    ctx.beginPath();
-    ctx.moveTo(bx, by - 7);
-    ctx.lineTo(bx + 5, by + 5);
-    ctx.lineTo(bx - 5, by + 5);
-    ctx.fill();
+    drawBoatIcon(ctx, bx, by, opts.boatYaw ?? 0, 14);
   }
 
   ctx.fillStyle = '#e8f4f4';
@@ -2584,6 +2636,7 @@ function drawSeaMapOverlay() {
     showBoat: true,
     boatX: paddle.state.x,
     boatZ: paddle.state.z,
+    boatYaw: paddle.state.yaw || 0,
     hint: (() => {
       if ((map.id | 0) === -1) return `安全教学 · 灯塔绿圈停 ${EVAC_HOLD} 秒归航 · M 关闭`;
       const mobs = monstersForZone(map.id).map((id) => getMonsterDef(id).name).join(' · ');
@@ -2738,12 +2791,7 @@ function drawMinimap() {
       ctx.beginPath(); ctx.arc(mx, my, 5, 0, Math.PI * 2); ctx.stroke();
     }
   }
-  ctx.fillStyle = '#c48a4a';
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - 6);
-  ctx.lineTo(cx + 5, cy + 5);
-  ctx.lineTo(cx - 5, cy + 5);
-  ctx.fill();
+  drawBoatIcon(ctx, cx, cy, paddle.state.yaw || 0, 10);
 }
 
 function tryFlashSail() {
@@ -2897,7 +2945,7 @@ function tick() {
     state.zone = zone.id;
 
     let corrMul = (zone.corrosionMul ?? 1) * (b.corrosionMul ?? 1);
-    if (meta.unlocks.ghostWake) corrMul *= ghostWakeCorrMul(meta);
+    corrMul *= ghostWakeCorrMul(meta, state.runTalents);
     if (slotHas('magmaMaw')) corrMul *= 1.18;
     if (now() < legendFx.heatPumpUntil) corrMul *= 1.7;
     if (!Number.isFinite(corrMul)) corrMul = 1;
@@ -2923,10 +2971,6 @@ function tick() {
         + (monsterFx.tiltAmt || 0) * Math.sin((monsterFx.tiltUntil - now()) * 6)
         + (now() < monsterFx.shakeUntil ? Math.sin(t * 22) * 0.18 : 0)
     );
-
-    // captain mouse follow on deck (simple)
-    boat.userData.captain.position.x = clamp(state.captainLocal.x, -0.7, 0.7);
-    boat.userData.captain.position.z = clamp(state.captainLocal.z, -1.6, 1.8);
 
     foam.position.set(phys.x, 0.05, phys.z);
     foam.rotation.y = phys.yaw;
@@ -2967,7 +3011,7 @@ function tick() {
             monsterFx.heatSeal = false;
             showToast('\u649e\u51fb\u9707\u98de\u7194\u5ca9\u85e4\u58f6');
           }
-        }, b.ramDmg || 12);
+        }, Math.round((b.ramDmg || 12) * ramBlacksmithMul(meta, state.runTalents)));
         if (hits > 0) {
           sfx.ramHit();
           state.ramCd = b.ramCd || 3.4;
@@ -3143,7 +3187,6 @@ function tick() {
     seaWorld.updateDecor?.(t);
     weatherFx.update(dt, boat.position);
     duskSky.userData.follow?.(boat.position);
-    duskSun.userData.follow?.(boat.position);
     worldClouds.userData.follow?.(boat.position);
   } else if (phase === 'hub' && hub?.shipUiOpen) {
     const waterFocus = hubBoatPreview.boat.position;
@@ -3229,11 +3272,6 @@ canvas.addEventListener('pointermove', (e) => {
   skillPointer.x = e.clientX;
   skillPointer.y = e.clientY;
   skillPointer.has = true;
-  if (!state.started || state.fishPanelOpen) return;
-  const nx = (e.clientX / innerWidth) * 2 - 1;
-  const ny = (e.clientY / innerHeight) * 2 - 1;
-  state.captainLocal.x = nx * 0.9;
-  state.captainLocal.z = -ny * 1.2;
 });
 function noteSkillWraps(wraps) {
   wraps.ids.forEach(registerMonster);

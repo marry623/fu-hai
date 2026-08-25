@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>浮骸 · 海上肉鸽</title>
-  <link rel="stylesheet" href="css/style.css?v=35g" />
+  <link rel="stylesheet" href="css/style.css?v=38s" />
 </head>
 <body>
   <div id="game-root">
@@ -98,7 +98,7 @@
               <span class="bp-tab-label">物资</span>
             </button>
             <button type="button" class="bp-tab" data-tab="relics">
-              <span class="bp-tab-icon bp-ico-box"></span>
+              <span class="bp-tab-icon bp-ico-relic"></span>
               <span class="bp-tab-label">宝物</span>
             </button>
             <p class="bp-nav-hint">Tab 关闭</p>
@@ -274,7 +274,7 @@
                   <span class="bp-tab-label">怪物</span>
                 </button>
                 <button type="button" class="bp-tab" data-codex-tab="relic">
-                  <span class="bp-tab-icon bp-ico-box"></span>
+                  <span class="bp-tab-icon bp-ico-relic"></span>
                   <span class="bp-tab-label">宝物</span>
                 </button>
               </nav>
@@ -392,8 +392,8 @@
     window.addEventListener('unhandledrejection', (e) => show(e.reason && e.reason.stack || e.reason));
     const fileHint = '请勿直接双击 index.html。运行项目里的 play.bat，或打开 http://127.0.0.1:8787/\nChrome 在 file:// 下无法加载 ES 模块。';
     const urls = location.protocol === 'file:'
-      ? ['./js/main.js', './js/main.js?v=35g']
-      : ['./js/main.js?v=35g'];
+      ? ['./js/main.js', './js/main.js?v=38s']
+      : ['./js/main.js?v=38s'];
     if (location.protocol === 'file:') show(fileHint);
     let last = null;
     let ok = false;

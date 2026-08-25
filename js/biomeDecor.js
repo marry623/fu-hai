@@ -390,6 +390,10 @@ function scatterGoldenGrass(group, islands, gm) {
 export function scatterBiomeDecor(root, map, biome, gm) {
   const group = new THREE.Group();
   group.name = 'biomeDecor';
+  if ((map.id | 0) === 0) {
+    root.add(group);
+    return group;
+  }
   const skin = biome.reefSkin;
   const reefs = map.reefs || [];
   const islands = map.islands || [];
@@ -405,12 +409,12 @@ export function scatterBiomeDecor(root, map, biome, gm) {
         piece.scale.setScalar(0.85 + (i % 3) * 0.28);
         group.add(piece);
       }
-      const lime = limestone(gm);
-      lime.position.set(r.x, 0, r.z);
-      group.add(lime);
       const weed = seaweed(gm);
       weed.position.set(r.x + r.r * 0.2, 0, r.z - r.r * 0.15);
       group.add(weed);
+      const lime = limestone(gm);
+      lime.position.set(r.x, 0, r.z);
+      group.add(lime);
       const rock = jitterRockCluster(gm, 0xf0c98a, r.r * 0.22, hash2(r.x, r.z));
       rock.position.set(r.x - r.r * 0.25, 0, r.z + r.r * 0.1);
       group.add(rock);

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createToonGradient } from './stylekit.js';
-import { createItemMesh } from './itemMeshes.js?v=31c';
+import { createItemMesh } from './itemMeshes.js?v=37a';
 
 /** Offscreen portraits for shop / backpack non-fish items. */
 const PORTRAIT_PX = 256;
@@ -33,13 +33,28 @@ function ensure() {
   gradientMap = createToonGradient();
 }
 
+function portraitCacheKey(itemId) {
+  const id = itemId || 'plank';
+  return `${id}@v7`;
+}
+
+function disposePortraitMesh(mesh) {
+  mesh.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose?.());
+      else o.material.dispose?.();
+    }
+  });
+}
+
 /**
  * @param {string} itemId
  * @returns {string} data URL
  */
 export function getItemPortrait(itemId) {
   const id = itemId || 'plank';
-  const key = `${id}@v4`;
+  const key = portraitCacheKey(id);
   if (cache.has(key)) return cache.get(key);
 
   ensure();
@@ -76,13 +91,7 @@ export function getItemPortrait(itemId) {
   renderer.render(scene, camera);
   const url = renderer.domElement.toDataURL('image/png');
   scene.remove(mesh);
-  mesh.traverse((o) => {
-    if (o.geometry) o.geometry.dispose();
-    if (o.material) {
-      if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose?.());
-      else o.material.dispose?.();
-    }
-  });
+  disposePortraitMesh(mesh);
 
   cache.set(key, url);
   return url;

@@ -856,6 +856,37 @@ html, body {
 
 .bp-tab:nth-child(3) { transform: rotate(1.2deg); }
 .bp-tab:nth-child(4) { transform: rotate(-0.8deg); }
+.bp-tab:nth-child(5) { transform: rotate(1.6deg); }
+
+.backpack .bp-tab[data-tab="catch"] {
+  background: #e4f4f2;
+}
+.backpack .bp-tab[data-tab="slots"] {
+  background: #f0e4d4;
+}
+.backpack .bp-tab[data-tab="supplies"] {
+  background: #f6efd2;
+}
+.backpack .bp-tab[data-tab="relics"] {
+  background: #ebe4f0;
+}
+.backpack .bp-tab[data-tab="catch"].active {
+  background: #dff8f4;
+  color: #0a6f6a;
+}
+.backpack .bp-tab[data-tab="slots"].active {
+  background: #f7ecdc;
+  color: #5a3a18;
+}
+.backpack .bp-tab[data-tab="supplies"].active {
+  background: #fff6d4;
+  color: #7a5a10;
+}
+.backpack .bp-tab[data-tab="relics"].active {
+  background: #f3e8fc;
+  color: #5a2a78;
+  box-shadow: 0 0 0 2px #9b59b6, 0 3px 0 #1a1008;
+}
 
 .bp-tab::before {
   content: "";
@@ -877,6 +908,13 @@ html, body {
 .backpack .bp-tab[data-tab="slots"],
 .backpack .bp-tab[data-tab="slots"].active {
   color: #111;
+}
+.backpack .bp-tab[data-tab="slots"].active {
+  color: #5a3a18;
+  box-shadow: 0 0 0 2px #c48a4a, 0 3px 0 #1a1008;
+}
+.backpack .bp-tab[data-tab="supplies"].active {
+  box-shadow: 0 0 0 2px #e0a020, 0 3px 0 #1a1008;
 }
 
 .bp-tab-icon {
@@ -902,6 +940,16 @@ html, body {
 .bp-ico-box {
   background:
     linear-gradient(180deg, #ffd24a 0 35%, #e0a020 35% 100%);
+}
+
+/* Sealed black package — distinct from supply crate */
+.bp-ico-relic {
+  background:
+    linear-gradient(90deg, transparent 42%, #4a4a52 42% 58%, transparent 58%),
+    linear-gradient(0deg, transparent 40%, #4a4a52 40% 55%, transparent 55%),
+    linear-gradient(145deg, #2a2430 0%, #141418 55%, #3a2060 100%);
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .bp-nav-hint {

@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { createToonGradient } from './stylekit.js';
-import { createBoat, setBoatVariant } from './boat.js?v=31d';
+import { createBoat, setBoatVariant } from './boat.js?v=36g';
 import { equipFish, SLOT_ORDER, SLOT_LABELS } from './slots.js?v=32e';
 import { getFishDef } from './fishCatalog.js?v=34b';
 import { getFishPortrait } from './fishPortrait.js?v=31d';
@@ -57,9 +57,9 @@ export function createBpBoatStage(opts) {
   renderer.setClearColor(0x000000, 0);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 80);
-  camera.position.set(7.0, 5.2, 8.4);
-  camera.lookAt(-0.15, 1.45, -0.3);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 80);
+  camera.position.set(11.0, 8.0, 13.5);
+  camera.lookAt(0.3, 5.0, -0.4);
 
   const gm = opts.gradientMap || createToonGradient();
   scene.add(new THREE.AmbientLight(0xffffff, 1.15));

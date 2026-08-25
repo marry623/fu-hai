@@ -2,6 +2,7 @@
 
 import { getFishDef } from './fishCatalog.js?v=34b';
 import { equipFish, SLOT_ORDER } from './slots.js?v=32e';
+import { deepLedgerBonusBait, equippedTalents } from './meta.js?v=35l';
 
 const RUN_START_BAIT = 20;
 
@@ -37,6 +38,8 @@ export function applyLoadoutToRun(boat, state, meta, gradientMap) {
   }
   const giftKind = 'crude';
   for (let i = 0; i < RUN_START_BAIT; i++) baitBag.push(giftKind);
+  const bonusCrude = deepLedgerBonusBait(meta, equippedTalents(meta));
+  for (let i = 0; i < bonusCrude; i++) baitBag.push('crude');
 
   state.inventory = {
     baitBag,

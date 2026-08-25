@@ -154,23 +154,7 @@ export const SEA_MAPS = [
       { x: 336, z: 288, id: 'lh1' },
       { x: 36, z: 660, id: 'lh2' },
     ],
-    reefs: [
-      { x: 24, z: 180, r: 19 }, { x: -156, z: 348, r: 15 }, { x: 180, z: 252, r: 14 },
-      { x: 108, z: 492, r: 16 }, { x: -240, z: 144, r: 12 }, { x: -48, z: 420, r: 13 },
-      { x: 90, z: 330, r: 11 }, { x: -120, z: 240, r: 12 },
-    ],
-    islands: [
-      { x: 120, z: 384, r: 22, shape: 'oblong' },
-      { x: -120, z: 528, r: 17, shape: 'round' },
-      { x: 48, z: 240, r: 14, shape: 'kidney' },
-      { x: -216, z: 300, r: 16, shape: 'round' },
-      { x: 216, z: 420, r: 15, shape: 'oblong' },
-      { x: 0, z: 468, r: 13, shape: 'kidney' },
-    ],
-    shoals: [
-      { x: 60, z: 150, rx: 20, rz: 7, yaw: 0.5 },
-      { x: -90, z: 390, rx: 16, rz: 6, yaw: -0.6 },
-    ],
+    reefs: [], islands: [], shoals: [],
     spawns: [
       { x: -204, z: 204, kind: 'ram' }, { x: 228, z: 216, kind: 'ram' },
       { x: 48, z: 432, kind: 'ram' }, { x: -120, z: 336, kind: 'ranged' },

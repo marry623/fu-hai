@@ -76,123 +76,119 @@ function meshPaste(gm) {
   return meshRepair(gm, 0xc45c1a, 0x8a5040);
 }
 
-/** —— Hulls (图2: 低阶木筏 / 中阶重筏 / 高阶冲锋船) —— */
+/** —— Hulls (procedural toon shop thumbnails) —— */
 function meshRaft(gm) {
   const g = new THREE.Group();
-  const hull = mat(0x9a6a3a, gm);
-  const dark = mat(0x6a4420, gm);
-  const sail = mat(0xf5f0e4, gm);
-  const mast = mat(0x4a2e14, gm);
-  const flag = mat(0xd42828, gm);
-  const crate = mat(0x7a5028, gm);
-  const h = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.26, 0.42, 1, 1, 1), hull);
-  h.position.y = 0.05;
-  add(g, h);
-  const bow = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.38, 5), dark);
-  bow.rotation.z = -Math.PI / 2;
-  bow.position.set(0.62, 0.05, 0);
-  bow.scale.set(1, 0.7, 1);
-  add(g, bow);
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.95, 5), mast);
-  m.position.set(-0.02, 0.55, 0);
-  add(g, m);
-  const s = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.68, 3), sail);
-  s.rotation.set(0, 0, -Math.PI / 2);
-  s.position.set(0.14, 0.5, 0);
-  s.scale.set(0.35, 1, 1);
-  add(g, s, 1.05);
-  const f = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.13, 3), flag);
-  f.rotation.z = -Math.PI / 2;
-  f.position.set(0.06, 1.08, 0);
-  add(g, f, 1.15);
-  const c = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.14), crate);
-  c.position.set(-0.28, 0.22, 0.08);
-  add(g, c, 1.1);
-  g.rotation.set(0.35, 0.7, 0.05);
+  const wood = mat(0x8a6a42, gm);
+  const dark = mat(0x5a4028, gm);
+  const rope = mat(0xc4a86a, gm);
+  // Log hull — 3 side-by-side cylinders
+  for (let i = 0; i < 3; i++) {
+    const log = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 1.6, 5), i % 2 ? dark : wood);
+    log.rotation.z = Math.PI / 2;
+    log.position.set(0, 0, (i - 1) * 0.22);
+    add(g, log, 1.1);
+  }
+  // Cross beams
+  for (let i = 0; i < 2; i++) {
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.6), dark);
+    beam.position.set(i ? 0.35 : -0.35, 0.12, 0);
+    add(g, beam, 1.12);
+  }
+  // Rope lashings
+  for (const x of [-0.3, 0.3]) {
+    const r = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.03, 4, 6), rope);
+    r.rotation.y = Math.PI / 2;
+    r.position.set(x, 0, 0);
+    add(g, r, 1.15);
+  }
+  g.rotation.set(0.15, 0.5, 0.05);
   return g;
 }
 
 function meshHeavyRaft(gm) {
   const g = new THREE.Group();
-  const hull = mat(0x6a4528, gm);
-  const trim = mat(0x2f6bb8, gm);
-  const sail = mat(0xf4f0e6, gm);
-  const stripe = mat(0x2f6bb8, gm);
-  const mast = mat(0x3e2a16, gm);
-  const wood = mat(0x8a5c30, gm);
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.36, 0.58, 1, 1, 1), hull);
-  body.position.y = 0.08;
-  add(g, body);
-  const rail = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.09, 0.62), trim);
-  rail.position.y = 0.3;
-  add(g, rail, 1.08);
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.32, 0.42), wood);
-  cabin.position.set(-0.42, 0.4, 0);
-  add(g, cabin);
-  for (const x of [-0.12, 0.28]) {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.9, 5), mast);
-    m.position.set(x, 0.72, 0);
-    add(g, m);
-    const s = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.58, 0.44), sail);
-    s.position.set(x + 0.08, 0.68, 0);
-    add(g, s, 1.05);
-    const st = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.55, 0.1), stripe);
-    st.position.set(x + 0.1, 0.68, 0);
-    add(g, st, 1.05);
-    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.12, 3), trim);
-    fl.rotation.z = -Math.PI / 2;
-    fl.position.set(x + 0.04, 1.2, 0);
-    add(g, fl, 1.15);
+  const wood = mat(0x6a5a3a, gm);
+  const dark = mat(0x4a3a22, gm);
+  const rope = mat(0xb89a5a, gm);
+  // Thicker log hull — 4 logs, wider
+  for (let i = 0; i < 4; i++) {
+    const log = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 1.8, 5), i % 2 ? dark : wood);
+    log.rotation.z = Math.PI / 2;
+    log.position.set(0, 0, (i - 1.5) * 0.24);
+    add(g, log, 1.1);
   }
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.16, 6), wood);
-  barrel.rotation.z = Math.PI / 2;
-  barrel.position.set(-0.1, 0.34, 0.18);
-  add(g, barrel, 1.1);
-  g.rotation.set(0.35, 0.65, 0.05);
+  // Cross beams — 3 heavy beams
+  for (let i = 0; i < 3; i++) {
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.85), dark);
+    beam.position.set((i - 1) * 0.5, 0.14, 0);
+    add(g, beam, 1.12);
+  }
+  // Rope lashings
+  for (const x of [-0.4, 0.4]) {
+    const r = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.035, 4, 6), rope);
+    r.rotation.y = Math.PI / 2;
+    r.position.set(x, 0, 0);
+    add(g, r, 1.15);
+  }
+  // Small cargo crate
+  const crate = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.3, 0.35), mat(0x8a7a5a, gm));
+  crate.position.set(0.1, 0.3, 0.05);
+  crate.rotation.y = 0.3;
+  add(g, crate, 1.1);
+  g.rotation.set(0.15, 0.5, 0.05);
   return g;
 }
 
 function meshChargeBoat(gm) {
   const g = new THREE.Group();
-  const hull = mat(0x1c1220, gm);
-  const gold = mat(0xd4a020, gm);
-  const purple = mat(0x4a2068, gm);
-  const sail = mat(0x5a2a7a, gm);
-  const mast = mat(0x2a1c14, gm);
-  const window = mat(0xffe08a, gm);
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.42, 0.62, 1, 1, 1), hull);
-  body.position.y = 0.1;
-  add(g, body);
-  const rail = new THREE.Mesh(new THREE.BoxGeometry(1.58, 0.08, 0.66), gold);
-  rail.position.y = 0.34;
-  add(g, rail, 1.08);
-  const stern = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.55, 0.5), purple);
-  stern.position.set(-0.55, 0.48, 0);
-  add(g, stern);
-  const w = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.06), window);
-  w.position.set(-0.78, 0.52, 0.12);
-  add(g, w, 1.2);
-  const figure = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.38, 5), gold);
-  figure.rotation.z = -Math.PI / 2;
-  figure.position.set(0.88, 0.28, 0);
-  add(g, figure, 1.1);
-  for (let i = 0; i < 3; i++) {
-    const x = -0.22 + i * 0.34;
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.032, 1.05 - i * 0.08, 5), mast);
-    m.position.set(x, 0.88, 0);
-    add(g, m);
-    const s = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.45, 0.34), sail);
-    s.position.set(x + 0.07, 0.8, 0);
-    add(g, s, 1.04);
-    const crest = new THREE.Mesh(new THREE.OctahedronGeometry(0.06, 0), gold);
-    crest.position.set(x + 0.1, 0.8, 0.02);
-    add(g, crest, 1.2);
-    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.11, 3), purple);
-    fl.rotation.z = -Math.PI / 2;
-    fl.position.set(x + 0.04, 1.42 - i * 0.04, 0);
-    add(g, fl, 1.15);
-  }
-  g.rotation.set(0.35, 0.7, 0.05);
+  const hull = mat(0x7a5a3a, gm);
+  const deck = mat(0x5a4528, gm);
+  const sail = mat(0xe8e0d0, gm);
+  const mast = mat(0x4a3a22, gm);
+  const accent = mat(0xc45c1a, gm);
+  // Hull — stretched box with tapered bow
+  const hullMesh = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.35, 0.55, 3, 1, 1), hull);
+  hullMesh.position.y = 0.1;
+  add(g, hullMesh, 1.08);
+  // Bow taper (cone)
+  const bow = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.5, 4), hull);
+  bow.rotation.z = -Math.PI / 2;
+  bow.position.set(1.0, 0.1, 0);
+  bow.scale.set(1, 1, 0.8);
+  add(g, bow, 1.1);
+  // Stern (flat back)
+  const stern = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.35, 0.55), deck);
+  stern.position.set(-0.9, 0.15, 0);
+  add(g, stern, 1.1);
+  // Deck
+  const deckMesh = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 0.5), deck);
+  deckMesh.position.y = 0.3;
+  add(g, deckMesh, 1.05);
+  // Mast
+  const mastMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.1, 5), mast);
+  mastMesh.position.set(0.2, 0.85, 0);
+  add(g, mastMesh, 1.12);
+  // Sail — big triangle
+  const sailMesh = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.8, 3), sail);
+  sailMesh.position.set(0.2, 0.75, 0.05);
+  sailMesh.rotation.x = 0.15;
+  sailMesh.scale.set(1, 1, 0.15);
+  add(g, sailMesh, 1.08);
+  // Stripe on sail
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.02), accent);
+  stripe.position.set(0.2, 0.72, 0.09);
+  add(g, stripe, 1.15);
+  // Cabin at stern
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.25, 0.4), deck);
+  cabin.position.set(-0.55, 0.48, 0);
+  add(g, cabin, 1.1);
+  // Prow ornament (small cone)
+  const prow = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.25, 4), accent);
+  prow.position.set(1.15, 0.35, 0);
+  prow.rotation.z = -Math.PI / 2;
+  add(g, prow, 1.15);
+  g.rotation.set(0.15, 0.5, 0.05);
   return g;
 }
 
@@ -261,6 +257,85 @@ function meshGhostWake(gm) {
     add(g, w, 1.1);
   }
   g.rotation.set(0.25, 0.55, 0);
+  return g;
+}
+
+function meshDriftNose(gm) {
+  const g = new THREE.Group();
+  const wood = mat(0x5a9aaa, gm);
+  const cork = mat(0xc4a06a, gm);
+  const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.5, 6), wood);
+  bottle.position.y = 0.1;
+  add(g, bottle);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.16, 5), wood);
+  neck.position.y = 0.42;
+  add(g, neck, 1.1);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.08, 5), cork);
+  cap.position.y = 0.52;
+  add(g, cap, 1.12);
+  const swirl = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.035, 4, 10), mat(0xb8e0e8, gm));
+  swirl.rotation.x = Math.PI / 2;
+  swirl.position.y = 0.12;
+  add(g, swirl, 1.15);
+  g.rotation.set(0.3, 0.4, 0.15);
+  return g;
+}
+
+function meshDeepLedger(gm) {
+  const g = new THREE.Group();
+  const cover = mat(0x8a7040, gm);
+  const page = mat(0xe8dcc0, gm);
+  const ink = mat(0x2a2218, gm);
+  const book = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.12, 0.7), cover);
+  add(g, book, 1.08);
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.04, 0.62), page);
+  leaf.position.y = 0.08;
+  add(g, leaf, 1.05);
+  for (let i = 0; i < 3; i++) {
+    const line = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.02, 0.03), ink);
+    line.position.set(-0.02, 0.11, 0.15 - i * 0.14);
+    add(g, line, 1.05);
+  }
+  const worm = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.22, 3, 5), mat(0x4a9a5a, gm));
+  worm.rotation.z = 0.7;
+  worm.position.set(0.22, 0.18, -0.1);
+  add(g, worm, 1.12);
+  g.rotation.set(0.45, 0.35, 0.1);
+  return g;
+}
+
+function meshRamBlacksmith(gm) {
+  const g = new THREE.Group();
+  const iron = mat(0xc07040, gm);
+  const dark = mat(0x5a4030, gm);
+  const horn = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.7, 5), iron);
+  horn.rotation.z = Math.PI / 2;
+  horn.position.set(0.15, 0.1, 0);
+  add(g, horn, 1.1);
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.22, 0.28), dark);
+  base.position.set(-0.15, 0.05, 0);
+  add(g, base, 1.08);
+  const rivet = new THREE.Mesh(new THREE.SphereGeometry(0.06, 5, 4), iron);
+  rivet.position.set(-0.05, 0.18, 0.12);
+  add(g, rivet, 1.15);
+  g.rotation.set(0.25, -0.5, 0.1);
+  return g;
+}
+
+function meshRustReceipt(gm) {
+  const g = new THREE.Group();
+  const paper = mat(0x6a8a5a, gm);
+  const rust = mat(0xa07040, gm);
+  const sheet = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 0.04), paper);
+  add(g, sheet, 1.08);
+  const stamp = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.05, 8), rust);
+  stamp.rotation.x = Math.PI / 2;
+  stamp.position.set(0.08, -0.12, 0.04);
+  add(g, stamp, 1.12);
+  const fold = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.08, 0.05), mat(0x4a6a40, gm));
+  fold.position.set(0, 0.32, 0.02);
+  add(g, fold, 1.1);
+  g.rotation.set(0.2, 0.35, -0.1);
   return g;
 }
 
@@ -441,6 +516,10 @@ const BUILDERS = {
   fishmongerEye: meshFishmongerEye,
   cursedBoat: meshCursedWhisper,
   ghostWake: meshGhostWake,
+  driftNose: meshDriftNose,
+  deepLedger: meshDeepLedger,
+  ramBlacksmith: meshRamBlacksmith,
+  rustReceipt: meshRustReceipt,
 };
 
 /**

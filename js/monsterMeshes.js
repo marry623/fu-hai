@@ -588,15 +588,18 @@ function attachHpBar(g) {
   bar.scale.setScalar(1 / ps);
   bar.position.y = (top + 0.52) / ps;
 
+  const bgW = HP_FULL_W + 0.12;
   const bg = new THREE.Sprite(HP_MAT_BG);
-  bg.scale.set(HP_FULL_W + 0.12, HP_H + 0.09, 1);
-  bg.center.set(0.5, 0.5);
+  bg.scale.set(bgW, HP_H + 0.09, 1);
+  bg.center.set(0, 0.5);
+  bg.position.x = -bgW * 0.5;
   bg.renderOrder = 24;
   bg.userData.skipOutline = true;
 
   const fill = new THREE.Sprite(HP_MAT_OK);
   fill.scale.set(HP_FULL_W, HP_H, 1);
-  fill.center.set(0.5, 0.5);
+  fill.center.set(0, 0.5);
+  fill.position.x = -HP_FULL_W * 0.5;
   fill.renderOrder = 25;
   fill.userData.skipOutline = true;
 
@@ -624,8 +627,11 @@ export function syncHpBar(mesh, boatPos) {
     : true;
   bar.visible = ratio < 0.999 || near || !!mesh.userData.chasing;
   const fill = bar.userData.fill;
-  const w = Math.max(0.06, ratio) * bar.userData.fullW;
+  const fullW = bar.userData.fullW;
+  const w = Math.max(0.06, ratio) * fullW;
   fill.scale.set(w, HP_H, 1);
+  fill.center.set(0, 0.5);
+  fill.position.x = -fullW * 0.5;
   fill.material = ratio > 0.55 ? HP_MAT_OK : ratio > 0.28 ? HP_MAT_MID : HP_MAT_LOW;
 }
 
