@@ -1,7 +1,7 @@
 /** Apply persisted loadout into a fresh run state */
 
 import { getFishDef } from './fishCatalog.js?v=34b';
-import { equipFish, SLOT_ORDER } from './slots.js?v=32e';
+import { equipFish, SLOT_ORDER } from './slots.js?v=39b';
 import { deepLedgerBonusBait, equippedTalents } from './meta.js?v=35l';
 
 const RUN_START_BAIT = 20;

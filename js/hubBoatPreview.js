@@ -1,9 +1,9 @@
 /** Hub boat showcase — loadout preview with mount projections for callouts */
 
 import * as THREE from 'three';
-import { createBoat, setBoatVariant, BOAT_WATERLINE_Y } from './boat.js?v=36g';
+import { createBoat, setBoatVariant, BOAT_WATERLINE_Y } from './boat.js?v=39h';
 import { getFishDef } from './fishCatalog.js?v=34b';
-import { equipFish, SLOT_ORDER } from './slots.js?v=32e';
+import { equipFish, SLOT_ORDER } from './slots.js?v=39b';
 
 const _v = new THREE.Vector3();
 
@@ -16,9 +16,19 @@ export function createHubBoatPreview(scene, gradientMap) {
   boat.name = 'hubShowBoat';
   boat.visible = false;
   boat.position.set(-0.2, BOAT_WATERLINE_Y || 0.72, 16);
-  boat.rotation.y = Math.PI * 1.65;
+  /** Prep showcase yaw — raft / heavyRaft get +180° only here (not in-run / backpack). */
+  const PREP_YAW = Math.PI * 1.65;
+  const PREP_YAW_FLIP = new Set(['raft', 'heavyRaft']);
+  boat.rotation.y = PREP_YAW + Math.PI;
   boat.scale.setScalar(1.35);
   scene.add(boat);
+
+  /** Prep showcase only — heavy raft reads small vs sailboat/charge at same scale. */
+  const PREP_BOAT_SCALE = {
+    raft: 1.35,
+    heavyRaft: 1.85,
+    chargeBoat: 1.35,
+  };
 
   /** @type {Record<string, object|null>} */
   let slotsState = Object.fromEntries(SLOT_ORDER.map((k) => [k, null]));
@@ -35,7 +45,10 @@ export function createHubBoatPreview(scene, gradientMap) {
   }
 
   function applyBoatId(boatId) {
-    setBoatVariant(boat, boatId || 'raft');
+    const id = boatId || 'raft';
+    setBoatVariant(boat, id);
+    boat.scale.setScalar(PREP_BOAT_SCALE[id] ?? 1.35);
+    boat.rotation.y = PREP_YAW + (PREP_YAW_FLIP.has(id) ? Math.PI : 0);
   }
 
   /** Sync hull look + 3D fish on mounts from meta.loadout */

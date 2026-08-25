@@ -1,7 +1,7 @@
 /** Hub UI — backpack desk; 整备=3D船, 出港=海域地图, 仓库=格子 */
 
 import { ZONES } from './zones.js?v=31y';
-import { SLOT_ORDER, SLOT_LABELS, ramCdForRarity } from './slots.js?v=32e';
+import { SLOT_ORDER, SLOT_LABELS, ramCdForRarity } from './slots.js?v=39b';
 import { getFishDef, FISH_CATALOG, RARITY, listShopBuyFishIds, shopBuyCost, BAIT_KINDS, rarityStars, familyOf, familyLabel } from './fishCatalog.js?v=34b';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=37a';
@@ -18,6 +18,7 @@ import {
   fishSellPrice,
   tryUnlock,
   buySupply,
+  buySupplyQty,
   buyWarehouseFish,
   upgradeSkill,
   upgradeTalent,
@@ -30,6 +31,7 @@ import {
   sellWarehouseRelic,
   sellWarehouseRelicsBelowTier,
   appraiseRelic,
+  appraiseRelicsBatch,
   relicSellPreview,
   hubFeedFish,
   equipFromWarehouse,
@@ -46,13 +48,15 @@ import {
   baitStock,
   setLoadoutBaitKind,
   packSupply,
+  packSupplyQty,
+  bagRoomForSupply,
   unpackSupply,
   LOADOUT_BAG_SIZE,
   zoneTicketCost,
   canDepartZone,
-} from './meta.js?v=35l';
+} from './meta.js?v=39n';
 import { HUB_SPOTS } from './hubIsland.js?v=35b';
-import { renderManualHtml } from './hubManual.js?v=35l';
+import { renderManualHtml } from './hubManual.js?v=39n';
 import * as sfx from './audio.js?v=33f';
 import {
   APPRAISE_COST,
@@ -60,6 +64,7 @@ import {
   getRelicDef,
   tierLabel,
 } from './salvageTables.js?v=35d';
+import { openAppraiseScratch } from './appraiseReveal.js?v=39n';
 
 const TAB_TITLES = {
   prep: '整备',
@@ -87,9 +92,9 @@ const CALLOUT_LAYOUT = {
   bow:   { x: 12, y: 26, n: 1, side: 'L' },
   sideL: { x: 12, y: 54, n: 2, side: 'L' },
   keel:  { x: 12, y: 82, n: 3, side: 'L' },
-  sail:  { x: 65, y: 14, n: 4, side: 'R' },
-  sideR: { x: 65, y: 48, n: 5, side: 'R' },
-  stern: { x: 65, y: 82, n: 6, side: 'R' },
+  sail:  { x: 78, y: 14, n: 4, side: 'R' },
+  sideR: { x: 78, y: 48, n: 5, side: 'R' },
+  stern: { x: 78, y: 82, n: 6, side: 'R' },
 };
 
 function listFishIds() {
@@ -169,6 +174,8 @@ export function createHub(deps) {
   let warehouseTab = 'fish';
   /** Prep callout bind picker: target slot id, or null when closed */
   let bindPickSlot = null;
+  /** Warehouse qty dialog: { mode:'buy'|'pack', id } or null */
+  let whQtyDlg = null;
   let shopDetail = null;
 
   if (els.libraryBody) els.libraryBody.innerHTML = renderManualHtml();
@@ -226,6 +233,7 @@ export function createHub(deps) {
   function closeDrawer() {
     const was = drawerOpen;
     closeSlotBindPicker();
+    closeWhBuyPop();
     drawerOpen = false;
     els.drawer?.classList.add('hidden');
     root?.classList.remove('drawer-open');
@@ -237,6 +245,7 @@ export function createHub(deps) {
 
   function setTab(id) {
     closeSlotBindPicker();
+    closeWhBuyPop();
     tab = id;
     const ship = isShipTab(id);
     const showBoat = id === 'prep';
@@ -365,6 +374,205 @@ export function createHub(deps) {
       list.setAttribute('aria-label', '携带物资与改装');
       panel.append(h, list);
     }
+  }
+
+  function ensureWhQtyPop() {
+    if (!els.warehouseStage) return null;
+    let pop = els.warehouseStage.querySelector('#hub-wh-buy-pop');
+    if (!pop) {
+      pop = document.createElement('div');
+      pop.id = 'hub-wh-buy-pop';
+      pop.className = 'hub-wh-buy-pop hidden';
+      pop.setAttribute('role', 'dialog');
+      els.warehouseStage.appendChild(pop);
+    }
+    return pop;
+  }
+
+  function closeWhBuyPop() {
+    whQtyDlg = null;
+    const pop = els.warehouseStage?.querySelector('#hub-wh-buy-pop');
+    if (pop) {
+      pop.classList.add('hidden');
+      pop.innerHTML = '';
+      pop.removeAttribute('aria-label');
+    }
+  }
+
+  function clampInt(v, lo, hi) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return lo;
+    return Math.max(lo, Math.min(hi, Math.round(n)));
+  }
+
+  function wireWhQtyControls(pop, max, onChange) {
+    const range = pop.querySelector('[data-wh-qty-range]');
+    const num = pop.querySelector('[data-wh-qty-num]');
+    const sync = (raw, from) => {
+      const v = clampInt(raw, 1, max);
+      if (range) range.value = String(v);
+      if (num && from !== 'num') num.value = String(v);
+      if (num && from === 'num') num.value = String(v);
+      onChange(v);
+      return v;
+    };
+    range?.addEventListener('input', () => sync(range.value, 'range'));
+    num?.addEventListener('input', () => sync(num.value, 'num'));
+    num?.addEventListener('change', () => sync(num.value, 'num'));
+    sync(1, 'init');
+  }
+
+  function openWhBuyPop(supplyId) {
+    const item = SHOP_SUPPLIES.find((s) => s.id === supplyId);
+    const pop = ensureWhQtyPop();
+    if (!item || !pop) return;
+    const meta = deps.getMeta();
+    const frags = meta.fragments | 0;
+    const maxPacks = Math.max(0, Math.min(99, Math.floor(frags / item.cost)));
+    if (maxPacks <= 0) {
+      deps.toast('海图碎片不足');
+      sfx.uiDeny();
+      return;
+    }
+    whQtyDlg = { mode: 'buy', id: supplyId };
+    pop.setAttribute('aria-label', `购买${item.name}`);
+    pop.classList.remove('hidden');
+    const paint = (packs) => {
+      const totalCost = item.cost * packs;
+      const units = item.amount * packs;
+      const priceEl = pop.querySelector('[data-wh-qty-price]');
+      const bodyEl = pop.querySelector('[data-wh-qty-body]');
+      const go = pop.querySelector('[data-wh-buy-confirm]');
+      if (priceEl) priceEl.textContent = `${totalCost} 海图碎片 · 入手 ×${units} · 余额 ${frags}`;
+      if (bodyEl) {
+        bodyEl.textContent = `每份 ${item.cost} 碎片 → ×${item.amount}。购入后尽量装入携带背包。`;
+      }
+      if (go) {
+        go.disabled = packs < 1 || totalCost > frags;
+        go.textContent = go.disabled ? '碎片不足' : `购买 ${packs} 份并装入`;
+      }
+    };
+    pop.innerHTML = `
+      <div class="hub-wh-buy-head">
+        <strong>购买 ${item.name}</strong>
+        <button type="button" class="hub-slot-bind-close" data-wh-buy-close aria-label="关闭">×</button>
+      </div>
+      <p class="hub-wh-buy-body" data-wh-qty-body></p>
+      <div class="hub-wh-qty">
+        <label class="hub-wh-qty-label">份数</label>
+        <input type="range" class="hub-wh-qty-range" data-wh-qty-range min="1" max="${maxPacks}" value="1" />
+        <input type="number" class="hub-wh-qty-num" data-wh-qty-num min="1" max="${maxPacks}" value="1" inputmode="numeric" />
+      </div>
+      <p class="hub-wh-buy-price" data-wh-qty-price></p>
+      <div class="hub-wh-buy-acts">
+        <button type="button" class="bp-btn dim" data-wh-buy-close>取消</button>
+        <button type="button" class="bp-btn bright" data-wh-buy-confirm>购买并装入</button>
+      </div>
+    `;
+    wireWhQtyControls(pop, maxPacks, paint);
+    pop.querySelectorAll('[data-wh-buy-close]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sfx.uiClose();
+        closeWhBuyPop();
+      });
+    });
+    pop.querySelector('[data-wh-buy-confirm]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!whQtyDlg || whQtyDlg.mode !== 'buy') return;
+      const id = whQtyDlg.id;
+      const packs = clampInt(pop.querySelector('[data-wh-qty-num]')?.value, 1, maxPacks);
+      const shopItem = SHOP_SUPPLIES.find((s) => s.id === id);
+      const bought = buySupplyQty(deps.getMeta(), id, packs);
+      if (!bought.ok) {
+        deps.toast(bought.msg);
+        sfx.uiDeny();
+        return;
+      }
+      sfx.uiConfirm();
+      const room = bagRoomForSupply(bought.meta, id);
+      const toPack = Math.min(bought.amount | 0, room);
+      if (toPack > 0) {
+        const packed = packSupplyQty(bought.meta, id, toPack);
+        deps.setMeta(packed.meta);
+        deps.toast(`${shopItem?.name || '物资'} 购入 ×${bought.amount}，装入 ${packed.moved}`);
+        sfx.uiEquip();
+      } else {
+        deps.setMeta(bought.meta);
+        deps.toast(`${bought.msg}（背包已满，留在仓库）`);
+      }
+      closeWhBuyPop();
+      render();
+    });
+  }
+
+  function openWhPackPop(supplyId) {
+    const item = SHOP_SUPPLIES.find((s) => s.id === supplyId);
+    const pop = ensureWhQtyPop();
+    if (!item || !pop) return;
+    const meta = deps.getMeta();
+    const stock = (meta.warehouse?.supplies?.[supplyId] | 0);
+    const room = bagRoomForSupply(meta, supplyId);
+    const max = Math.min(stock, room);
+    if (stock <= 0) {
+      openWhBuyPop(supplyId);
+      return;
+    }
+    if (max <= 0) {
+      deps.toast('背包已满（8格）');
+      sfx.uiDeny();
+      return;
+    }
+    whQtyDlg = { mode: 'pack', id: supplyId };
+    pop.setAttribute('aria-label', `携带${item.name}`);
+    pop.classList.remove('hidden');
+    const paint = (qty) => {
+      const priceEl = pop.querySelector('[data-wh-qty-price]');
+      const go = pop.querySelector('[data-wh-pack-confirm]');
+      if (priceEl) priceEl.textContent = `将装入 ${qty} · 仓库余 ${stock} · 背包还可装 ${room}`;
+      if (go) go.textContent = `携带 ${qty}`;
+    };
+    pop.innerHTML = `
+      <div class="hub-wh-buy-head">
+        <strong>携带 ${item.name}</strong>
+        <button type="button" class="hub-slot-bind-close" data-wh-buy-close aria-label="关闭">×</button>
+      </div>
+      <p class="hub-wh-buy-body">从仓库装入携带背包，可一次携带多个。</p>
+      <div class="hub-wh-qty">
+        <label class="hub-wh-qty-label">数量</label>
+        <input type="range" class="hub-wh-qty-range" data-wh-qty-range min="1" max="${max}" value="1" />
+        <input type="number" class="hub-wh-qty-num" data-wh-qty-num min="1" max="${max}" value="1" inputmode="numeric" />
+      </div>
+      <p class="hub-wh-buy-price" data-wh-qty-price></p>
+      <div class="hub-wh-buy-acts">
+        <button type="button" class="bp-btn dim" data-wh-buy-close>取消</button>
+        <button type="button" class="bp-btn bright" data-wh-pack-confirm>携带</button>
+      </div>
+    `;
+    wireWhQtyControls(pop, max, paint);
+    pop.querySelectorAll('[data-wh-buy-close]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sfx.uiClose();
+        closeWhBuyPop();
+      });
+    });
+    pop.querySelector('[data-wh-pack-confirm]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!whQtyDlg || whQtyDlg.mode !== 'pack') return;
+      const id = whQtyDlg.id;
+      const qty = clampInt(pop.querySelector('[data-wh-qty-num]')?.value, 1, max);
+      const packed = packSupplyQty(deps.getMeta(), id, qty);
+      deps.toast(packed.msg);
+      if (!packed.ok) {
+        sfx.uiDeny();
+        return;
+      }
+      sfx.uiEquip();
+      deps.setMeta(packed.meta);
+      closeWhBuyPop();
+      render();
+    });
   }
 
   function ensureSlotBindPop() {
@@ -719,9 +927,9 @@ export function createHub(deps) {
     }
 
     const boats = [
-      { id: 'raft', name: '木筏', need: true },
-      { id: 'heavyRaft', name: '重筏', need: !!meta.unlocks.heavyRaft },
-      { id: 'chargeBoat', name: '冲锋船', need: !!meta.unlocks.chargeBoat },
+      { id: 'raft', name: HULL_NAMES.raft, need: true },
+      { id: 'heavyRaft', name: HULL_NAMES.heavyRaft, need: !!meta.unlocks.heavyRaft },
+      { id: 'chargeBoat', name: HULL_NAMES.chargeBoat, need: !!meta.unlocks.chargeBoat },
     ];
     const curBoat = deps.getBoat() === 'lightBoat' ? 'raft' : deps.getBoat();
     const boatBtns = boats.map((b) => `
@@ -905,6 +1113,7 @@ export function createHub(deps) {
       nav.querySelectorAll('[data-wh-tab]').forEach((btn) => {
         btn.addEventListener('click', () => {
           sfx.uiClick();
+          closeWhBuyPop();
           warehouseTab = btn.dataset.whTab;
           render();
         });
@@ -922,6 +1131,9 @@ export function createHub(deps) {
         } catch (_) {
           thumb = `<div class="bp-thumb-blob" style="background:${item.tone || '#4a90a4'}"></div>`;
         }
+        const act = `
+              <button type="button" class="bp-btn dim" data-pack="${item.id}">装 ×${n}</button>
+              <button type="button" class="bp-btn bright" data-wh-buy="${item.id}">购</button>`;
         return `<div class="bp-cell hub-wh-cell">
           <span class="bp-tape top"></span>
           <div class="bp-polaroid">
@@ -929,25 +1141,25 @@ export function createHub(deps) {
             <div class="bp-cell-name">${item.name}</div>
             <div class="bp-rarity-bar r1"></div>
             <div class="hub-wh-acts-inline">
-              <button type="button" class="bp-btn dim" data-pack="${item.id}" ${n ? '' : 'disabled'}>装 ×${n}</button>
+              ${act}
             </div>
           </div>
         </div>`;
       });
-      while (cells.length < 20) cells.push(emptyWarehouseCell(1));
+      while (cells.length < 20) cells.push(emptyWarehouseCell(2));
       els.warehouse.innerHTML = cells.join('');
       els.warehouse.querySelectorAll('[data-pack]').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
-          const r = packSupply(deps.getMeta(), btn.dataset.pack);
-          deps.toast(r.msg);
-          if (r.ok) {
-            sfx.uiEquip();
-            deps.setMeta(r.meta);
-            render();
-          } else {
-            sfx.uiDeny();
-          }
+          sfx.uiOpen();
+          openWhPackPop(btn.dataset.pack);
+        });
+      });
+      els.warehouse.querySelectorAll('[data-wh-buy]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          sfx.uiOpen();
+          openWhBuyPop(btn.dataset.whBuy);
         });
       });
       return;
@@ -1132,7 +1344,7 @@ export function createHub(deps) {
     const tabMeta = SHOP_TABS.find((t) => t.id === shopTab);
     const blurb = {
       sell: '卖掉仓库鱼或宝物换碎片。未鉴定包裹也可先卖。',
-      hull: '木筏免费。重筏 / 冲锋船买的是一艘在港船，沉了要重买。',
+      hull: '帆船免费。重筏 / 冲锋船买的是一艘在港船，沉了要重买。',
       supply: '饵和修理剂入仓库，出港再装进 8 格背包。1–3 星鱼可直购。',
       weapon: '学会永久。出航带 3 张。可升到 3 级。',
       talent: '永久。可升到 3 级。',
@@ -1203,7 +1415,7 @@ export function createHub(deps) {
           sfx.uiSell();
           shopDetail = {
             title: '一键出售完成',
-            desc: `已卖掉 ${r.count} 件 T${below} 以下宝物`,
+            desc: `已卖掉 ${r.count} 件（T${below} 以下与未鉴定包裹）`,
             priceLine: `+${r.price} 海图碎片`,
           };
           deps.setMeta(r.meta);
@@ -1312,7 +1524,7 @@ export function createHub(deps) {
         const relics = meta.warehouse?.relics || [];
         const bulkBar = `<div class="hub-shop-bulk">
           <button type="button" class="bp-btn bright hub-shop-bulk-btn" data-sell-relic-below="3">一键出售 T3 以下</button>
-          <span class="hub-shop-bulk-hint">保留 T3 / 隐藏级</span>
+          <span class="hub-shop-bulk-hint">含未鉴定包裹 · 保留已鉴定 T3 / 隐藏</span>
         </div>`;
         if (!relics.length) {
           cards = `<div class="hub-shop-subtabs">${sellSub}</div>${bulkBar}<p class="hub-empty">仓库暂无宝物可售</p>`;
@@ -1486,19 +1698,23 @@ export function createHub(deps) {
         const below = Number(btn.dataset.sellRelicBelow) || 3;
         const low = (deps.getMeta().warehouse?.relics || []).filter((item) => {
           if (!item) return false;
-          const def = item.sealed ? null : getRelicDef(item.defId);
+          if (item.sealed) return true;
+          const def = getRelicDef(item.defId);
+          if (item.hidden || def?.hidden) return false;
           const tier = (item.tier | 0) || (def?.tier | 0) || 1;
           return tier > 0 && tier < below;
         });
         if (!low.length) {
           sfx.uiDeny();
-          deps.toast('没有 T3 以下的宝物');
+          deps.toast('没有可一键出售的宝物');
           return;
         }
         const total = low.reduce((s, item) => s + relicSellPreview(item), 0);
+        const sealedN = low.filter((x) => x.sealed).length;
+        const idN = low.length - sealedN;
         shopDetail = {
           title: '一键出售 T3 以下',
-          desc: `将卖掉仓库里全部 T1 / T2 宝物（共 ${low.length} 件），保留 T3 与隐藏级。`,
+          desc: `将卖掉 T1/T2${idN ? ` ${idN} 件` : ''}与未鉴定包裹${sealedN ? ` ${sealedN} 件` : ''}（共 ${low.length} 件），保留已鉴定的 T3 与隐藏级。`,
           priceLine: `预计 +${total} 海图碎片`,
           act: 'sellRelicBelow',
           actId: String(below),
@@ -1674,12 +1890,48 @@ export function createHub(deps) {
   }
 
 
+  function showBmResult(r) {
+    if (!els.bmDetail || !r?.def) return;
+    els.bmDetail.innerHTML = `
+      <div class="hub-bm-result">
+        <div class="hub-bm-result-face">${relicFaceHtml(r.relic)}</div>
+        <div class="hub-bm-result-body">
+          <strong>${r.def.name}</strong>
+          <p>${tierLabel(r.def.tier, r.def.hidden)} · ${r.def.museum}</p>
+          <p>${r.def.blurb}</p>
+          <p class="hub-shop-detail-price">估值 ${r.relic.sellPrice}（${r.def.sellMin}–${r.def.sellMax}）</p>
+        </div>
+      </div>`;
+  }
+
+  function showBmBatchResults(results, msg) {
+    const panel = document.getElementById('hub-bm-batch');
+    const list = document.getElementById('hub-bm-batch-list');
+    const closeBtn = document.getElementById('hub-bm-batch-close');
+    if (!panel || !list) return;
+    list.innerHTML = results.map((row) => `
+      <div class="hub-bm-batch-row">
+        <div class="hub-bm-batch-face">${relicFaceHtml(row.relic)}</div>
+        <div class="hub-bm-batch-body">
+          <strong>${row.def.name}${row.neu ? ' · 新' : ''}</strong>
+          <span>${tierLabel(row.def.tier, row.def.hidden)} · 估值 ${row.relic.sellPrice}</span>
+        </div>
+      </div>`).join('') || `<p class="hub-empty">${msg || '无结果'}</p>`;
+    panel.classList.remove('hidden');
+    const close = () => panel.classList.add('hidden');
+    closeBtn.onclick = close;
+    panel.onclick = (e) => { if (e.target === panel) close(); };
+  }
+
   function renderBlackMarket(meta) {
     if (!els.blackmarket) return;
     const relics = meta.warehouse?.relics || [];
     const sealed = relics
       .map((item, i) => ({ item, i }))
       .filter((x) => x.item?.sealed);
+    const bal = meta.fragments | 0;
+    const canOpen = Math.min(sealed.length, Math.floor(bal / APPRAISE_COST));
+    const batchCost = canOpen * APPRAISE_COST;
     let cards;
     if (!sealed.length) {
       cards = '<p class="hub-empty">没有未鉴定的黑色包裹。出海捞包裹并成功归航后再来。</p>';
@@ -1692,10 +1944,40 @@ export function createHub(deps) {
         faceHtml: relicFaceHtml(item),
       })).join('');
     }
+    const batchLabel = canOpen > 0
+      ? `一键鉴宝 · ${canOpen}×${APPRAISE_COST}`
+      : (sealed.length ? '一键鉴宝 · 碎片不足' : '一键鉴宝');
     els.blackmarket.innerHTML = `
       <div class="hub-shop-tabs"><span class="hub-shop-tab active">鉴宝</span></div>
-      <p class="hub-fs-blurb">一律 ${APPRAISE_COST} 碎片 · 鉴定前不知档位</p>
+      <p class="hub-fs-blurb">每件 ${APPRAISE_COST} 碎片 · 单开刮擦 · 可一键</p>
+      <div class="hub-bm-toolbar">
+        <button type="button" class="bp-btn bright hub-bm-batch-btn" data-bm-batch
+          ${canOpen > 0 ? '' : 'disabled'}>${batchLabel}</button>
+      </div>
       <div class="hub-shop-grid">${cards}</div>`;
+
+    els.blackmarket.querySelector('[data-bm-batch]')?.addEventListener('click', () => {
+      if (canOpen <= 0) {
+        sfx.uiDeny();
+        deps.toast(sealed.length ? `碎片不足（需要 ${APPRAISE_COST}）` : '没有未鉴定的包裹');
+        return;
+      }
+      sfx.uiClick();
+      const ok = window.confirm(`一键鉴定 ${canOpen} 件黑色包裹？\n费用 ${batchCost} 海图碎片（余额 ${bal}）`);
+      if (!ok) return;
+      const r = appraiseRelicsBatch(deps.getMeta());
+      deps.toast(r.msg);
+      if (r.ok) {
+        sfx.uiBuy();
+        deps.setMeta(r.meta);
+        showBmBatchResults(r.results, r.msg);
+        if (els.bmDetail) {
+          els.bmDetail.innerHTML = `<strong>一键鉴定</strong><p>${r.msg}</p>`;
+        }
+        render();
+      } else sfx.uiDeny();
+    });
+
     els.blackmarket.querySelectorAll('[data-shop-key]').forEach((btn) => {
       btn.addEventListener('click', () => {
         sfx.uiClick();
@@ -1708,29 +1990,30 @@ export function createHub(deps) {
         if (els.bmDetail) {
           els.bmDetail.innerHTML = `
             <strong>黑色包裹</strong>
-            <p>花费 ${APPRAISE_COST} 海图碎片鉴定。鉴定后揭开名称与售价，物品仍留在仓库。</p>
+            <p>花费 ${APPRAISE_COST} 海图碎片后刮开涂层揭晓。物品仍留在仓库。</p>
             <p class="hub-shop-detail-price">费用 ${APPRAISE_COST} · 余额 ${deps.getMeta().fragments || 0}</p>
-            <button type="button" class="bp-btn bright hub-shop-act" data-bm-appraise="${idx}">确认鉴定</button>`;
+            <button type="button" class="bp-btn bright hub-shop-act" data-bm-appraise="${idx}">开始鉴定</button>`;
           els.bmDetail.querySelector('[data-bm-appraise]')?.addEventListener('click', () => {
             const r = appraiseRelic(deps.getMeta(), idx);
             deps.toast(r.msg);
-            if (r.ok) {
-              sfx.uiBuy();
-              deps.setMeta(r.meta);
-              if (els.bmDetail && r.def) {
-                els.bmDetail.innerHTML = `
-                  <div class="hub-bm-result">
-                    <div class="hub-bm-result-face">${relicFaceHtml(r.relic)}</div>
-                    <div class="hub-bm-result-body">
-                      <strong>${r.def.name}</strong>
-                      <p>${tierLabel(r.def.tier, r.def.hidden)} · ${r.def.museum}</p>
-                      <p>${r.def.blurb}</p>
-                      <p class="hub-shop-detail-price">估值 ${r.relic.sellPrice}（${r.def.sellMin}–${r.def.sellMax}）</p>
-                    </div>
-                  </div>`;
-              }
-              render();
-            } else sfx.uiDeny();
+            if (!r.ok) {
+              sfx.uiDeny();
+              return;
+            }
+            sfx.uiBuy();
+            deps.setMeta(r.meta);
+            render();
+            openAppraiseScratch({
+              faceHtml: relicFaceHtml(r.relic),
+              onDone: () => {
+                showBmResult(r);
+              },
+            });
+            if (els.bmDetail) {
+              els.bmDetail.innerHTML = `
+                <strong>鉴定中…</strong>
+                <p>擦开涂层揭晓宝物。也可点「直接揭开」。</p>`;
+            }
           });
         }
       });
@@ -2080,7 +2363,9 @@ export function createHub(deps) {
   }, true);
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && bindPickSlot) closeSlotBindPicker();
+    if (e.key !== 'Escape') return;
+    if (bindPickSlot) closeSlotBindPicker();
+    if (whQtyDlg) closeWhBuyPop();
   });
 
   return {

@@ -4,10 +4,11 @@ import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
 import { getSeaMap, constrainToPoly, pointInPoly, EVAC_RADIUS, TUTORIAL_BEATS, TUTORIAL_EVAC_RADIUS } from './seaMaps.js?v=32y';
 import { getSeaBiome } from './seaBiomes.js?v=30h';
-import { scatterBiomeDecor, updateBiomeDecor, jitterRockCluster } from './biomeDecor.js?v=30j';
+import { scatterBiomeDecor, updateBiomeDecor } from './biomeDecor.js?v=30j';
 import {
-  clonePropGlb, ensureAllPropGlbsLoading, isPropGlbReady, onPropGlbReady, styleCoralProp,
-} from './propGlb.js?v=36k';
+  clonePropGlb, ensureAllPropGlbsLoading, ensureZonePropGlbsLoading,
+  isPropGlbReady, onPropGlbReady, styleCoralProp, areZonePropsReady, propIdsForZone,
+} from './propGlb.js?v=39d';
 
 function M(geo, color, gradientMap, outline = 1.05) {
   const m = new THREE.Mesh(geo, toonMat(color, gradientMap, { flatShading: true }));
@@ -912,7 +913,7 @@ function scatterZone1GlbProps(root, map, biome, gradientMap) {
   function tryPlacePoint(minSpawnDist, minPairDist, salt, minLhDist) {
     salt = salt || 0;
     minLhDist = minLhDist || 0;
-    for (let attempt = 0; attempt < 600; attempt++) {
+    for (let attempt = 0; attempt < 80; attempt++) {
       const x = b.minX + hash2(attempt * 7.3 + salt * 37.2, b.minZ + salt * 0.91) * bw;
       const z = b.minZ + hash2(b.maxX + salt * 1.73, attempt * 3.1 + salt * 19.8) * bh;
       if (!pointInPoly(x, z, poly)) continue;
@@ -953,22 +954,20 @@ function scatterZone1GlbProps(root, map, biome, gradientMap) {
     corridorDirZ = _cdz / _clen;
   }
 
-  const stoneCount = 168;
+  const stoneCount = 96;
   for (let i = 0; i < stoneCount; i++) {
     const id = stoneIds[i % stoneIds.length];
     if (!isPropGlbReady(id)) continue;
-    const tpl = clonePropGlb(id);
-    if (!tpl) continue;
-    const baseSize = tpl.userData.baseSize || 4;
-    const baseSizeXZ = tpl.userData.baseSizeXZ || baseSize;
-    // 150-unit spawn clearance eliminates entrance clutter
     const pt = tryPlacePoint(150, minDist, i * 1.7, 0);
     if (!pt) continue;
-    // Wide corridor (80 units) for 200 units along entry axis
     const _vx = pt.x - spawnX, _vz = pt.z - spawnZ;
     const _along = _vx * corridorDirX + _vz * corridorDirZ;
     const _perp = Math.abs(_vx * corridorDirZ - _vz * corridorDirX);
     if (_along > 0 && _along < 200 && _perp < 80) continue;
+    const tpl = clonePropGlb(id);
+    if (!tpl) continue;
+    const baseSize = tpl.userData.baseSize || 4;
+    const baseSizeXZ = tpl.userData.baseSizeXZ || baseSize;
     tpl.position.set(pt.x, 0, pt.z);
     tpl.rotation.y = hash2(pt.x, pt.z) * Math.PI * 2;
     const stoneScaleBoost = stoneScaleBoostMap[id] ?? 11;
@@ -979,16 +978,21 @@ function scatterZone1GlbProps(root, map, biome, gradientMap) {
     propDiscs.push({ x: pt.x, z: pt.z, r: meshPropDiscR(appliedScale, baseSizeXZ, 3) });
   }
 
-  // Decor: wide random scale 0.5–2×, increased count
-  const decorCount = 3200;
+  // Decor kept modest — old 3200×clone froze zone entry for seconds.
+  const decorCount = 280;
+  let decorFailStreak = 0;
   for (let i = 0; i < decorCount; i++) {
     const id = decorIds[i % decorIds.length];
     if (!isPropGlbReady(id)) continue;
+    const pt = tryPlacePoint(100, 22, i * 2.3, 25);
+    if (!pt) {
+      if (++decorFailStreak > 48) break;
+      continue;
+    }
+    decorFailStreak = 0;
     const tpl = clonePropGlb(id);
     if (!tpl) continue;
     const baseSize = tpl.userData.baseSize || 4;
-    const pt = tryPlacePoint(100, 18, i * 2.3, 25);
-    if (!pt) continue;
     tpl.position.set(pt.x, 0, pt.z);
     tpl.rotation.y = hash2(pt.x * 0.7, pt.z * 1.3) * Math.PI * 2;
     const decorScaleBoost = 0.5 + hash2(pt.x * 1.1, pt.z * 0.9) * 1.5;
@@ -998,10 +1002,8 @@ function scatterZone1GlbProps(root, map, biome, gradientMap) {
   }
 
   // Spawn-side decor: forward arc only (120–160 units from spawn).
-  // Backward/sideways placement (_along < 30) puts models between camera and ship,
-  // causing visual overlap. Forward-only + longer dist keeps near-spawn view clear.
   const spawnDecorSlots = [];
-  for (let si = 0; si < 800 && spawnDecorSlots.length < 160; si++) {
+  for (let si = 0; si < 220 && spawnDecorSlots.length < 48; si++) {
     const angle = hash2(si * 3.7 + 8000, spawnX + si * 0.3) * Math.PI * 2;
     const dist = 120 + hash2(spawnZ + si * 2.1, si * 5.3 + 8000) * 40;
     const sx = spawnX + Math.cos(angle) * dist;
@@ -1080,7 +1082,7 @@ function scatterZone2GlbProps(root, map, biome, gradientMap) {
     return null;
   }
 
-  // Visible-size targets: 2× from previous values
+  // Visible-size targets (mild 0.9 vs full; load-opt 0.7 was too small)
   const stoneScaleMap = {
     zone2S1: 18,
     zone2S2: 14,
@@ -1090,20 +1092,20 @@ function scatterZone2GlbProps(root, map, biome, gradientMap) {
     zone2S6: 18,
   };
 
-  const stoneCount = 96;
+  const stoneCount = 120;
   for (let i = 0; i < stoneCount; i++) {
     const id = stoneIds[i % stoneIds.length];
     if (!isPropGlbReady(id)) continue;
+    const pt = tryPlacePoint(30, minDist, i * 1.7, 0);
+    if (!pt) continue;
     const tpl = clonePropGlb(id);
     if (!tpl) continue;
     const baseSize = tpl.userData.baseSize || 4;
-    const pt = tryPlacePoint(30, minDist, i * 1.7, 0);
-    if (!pt) continue;
     tpl.position.set(pt.x, 0, pt.z);
     tpl.rotation.y = hash2(pt.x, pt.z) * Math.PI * 2;
     const stoneScaleBoost = stoneScaleMap[id] ?? 36;
     const sizeMul = (0.6 + hash2(pt.x * 1.7, pt.z) * 0.8) * stoneScaleBoost;
-    const appliedScale = (2.5 * sizeMul) / baseSize * 0.7;
+    const appliedScale = (2.5 * sizeMul) / baseSize * 0.9;
     tpl.scale.setScalar(appliedScale);
     root.add(tpl);
     const baseSizeXZ = tpl.userData.baseSizeXZ || baseSize;
@@ -1115,17 +1117,17 @@ function scatterZone2GlbProps(root, map, biome, gradientMap) {
   for (let i = 0; i < decorCount; i++) {
     const id = decorIds[i % decorIds.length];
     if (!isPropGlbReady(id)) continue;
+    const pt = tryPlacePoint(12, 14, i * 2.3, 18);
+    if (!pt) continue;
     const tpl = clonePropGlb(id);
     if (!tpl) continue;
     const baseSize = tpl.userData.baseSize || 4;
-    const pt = tryPlacePoint(12, 14, i * 2.3, 18);
-    if (!pt) continue;
     tpl.position.set(pt.x, 0, pt.z);
     tpl.rotation.y = hash2(pt.x * 0.7, pt.z * 1.3) * Math.PI * 2;
     // sizeVariant: 1.0 – 3.0 per piece so no two look the same
     const sizeVariant = 1.0 + hash2(pt.x * 3.1, pt.z * 2.3) * 2.0;
     const sizeMul = (0.6 + hash2(pt.z * 1.4, pt.x * 0.8) * 1.4) * sizeVariant;
-    tpl.scale.setScalar((8.0 * sizeMul) / baseSize);
+    tpl.scale.setScalar((8.0 * sizeMul) / baseSize * 0.9);
     root.add(tpl);
   }
 
@@ -1186,20 +1188,20 @@ function scatterZone3GlbProps(root, map, biome, gradientMap) {
     zone3S17: 21,
   };
 
-  const stoneCount = 96;
+  const stoneCount = 120;
   for (let i = 0; i < stoneCount; i++) {
     const id = stoneIds[i % stoneIds.length];
     if (!isPropGlbReady(id)) continue;
+    const pt = tryPlacePoint(30, minDist, i * 1.7, 0);
+    if (!pt) continue;
     const tpl = clonePropGlb(id);
     if (!tpl) continue;
     const baseSize = tpl.userData.baseSize || 4;
-    const pt = tryPlacePoint(30, minDist, i * 1.7, 0);
-    if (!pt) continue;
     tpl.position.set(pt.x, 0, pt.z);
     tpl.rotation.y = hash2(pt.x, pt.z) * Math.PI * 2;
     const stoneScaleBoost = stoneScaleMap[id] ?? 36;
     const sizeMul = (0.6 + hash2(pt.x * 1.7, pt.z) * 0.8) * stoneScaleBoost;
-    const appliedScale = (2.5 * sizeMul) / baseSize * 0.7;
+    const appliedScale = (2.5 * sizeMul) / baseSize * 0.9;
     tpl.scale.setScalar(appliedScale);
     root.add(tpl);
     const baseSizeXZ = tpl.userData.baseSizeXZ || baseSize;
@@ -1210,16 +1212,16 @@ function scatterZone3GlbProps(root, map, biome, gradientMap) {
   for (let i = 0; i < decorCount; i++) {
     const id = decorIds[i % decorIds.length];
     if (!isPropGlbReady(id)) continue;
+    const pt = tryPlacePoint(12, 14, i * 2.3 + 500, 18);
+    if (!pt) continue;
     const tpl = clonePropGlb(id);
     if (!tpl) continue;
     const baseSize = tpl.userData.baseSize || 4;
-    const pt = tryPlacePoint(12, 14, i * 2.3 + 500, 18);
-    if (!pt) continue;
     tpl.position.set(pt.x, 0, pt.z);
     tpl.rotation.y = hash2(pt.x * 0.7, pt.z * 1.3) * Math.PI * 2;
     const sizeVariant = 1.0 + hash2(pt.x * 3.1, pt.z * 2.3) * 2.0;
     const sizeMul = (0.6 + hash2(pt.z * 1.4, pt.x * 0.8) * 1.4) * sizeVariant;
-    tpl.scale.setScalar((5.33 * sizeMul) / baseSize);
+    tpl.scale.setScalar((5.33 * sizeMul) / baseSize * 0.9);
     root.add(tpl);
   }
 
@@ -1423,6 +1425,7 @@ export function createSeaWorld() {
   function load(zoneId, scene, gradientMap, water) {
     reset();
     lastLoadArgs = { zoneId, scene, gradientMap, water };
+    ensureZonePropGlbsLoading(zoneId);
     if (!root.parent) scene.add(root);
     const map = getSeaMap(zoneId);
     const biome = getSeaBiome(zoneId);
@@ -1445,14 +1448,22 @@ export function createSeaWorld() {
       root.add(beachRing(map.navigable, gradientMap, biome.beach));
     }
 
-    if (!isZone0 && !isZone1) {
-
-      if (!isZone2 && !isZone3 && !isZone4) {
-        for (const shoal of map.shoals || []) {
-          root.add(makeShoal(shoal, biome.beach, gradientMap));
-        }
+    // Zones -1..4: only GLB prop stones (no procedural Dodecahedron / island mounds).
+    if (isZone2) {
+      map._propDiscs = scatterZone2GlbProps(root, map, biome, gradientMap) || [];
+    } else if (isZone3) {
+      map._propDiscs = scatterZone3GlbProps(root, map, biome, gradientMap) || [];
+    } else if (isZone4) {
+      map._propDiscs = scatterZone4GlbProps(root, map, biome, gradientMap) || [];
+    } else if (isZone1) {
+      map._propDiscs = scatterZone1GlbProps(root, map, biome, gradientMap) || [];
+    } else if (isZone0) {
+      map._propDiscs = scatterZone0Props(root, map, biome, gradientMap) || [];
+    } else {
+      // Legacy / unknown zones only: beaches, shoals, code islands + reef rocks.
+      for (const shoal of map.shoals || []) {
+        root.add(makeShoal(shoal, biome.beach, gradientMap));
       }
-
       for (const isl of map.islands) {
         root.add(makeIslandMesh(isl, biome, gradientMap));
         if (biome.islandSkin === 'lava') {
@@ -1462,47 +1473,27 @@ export function createSeaWorld() {
           root.add(seam);
         }
       }
-
-      if (isZone2) {
-        map._propDiscs = scatterZone2GlbProps(root, map, biome, gradientMap) || [];
-      } else if (isZone3) {
-        map._propDiscs = scatterZone3GlbProps(root, map, biome, gradientMap) || [];
-      } else if (isZone4) {
-        map._propDiscs = scatterZone4GlbProps(root, map, biome, gradientMap) || [];
-      } else {
-        for (const r of map.reefs) {
-          const skin = biome.reefSkin;
-          if (skin === 'grove' || skin === 'coral' || skin === 'kelp') {
-            const col = reefColor(biome, 0);
-            const cluster = jitterRockCluster(gradientMap, col, r.r * 0.38, hash2(r.x, r.z));
-            cluster.position.set(r.x, 0, r.z);
-            root.add(cluster);
-            continue;
+      for (const r of map.reefs) {
+        const skin = biome.reefSkin;
+        for (let i = 0; i < 3; i++) {
+          const col = reefColor(biome, i);
+          let rock;
+          if (skin === 'spire') {
+            rock = M(new THREE.ConeGeometry(r.r * (0.22 + i * 0.12), r.r * (0.85 + i * 0.35), 5), col, gradientMap, 1.05);
+          } else if (skin === 'vent') {
+            rock = M(new THREE.DodecahedronGeometry(r.r * (0.32 + i * 0.14), 0), col, gradientMap, 1.05);
+          } else {
+            rock = M(new THREE.DodecahedronGeometry(r.r * (0.35 + i * 0.15), 0), col, gradientMap, 1.05);
           }
-          for (let i = 0; i < 3; i++) {
-            const col = reefColor(biome, i);
-            let rock;
-            if (skin === 'spire') {
-              rock = M(new THREE.ConeGeometry(r.r * (0.22 + i * 0.12), r.r * (0.85 + i * 0.35), 5), col, gradientMap, 1.05);
-            } else if (skin === 'vent') {
-              rock = M(new THREE.DodecahedronGeometry(r.r * (0.32 + i * 0.14), 0), col, gradientMap, 1.05);
-            } else {
-              rock = M(new THREE.DodecahedronGeometry(r.r * (0.35 + i * 0.15), 0), col, gradientMap, 1.05);
-            }
-            rock.position.set(
-              r.x + (Math.random() - 0.5) * r.r,
-              0.2 + Math.random() * 0.4,
-              r.z + (Math.random() - 0.5) * r.r
-            );
-            rock.rotation.set(Math.random(), Math.random(), Math.random());
-            root.add(rock);
-          }
+          rock.position.set(
+            r.x + (Math.random() - 0.5) * r.r,
+            0.2 + Math.random() * 0.4,
+            r.z + (Math.random() - 0.5) * r.r
+          );
+          rock.rotation.set(Math.random(), Math.random(), Math.random());
+          root.add(rock);
         }
       }
-    } else if (isZone1) {
-      map._propDiscs = scatterZone1GlbProps(root, map, biome, gradientMap) || [];
-    } else {
-      map._propDiscs = scatterZone0Props(root, map, biome, gradientMap) || [];
     }
 
     lighthouses = [];
@@ -1522,17 +1513,41 @@ export function createSeaWorld() {
 
     decorRoot = (isZone0 || isZone1 || isZone2 || isZone3 || isZone4) ? null : scatterBiomeDecor(root, map, biome, gradientMap);
 
+    const propIds = propIdsForZone(zoneId);
+    if (propIds && areZonePropsReady(zoneId)) {
+      propsReloadKey = `${zoneId | 0}:${propIds.join(',')}`;
+    } else {
+      propsReloadKey = '';
+    }
+
     return map;
   }
 
   ensureAllPropGlbsLoading();
-  onPropGlbReady(() => {
-    if (lastLoadArgs) {
-      const zid = lastLoadArgs.zoneId | 0;
-      if (zid === 0 || zid === -1 || zid === 1 || zid === 2 || zid === 3 || zid === 4) {
-        load(lastLoadArgs.zoneId, lastLoadArgs.scene, lastLoadArgs.gradientMap, lastLoadArgs.water);
-      }
-    }
+  let propsReloadTimer = 0;
+  let propsReloadKey = '';
+  onPropGlbReady((readyId) => {
+    if (!lastLoadArgs) return;
+    const zid = lastLoadArgs.zoneId | 0;
+    const needed = propIdsForZone(zid);
+    // Ignore assets that do not belong to the active zone (prevents ~60 full reloads).
+    if (needed && readyId && !needed.includes(readyId)) return;
+    if (needed && !areZonePropsReady(zid)) return;
+    const key = needed ? `${zid}:${needed.join(',')}` : `${zid}:*`;
+    if (key === propsReloadKey) return;
+    if (propsReloadTimer) clearTimeout(propsReloadTimer);
+    propsReloadTimer = setTimeout(() => {
+      propsReloadTimer = 0;
+      if (!lastLoadArgs) return;
+      const z = lastLoadArgs.zoneId | 0;
+      const ids = propIdsForZone(z);
+      if (ids && !areZonePropsReady(z)) return;
+      const nextKey = ids ? `${z}:${ids.join(',')}` : `${z}:*`;
+      if (nextKey === propsReloadKey) return;
+      propsReloadKey = nextKey;
+      ensureZonePropGlbsLoading(z);
+      load(lastLoadArgs.zoneId, lastLoadArgs.scene, lastLoadArgs.gradientMap, lastLoadArgs.water);
+    }, 40);
   });
 
   function constrainBoat(paddleState) {
@@ -1544,16 +1559,16 @@ export function createSeaWorld() {
     // Boat is a point; pads approximate hull extent once discs match mesh AABB.
     const ISLAND_PAD = 1.5;
     const PROP_PAD = 1.6;
-    // GLB zones assign _propDiscs (even empty before assets load); map.reefs are
-    // placement anchors only — colliding them creates large invisible air walls.
-    const skipReefDiscs = Array.isArray(current._propDiscs);
+    // GLB zones assign _propDiscs (even empty before assets load); map.reefs /
+    // islands are placement anchors only — colliding them creates invisible air walls.
+    const skipAnchorDiscs = Array.isArray(current._propDiscs);
 
     // 8-pass push-out for stable multi-stone constraint resolution.
     // Pass 0 also projects out the inward velocity component so the boat slides along
     // the stone surface instead of re-entering on the next frame ("stuck in stone" fix).
     // d<0.01 fallback: eject in current heading (or +x) and zero speed.
     for (let pass = 0; pass < 8; pass++) {
-      if ((current.id | 0) !== -1) {
+      if (!skipAnchorDiscs && (current.id | 0) !== -1) {
         for (const isl of current.islands || []) {
           const dx = x - isl.x, dz = z - isl.z;
           const d = Math.hypot(dx, dz);
@@ -1566,7 +1581,7 @@ export function createSeaWorld() {
           }
         }
       }
-      if (!skipReefDiscs) {
+      if (!skipAnchorDiscs) {
         for (const reef of current.reefs) {
           const dx = x - reef.x, dz = z - reef.z;
           const d = Math.hypot(dx, dz);

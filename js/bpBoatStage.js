@@ -2,8 +2,8 @@
 
 import * as THREE from 'three';
 import { createToonGradient } from './stylekit.js';
-import { createBoat, setBoatVariant } from './boat.js?v=36g';
-import { equipFish, SLOT_ORDER, SLOT_LABELS } from './slots.js?v=32e';
+import { createBoat, setBoatVariant } from './boat.js?v=39h';
+import { equipFish, SLOT_ORDER, SLOT_LABELS } from './slots.js?v=39b';
 import { getFishDef } from './fishCatalog.js?v=34b';
 import { getFishPortrait } from './fishPortrait.js?v=31d';
 
@@ -78,7 +78,7 @@ export function createBpBoatStage(opts) {
   const boat = createBoat(gm, 'raft');
   boat.position.set(0, 0.15, 0);
   boat.rotation.y = -Math.PI * 0.35;
-  boat.scale.setScalar(1.22);
+  boat.scale.setScalar(1.32);
   scene.add(boat);
 
   const slotsState = Object.fromEntries(SLOT_ORDER.map((k) => [k, null]));

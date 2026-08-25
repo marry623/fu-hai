@@ -42,8 +42,10 @@ export function equipFish(boat, slotsState, fishItem, preferredSlot, gradientMap
 }
 
 function orientForSlot(mesh, slot) {
+  // Fish meshes face +X; bow=-Z, stern=+Z.
   if (slot === 'bow') mesh.rotation.y = Math.PI / 2;
-  if (slot === 'stern') { mesh.rotation.y = -Math.PI / 2; mesh.rotation.z = Math.PI / 2; }
+  // Face aft; keep upright (old z=π/2 laid fish onto the deck).
+  if (slot === 'stern') mesh.rotation.y = -Math.PI / 2;
   if (slot === 'sideL') mesh.rotation.y = Math.PI;
   if (slot === 'keel') mesh.rotation.z = Math.PI;
   if (slot === 'sail') mesh.position.y = 0.3;

@@ -4,7 +4,7 @@ import {
   createDuskSky, createClouds, createWater, updateWater,
   createFoamRings,
 } from './world.js';
-import { createBoat, createWakeSystem, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, resetRodPose } from './boat.js?v=36h';
+import { createBoat, createWakeSystem, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, resetRodPose } from './boat.js?v=39v';
 import { createPaddleController } from './paddle.js?v=29n';
 import { createHull, updateCorrosion, damageHull, repairHull } from './hull.js?v=16c';
 import {
@@ -13,11 +13,11 @@ import {
 import {
   createVortexField, updateVortices, findNearestVortex, createFishingController, CAST_AIM_DIST, tintVortexField, VORTEX_COUNT,
 } from './fishing.js?v=33c';
-import { createHazards } from './hazards.js?v=32s';
+import { createHazards } from './hazards.js?v=39d';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot, ramCdForRarity,
-} from './slots.js?v=33c';
+} from './slots.js?v=39b';
 import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS, familyOf, familyLabel } from './fishCatalog.js?v=34b';
 import { createFamilyVfx } from './familyVfx.js?v=32p';
 import { createFishMesh } from './fishMeshes.js?v=31c';
@@ -37,19 +37,20 @@ import {
   skillLevel, scaledSkillCard, fishmongerGreenMul, ghostWakeCorrMul, talentLevel,
   equippedTalents, driftSalvageMul, ramBlacksmithMul,
   chargeZoneTicket, canDepartZone, saveMeta,
-} from './meta.js?v=35l';
+} from './meta.js?v=39c';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=35l';
-import { createHub } from './hub.js?v=38t';
+import { createHub } from './hub.js?v=39h';
 import { createCoverScene } from './coverScene.js?v=28m';
 import { createHubIsland } from './hubIsland.js?v=35b';
-import { createHubBoatPreview } from './hubBoatPreview.js?v=38h';
+import { createHubBoatPreview } from './hubBoatPreview.js?v=39q';
 import { createBpBoatStage } from './bpBoatStage.js?v=31e';
-import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=37m';
-import { ensureAllPropGlbsLoading } from './propGlb.js?v=36k';
+import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=39d';
+import { ensureAllPropGlbsLoading } from './propGlb.js?v=38x';
 import { getSeaBiome } from './seaBiomes.js?v=30h';
+import { applyHudTheme } from './hudTheme.js?v=39j';
 import { createWeatherFx } from './weatherFx.js?v=30h';
-import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=31g';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=38t';
+import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=40b';
 import { renderManualHtml } from './hubManual.js?v=35l';
 import * as sfx from './audio.js?v=33f';
 
@@ -74,6 +75,7 @@ const ui = {
   tutGuideBody: document.getElementById('tut-guide-body'),
   tutGuideNext: document.getElementById('tut-guide-next'),
   comboHint: document.getElementById('combo-hint'),
+  resonance: document.getElementById('hud-resonance'),
   qte: document.getElementById('qte'),
   qteGreen: document.getElementById('qte-green'),
   qtePointer: document.getElementById('qte-pointer'),
@@ -121,8 +123,13 @@ const ui = {
   btnLhContinue: document.getElementById('btn-lh-continue'),
   settleModal: document.getElementById('settle-modal'),
   settleTitle: document.getElementById('settle-title'),
+  settleScore: document.getElementById('settle-score'),
+  settleFish: document.getElementById('settle-fish'),
   settleStats: document.getElementById('settle-stats'),
   btnSettleHub: document.getElementById('btn-settle-hub'),
+  sinkTitle: document.getElementById('sink-title'),
+  sinkFish: document.getElementById('sink-fish'),
+  sinkScore: document.getElementById('sink-score'),
   cover: document.getElementById('cover-overlay'),
   btnCoverStart: document.getElementById('btn-cover-start'),
   btnCoverTutorial: document.getElementById('btn-cover-tutorial'),
@@ -1004,7 +1011,7 @@ const TUT_STEPS = [
   },
   {
     title: '\u6539\u88c5',
-    body: 'Tab \u5f00\u80cc\u5305\uff0c\u628a\u9c7c\u7ed1\u5230\u4e13\u5c5e\u69fd\u3002\u89d2\u6807\u662f\u516d\u65cf\uff1a\u58f3\u7532 / \u58a8\u96fe / \u8f6e\u673a / \u5e06\u96f7 / \u5bd2\u6f5c / \u9ab8\u9707\u3002\u540c\u65cf\u88c5\u5230\u4e0d\u540c\u69fd\u53ef\u5171\u9e23\u3002',
+    body: 'Tab \u5f00\u80cc\u5305 \u2192 \u9009\u4e2d\u9c7c \u2192 \u70b9\u300c\u6539\u88c5\u300d\u7ed1\u69fd\u3002',
     btn: '\u4e0b\u4e00\u6b65',
     gate: 'equip',
   },
@@ -1056,7 +1063,7 @@ function tutStepBody(step) {
     case 2:
       return `\u7ee7\u7eed\u5411\u5317 \u00b7 \u9760\u8fd1\u6f02\u6d6e\u7269\u6309 E\uff08\u7ea6 ${dist} \u7c73\uff09`;
     case 3:
-      return '\u6309 Tab \u6253\u5f00\u80cc\u5305 \u00b7 \u7ed1\u5230\u4e13\u5c5e\u69fd \u00b7 \u89d2\u6807\u516d\u65cf\uff0c\u540c\u65cf\u4e0d\u540c\u69fd\u53ef\u5171\u9e23';
+      return '\u6309 Tab \u5f00\u80cc\u5305\uff0c\u9009\u4e2d\u9c7c\u540e\u70b9\u300c\u6539\u88c5\u300d\u3002';
     case 4:
       return `\u6309 1 / 2 / 3 \u5207\u6362\u6280\u80fd\u3002\u79fb\u52a8\u9f20\u6807\u9009\u4e2d\u6d77\u9762\uff0c\u5de6\u952e\u70b9\u51fb\u653b\u51fb\uff08\u7ea6 ${dist} \u7c73\uff09`;
     case 5:
@@ -1074,6 +1081,25 @@ function applyTutorialWorld() {
 
 function tutHasBindableFish() {
   return state.fishHold.some((f) => !!getFishDef(f.defId)?.slot);
+}
+
+function isTutEquipLock() {
+  return tut.active && !tut.dismissed && (tut.step | 0) === 3 && (state.mods | 0) < 1;
+}
+
+function ensureTutBindableFish() {
+  if (!isTutEquipLock() || tutHasBindableFish()) return;
+  let fish = null;
+  for (let i = 0; i < 16; i++) {
+    const tFish = pickFishForZone(0, 'crude');
+    if (getFishDef(tFish.defId)?.slot) { fish = tFish; break; }
+  }
+  if (!fish) return;
+  state.fishHold.push(fish);
+  state.selectedFish = state.fishHold.length - 1;
+  state.backpackTab = 'catch';
+  showToast('\u6559\u5b66\u8865\u53d1\u4e00\u6761\u53ef\u6539\u88c5\u9c7c\uff08\u8bf7\u70b9\u300c\u6539\u88c5\u300d\uff09');
+  renderFishList();
 }
 
 function checkTutGate() {
@@ -1191,7 +1217,10 @@ function onTutGuideNext() {
     tut.step += 1;
     if (tut.step === 3) {
       state.backpackTab = 'catch';
-      if (state.fishHold.length) state.selectedFish = 0;
+      const bi = state.fishHold.findIndex((f) => !!getFishDef(f.defId)?.slot);
+      state.selectedFish = bi >= 0 ? bi : (state.fishHold.length ? 0 : -1);
+      ensureTutBindableFish();
+      setBackpackOpen(true);
     }
     applyTutorialWorld();
     renderTutGuide();
@@ -1893,13 +1922,18 @@ function renderBackpackDetail() {
       ].filter(Boolean).join('<br>'),
       showSlots: !!def.slot,
       fish: f,
-      actions: {
-        discard: true,
-        eat: true,
-        equip: !!def.slot,
-        feed: def.category === 'food',
-        use: false,
-      },
+      actions: (() => {
+        if (isTutEquipLock()) {
+          return { discard: false, eat: false, equip: !!def.slot, feed: false, use: false };
+        }
+        return {
+          discard: true,
+          eat: true,
+          equip: !!def.slot,
+          feed: def.category === 'food',
+          use: false,
+        };
+      })(),
     });
   } else if (tab === 'slots' && state.slots[state.selectedSlot]) {
     show = true;
@@ -1951,8 +1985,8 @@ function renderBackpackDetail() {
         : '可在背包直接使用，立即作用于船体。',
       showSlots: false,
       actions: {
-        use: canUse && s.count > 0,
-        discard: s.count > 0,
+        use: !isTutEquipLock() && canUse && s.count > 0,
+        discard: !isTutEquipLock() && s.count > 0,
         eat: false,
         equip: false,
         feed: false,
@@ -2009,6 +2043,7 @@ function fillDetail({ name, serial, color, defId, itemId, rarity, ribbon, taglin
   ui.btnEquip.style.display = show.equip ? '' : 'none';
   ui.btnFeed.style.display = show.feed ? '' : 'none';
   ui.btnDiscard.style.display = show.discard ? '' : 'none';
+  ui.btnEquip.classList.toggle('tut-equip-hl', isTutEquipLock() && show.equip);
 }
 
 function renderFishList() {
@@ -2020,6 +2055,11 @@ function renderFishList() {
 }
 
 function discardFish() {
+  if (isTutEquipLock()) {
+    showToast('\u6559\u5b66\u6b65\uff1a\u53ea\u80fd\u70b9\u300c\u6539\u88c5\u300d');
+    sfx.uiDeny();
+    return;
+  }
   if (state.backpackTab === 'supplies') {
     discardSupply();
     return;
@@ -2052,6 +2092,11 @@ function discardSupply() {
 }
 
 function useSupply() {
+  if (isTutEquipLock()) {
+    showToast('\u6559\u5b66\u6b65\uff1a\u53ea\u80fd\u70b9\u300c\u6539\u88c5\u300d');
+    sfx.uiDeny();
+    return;
+  }
   const id = state.selectedSupply;
   if (!id) return showToast('先选物资');
   if (id === 'bait') return showToast('鱼饵在抛竿时自动消耗');
@@ -2083,6 +2128,11 @@ function useSupply() {
 }
 
 function eatOrRepair() {
+  if (isTutEquipLock()) {
+    showToast('\u6559\u5b66\u6b65\uff1a\u53ea\u80fd\u70b9\u300c\u6539\u88c5\u300d');
+    sfx.uiDeny();
+    return;
+  }
   const f = state.fishHold[state.selectedFish];
   if (!f) return showToast('先选鱼');
   const def = getFishDef(f.defId);
@@ -2130,9 +2180,16 @@ function doEquip() {
   renderFishList();
   refreshSlots();
   updateComboHint();
+  if (tut.active && !tut.dismissed) renderTutGuide();
+  ui.btnEquip?.classList.remove('tut-equip-hl');
 }
 
 function doFeed() {
+  if (isTutEquipLock()) {
+    showToast('\u6559\u5b66\u6b65\uff1a\u53ea\u80fd\u70b9\u300c\u6539\u88c5\u300d');
+    sfx.uiDeny();
+    return;
+  }
   const f = state.fishHold[state.selectedFish];
   if (!f || getFishDef(f.defId).category !== 'food') return showToast('需要食物鱼投喂');
   const slot = state.selectedSlot;
@@ -2198,8 +2255,17 @@ function updateComboHint() {
   } else {
     familyVfx.sync(fams.map((f) => f.id));
   }
-  if (fams.length) setPrompt(ui.comboHint, `\u5171\u9e23\uff1a${fams.map((c) => c.name).join(' \u00b7 ')}`);
-  else setPrompt(ui.comboHint, '');
+  // Persistent resonance: compact chip left of minimap (not center prompt).
+  setPrompt(ui.comboHint, '');
+  const el = ui.resonance;
+  if (!el) return;
+  if (fams.length) {
+    el.textContent = `\u5171\u9e23 \u00b7 ${fams.map((c) => c.name).join(' \u00b7 ')}`;
+    el.classList.remove('hidden');
+  } else {
+    el.textContent = '';
+    el.classList.add('hidden');
+  }
 }
 
 function tryJump() {
@@ -2252,7 +2318,9 @@ function finishRun(outcome) {
   setBoatVariant(boat, selectedBoat);
   hubBoatPreview?.applyBoatId?.(selectedBoat);
   if (wasTutorial && success) startZone = 0;
-  const title = success ? (wasTutorial ? '教学完成 · 归航' : '成功归航') : '沉船结算';
+  const title = success
+    ? (wasTutorial ? '教学完成' : '成功归航')
+    : (wasTutorial ? '教学失败' : '沉船失败');
   const storeNote = wasTutorial
     ? (success ? '教学关物资不入库 · 仅标记教程完成' : '教学关沉船 · 不写入仓库')
     : success
@@ -2261,18 +2329,22 @@ function finishRun(outcome) {
   const hullNote = lostHull ? ` · ${HULL_NAMES[lostHull] || lostHull}已沉没，需在市集重买` : '';
   const stats = `航行 ${dist} 米 · 改装 ${state.mods} · 击杀 ${state.kills} · 海图碎片 +${gain}${hullNote}
 ${storeNote}`;
+  const score = Math.max(0, dist + (state.kills | 0) * 20 + (state.mods | 0) * 10 + (gain | 0) * 2);
   if (ui.settleTitle) ui.settleTitle.textContent = title;
+  if (ui.sinkTitle) ui.sinkTitle.textContent = title;
+  if (ui.settleScore) ui.settleScore.textContent = String(score);
+  if (ui.sinkScore) ui.sinkScore.textContent = String(score);
   if (ui.settleStats) ui.settleStats.textContent = stats;
-  ui.sinkStats.textContent = stats;
+  if (ui.sinkStats) ui.sinkStats.textContent = stats;
   if (ui.btnRetry) {
-    ui.btnRetry.textContent = wasTutorial && !success
+    ui.btnRetry.setAttribute('aria-label', wasTutorial && !success
       ? '\u56de\u6e2f\u53e3\u770b\u770b'
-      : '\u8fd4\u56de\u57fa\u5730';
+      : '\u8fd4\u56de\u57fa\u5730');
   }
   if (ui.btnSettleHub) {
-    ui.btnSettleHub.textContent = wasTutorial && success
+    ui.btnSettleHub.setAttribute('aria-label', wasTutorial && success
       ? '\u8fdb\u5165\u6e2f\u53e3'
-      : '\u8fd4\u56de\u57fa\u5730';
+      : '\u8fd4\u56de\u57fa\u5730');
   }
   if (outcome === 'sink') {
     ui.sinkModal.classList.remove('hidden');
@@ -2503,6 +2575,7 @@ function applyZoneVisual(z) {
   worldClouds.userData.setBiome?.(biome);
   weatherFx.setPreset(biome);
   ui.zoneName.textContent = z.name;
+  applyHudTheme(z.id, ui.hud);
 }
 
 function setSeaMapOpen(open) {
@@ -2587,17 +2660,27 @@ function drawSeaMapOnto(canvas, map, opts = {}) {
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  ctx.fillStyle = '#6b7a88';
-  for (const r of map.reefs) {
-    ctx.beginPath();
-    ctx.arc(tx(r.x), tz(r.z), Math.max(3, r.r * scale * 0.35), 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.fillStyle = '#c4a574';
-  for (const isl of map.islands) {
-    ctx.beginPath();
-    ctx.arc(tx(isl.x), tz(isl.z), Math.max(4, isl.r * scale * 0.4), 0, Math.PI * 2);
-    ctx.fill();
+  const propDiscs = map._propDiscs;
+  if (Array.isArray(propDiscs)) {
+    ctx.fillStyle = '#6b7a88';
+    for (const d of propDiscs) {
+      ctx.beginPath();
+      ctx.arc(tx(d.x), tz(d.z), Math.max(2, (d.r || 4) * scale * 0.35), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    ctx.fillStyle = '#6b7a88';
+    for (const r of map.reefs) {
+      ctx.beginPath();
+      ctx.arc(tx(r.x), tz(r.z), Math.max(3, r.r * scale * 0.35), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#c4a574';
+    for (const isl of map.islands) {
+      ctx.beginPath();
+      ctx.arc(tx(isl.x), tz(isl.z), Math.max(4, isl.r * scale * 0.4), 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   ctx.fillStyle = '#ffe066';
@@ -3437,6 +3520,11 @@ ui.btnFeed.onclick = () => { sfx.uiClick(); doFeed(); };
 document.querySelectorAll('.bp-tab').forEach((el) => {
   el.onclick = () => {
     sfx.uiClick();
+    if (isTutEquipLock() && el.dataset.tab !== 'catch') {
+      showToast('\u6559\u5b66\u6b65\uff1a\u5148\u5728\u9c7c\u83b7\u9875\u70b9\u300c\u6539\u88c5\u300d');
+      sfx.uiDeny();
+      return;
+    }
     state.backpackTab = el.dataset.tab;
     state.selectedFish = state.backpackTab === 'catch' && state.fishHold.length
       ? Math.max(0, Math.min(state.selectedFish < 0 ? 0 : state.selectedFish, state.fishHold.length - 1))
@@ -3449,6 +3537,13 @@ ui.eventA.onclick = () => { sfx.uiClick(); resolveEvent('a'); };
 ui.eventB.onclick = () => { sfx.uiClick(); resolveEvent('b'); };
 ui.btnRetry.onclick = () => { sfx.uiClick(); openHub(); };
 ui.btnSettleHub?.addEventListener('click', () => { sfx.uiClick(); openHub(); });
+document.querySelectorAll('[data-mirror]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const id = btn.getAttribute('data-mirror');
+    document.getElementById(id)?.click();
+  });
+});
+
 ui.btnLhContinue?.addEventListener('click', () => {
   sfx.uiClick();
   state.lighthouseOpen = false;

@@ -4,12 +4,22 @@ import {
   ensureAllHullGlbsLoading,
   ensureHullGlbLoading,
   onHullGlbReady,
-} from './hullGlb.js?v=36g';
+} from './hullGlb.js?v=39b';
 import { addOutline, toonMat } from './stylekit.js';
 
 const SLOT_KEYS = ['bow', 'stern', 'sideL', 'sideR', 'keel', 'sail'];
 /** Bump when hull/sail mesh layout changes so setBoatVariant rebuilds same boatId. */
-export const HULL_REV = 'hull-glb-v10';
+export const HULL_REV = 'hull-glb-v11';
+
+/** Fallback mounts (pre-GLB / unknown hull). */
+const DEFAULT_MOUNTS = {
+  bow: [0, 0.65, -3.1],
+  stern: [0, 0.35, 4.2],
+  sideL: [-1.15, 0.7, 0],
+  sideR: [1.15, 0.7, 0],
+  keel: [0, -0.5, 0.15],
+  sail: [1.0, 2.8, 0.1],
+};
 
 const hullBoats = new Set();
 
@@ -70,18 +80,55 @@ export function createBoat(gradientMap, boatId = 'raft') {
     mounts[k] = new THREE.Group();
     root.add(mounts[k]);
   }
-  mounts.bow.position.set(0, 0.65, -3.1);
-  mounts.stern.position.set(0, 0.5, 2.55);
-  mounts.sideL.position.set(-1.15, 0.7, 0);
-  mounts.sideR.position.set(1.15, 0.7, 0);
-  mounts.keel.position.set(0, -0.5, 0.15);
-  mounts.sail.position.set(1.0, 2.8, 0.1);
   root.userData.mounts = mounts;
+  layoutSlotMounts(root);
   root.userData.slots = Object.fromEntries(SLOT_KEYS.map((k) => [k, null]));
   root.userData.bobPhase = Math.random() * Math.PI * 2;
 
   hullBoats.add(root);
   return root;
+}
+
+/** Place slot mounts outside the current hull AABB (boat-local). */
+export function layoutSlotMounts(boat) {
+  const mounts = boat?.userData?.mounts;
+  if (!mounts) return;
+  const extents = readHullExtents(boat);
+  if (!extents) {
+    for (const k of SLOT_KEYS) {
+      const p = DEFAULT_MOUNTS[k];
+      mounts[k].position.set(p[0], p[1], p[2]);
+    }
+    return;
+  }
+  const { minX, maxX, minY, maxY, minZ, maxZ } = extents;
+  const beam = Math.max(0.8, (maxX - minX) * 0.5);
+  const deckY = Math.min(maxY * 0.35, 0.85);
+  mounts.bow.position.set(0, deckY, minZ - 0.35);
+  // Aft of the transom so stern fish hang in water, not on the cockpit floor.
+  mounts.stern.position.set(0, 0.28, maxZ + 0.55);
+  mounts.sideL.position.set(minX - 0.2, deckY + 0.05, (minZ + maxZ) * 0.15);
+  mounts.sideR.position.set(maxX + 0.2, deckY + 0.05, (minZ + maxZ) * 0.15);
+  mounts.keel.position.set(0, minY - 0.15, (minZ + maxZ) * 0.05);
+  mounts.sail.position.set(beam * 0.55, Math.max(2.4, maxY * 0.72), (minZ + maxZ) * 0.05);
+}
+
+function readHullExtents(boat) {
+  const hull = boat.userData?.hullGroup;
+  if (!hull) return null;
+  for (const child of hull.children) {
+    const e = child.userData?.hullExtents;
+    if (e) return e;
+  }
+  if (!hull.children.length) return null;
+  hull.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(hull);
+  if (box.isEmpty()) return null;
+  return {
+    minX: box.min.x, maxX: box.max.x,
+    minY: box.min.y, maxY: box.max.y,
+    minZ: box.min.z, maxZ: box.max.z,
+  };
 }
 
 /** Swap hull/sail look in-place (keeps mounts, oars). */
@@ -106,6 +153,7 @@ export function setBoatVariant(boat, boatId) {
   }
   boat.userData.sailMesh = null;
   buildHullVisual(hull, boat, gm, id);
+  layoutSlotMounts(boat);
   boat.userData.boatId = id;
   boat.userData.hullRev = HULL_REV;
   return boat;
@@ -139,8 +187,22 @@ function add(parent, mesh, outlineScale = 1.08) {
   return mesh;
 }
 
-function makeOar(gradientMap, side) {
-  const g = new THREE.Group();
+function clearOarChildren(oar) {
+  while (oar.children.length) {
+    const c = oar.children[0];
+    oar.remove(c);
+    c.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) {
+        if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose?.());
+        else o.material.dispose?.();
+      }
+    });
+  }
+}
+
+function fillOarVisual(oar, gradientMap, side) {
+  clearOarChildren(oar);
   const shaft = new THREE.Mesh(
     new THREE.CylinderGeometry(0.04, 0.05, 2.1, 5),
     toonMat(0x7a4a22, gradientMap)
@@ -148,7 +210,7 @@ function makeOar(gradientMap, side) {
   shaft.rotation.z = side * 0.4;
   shaft.rotation.x = 0.45;
   shaft.position.set(side * 0.2, -0.3, 0.45);
-  g.add(shaft);
+  oar.add(shaft);
   addOutline(shaft, 1.15);
   const blade = new THREE.Mesh(
     new THREE.BoxGeometry(0.1, 0.42, 0.28),
@@ -156,8 +218,14 @@ function makeOar(gradientMap, side) {
   );
   blade.position.set(side * 0.42, -1.05, 1.2);
   blade.rotation.x = 0.5;
-  g.add(blade);
+  oar.add(blade);
   addOutline(blade, 1.12);
+}
+
+function makeOar(gradientMap, side) {
+  const g = new THREE.Group();
+  g.userData.oarSide = side;
+  fillOarVisual(g, gradientMap, side);
   return g;
 }
 

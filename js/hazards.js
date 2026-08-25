@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
 import { pointInPoly, EVAC_RADIUS, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=32y';
-import { pickMonsterForZone, getMonsterDef, monstersForZone, monsterHp, hullTouchDamage, hullShotDamage, wrapDps, wrapCountForZone } from './monsterCatalog.js?v=31g';
+import { pickMonsterForZone, getMonsterDef, monstersForZone, monsterHp, hullTouchDamage, hullShotDamage, wrapDps, wrapCountForZone } from './monsterCatalog.js?v=39d';
 import { createCombatMonster, createMonsterMesh, syncHpBar, tickHitFlash, tickDeathAnim, finishDeathAnim } from './monsterMeshes.js?v=35j';
 
 export { createMonsterMesh, EVAC_RADIUS, EVAC_HOLD };
@@ -236,7 +236,7 @@ export function createHazards(gradientMap, scene, hitFx = null) {
       const minSep = Math.max(32, Math.min(52, Math.sqrt(area / Math.max(1, count)) * 0.72));
       const minSep2 = minSep * minSep;
       const pairSep2 = (minSep * 0.45) ** 2;
-      const maxAttempts = count * 48;
+      const maxAttempts = Math.min(count * 24, 2400);
 
       for (let attempt = 0; attempt < maxAttempts && enemyAnchors.length < count; attempt++) {
         const x = b.minX + Math.random() * bw;
@@ -277,8 +277,10 @@ export function createHazards(gradientMap, scene, hitFx = null) {
     // Rebuild enemy pool for this zone so meshes match catalog
     for (const e of enemies) root.remove(e);
     enemies.length = 0;
+    // Pool of combat meshes capped — anchors can be denser but we do not build
+    // one heavy mesh per anchor (old Math.max(anchors, …) created 500+ monsters).
     const wantEnemies = enemyAnchors.length > 0
-      ? Math.max(enemyAnchors.length, Math.min(8, count || enemyAnchors.length))
+      ? Math.min(enemyAnchors.length, Math.max(12, Math.min(140, count || 24)))
       : 0;
     ensureEnemies(wantEnemies, zid);
     for (let i = 0; i < enemies.length; i++) {

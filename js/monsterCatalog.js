@@ -220,11 +220,12 @@ export const ZONE_MONSTER_POOLS = {
 /** Swimming/static combat anchors. Shallow reef is the floor. */
 export const ZONE_COMBAT_COUNT = {
   [-1]: 1,
-  0: 448,
-  1: 540,
-  2: 610,
-  3: 700,
-  4: 800,
+  0: 64,
+  1: 72,
+  // Fog / rift: restore near original density (was 610 / 700); slight trim only.
+  2: 520,
+  3: 600,
+  4: 110,
 };
 
 export const ZONE_WRAP_COUNT = {

@@ -70,6 +70,58 @@ const templates = {};
 const started = new Set();
 const readyListeners = new Set();
 
+const ZONE_PROP_IDS = {
+  [-1]: [
+    'zone0Coral', 'zone0Rock', 'zone0CoralB', 'zone0RockB', 'zone0CoralC', 'zone0CoralD',
+    'zone0RockC', 'zone0CoralE', 'zone0CoralF', 'zone0CoralG', 'zone0CoralH',
+    'zone0Nc02', 'zone0Noc002', 'zone0Surf01', 'zone0Surf02', 'zone0Surf03',
+    'zone0Surf04', 'zone0Surf05', 'zone0Surf06',
+    'zone0RockNew1', 'zone0RockNew2', 'zone0RockNew3',
+  ],
+  0: [
+    'zone0Coral', 'zone0Rock', 'zone0CoralB', 'zone0RockB', 'zone0CoralC', 'zone0CoralD',
+    'zone0RockC', 'zone0CoralE', 'zone0CoralF', 'zone0CoralG', 'zone0CoralH',
+    'zone0Nc02', 'zone0Noc002', 'zone0Surf01', 'zone0Surf02', 'zone0Surf03',
+    'zone0Surf04', 'zone0Surf05', 'zone0Surf06',
+    'zone0RockNew1', 'zone0RockNew2', 'zone0RockNew3',
+  ],
+  1: [
+    'zone1Stone1', 'zone1Stone2', 'zone1Stone3', 'zone1Stone4', 'zone1Stone5',
+    'zone1Decor1', 'zone1Decor2', 'zone1Decor3', 'zone1Decor4', 'zone1Decor5',
+  ],
+  2: [
+    'zone2S1', 'zone2S2', 'zone2S3', 'zone2S4', 'zone2S5', 'zone2S6',
+    'zone2C1', 'zone2C2', 'zone2C3', 'zone2C4',
+  ],
+  3: [
+    'zone3S11', 'zone3S12', 'zone3S13', 'zone3S14', 'zone3S15', 'zone3S16', 'zone3S17',
+    'zone3C11', 'zone3C12', 'zone3C13',
+  ],
+  4: [
+    'zone4S22', 'zone4S23', 'zone4S24', 'zone4S25', 'zone4S26',
+    'zone4C21', 'zone4C22', 'zone4C23', 'zone4C24',
+  ],
+};
+
+export function propIdsForZone(zoneId) {
+  return ZONE_PROP_IDS[zoneId | 0] || null;
+}
+
+export function areZonePropsReady(zoneId) {
+  const ids = propIdsForZone(zoneId);
+  if (!ids || !ids.length) return true;
+  return ids.every((id) => !!templates[id]);
+}
+
+export function ensureZonePropGlbsLoading(zoneId) {
+  const ids = propIdsForZone(zoneId);
+  if (!ids) {
+    ensureAllPropGlbsLoading();
+    return;
+  }
+  for (const id of ids) ensurePropGlbLoading(id);
+}
+
 export function isPropGlbReady(id) {
   return !!templates[id];
 }

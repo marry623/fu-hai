@@ -21,7 +21,7 @@ const ECON_V2 = 2;
 
 export const CONSUMABLE_HULLS = ['heavyRaft', 'chargeBoat'];
 export const HULL_NAMES = {
-  raft: '木筏',
+  raft: '帆船',
   heavyRaft: '重筏',
   chargeBoat: '冲锋船',
 };
@@ -670,18 +670,93 @@ export function tryUnlock(meta, shopId) {
 }
 
 export function buySupply(meta, supplyId) {
+  return buySupplyQty(meta, supplyId, 1);
+}
+
+/** Buy `packs` shop bundles of a supply (each pack costs item.cost and adds item.amount). */
+export function buySupplyQty(meta, supplyId, packs = 1) {
   const item = SHOP_SUPPLIES.find((s) => s.id === supplyId);
   if (!item) return { ok: false, meta, msg: '无效物资' };
-  if (meta.fragments < item.cost) return { ok: false, meta, msg: '海图碎片不足' };
+  const n = Math.max(1, Math.min(99, packs | 0));
+  const cost = item.cost * n;
+  if ((meta.fragments | 0) < cost) return { ok: false, meta, msg: '海图碎片不足' };
   const supplies = normalizeSupplies(meta.warehouse?.supplies);
-  supplies[item.id] = (supplies[item.id] || 0) + item.amount;
+  supplies[item.id] = (supplies[item.id] || 0) + item.amount * n;
   const m = {
     ...meta,
-    fragments: meta.fragments - item.cost,
+    fragments: (meta.fragments | 0) - cost,
     warehouse: { ...meta.warehouse, supplies },
   };
   saveMeta(m);
-  return { ok: true, meta: m, msg: `购入 ${item.name} ×${item.amount}` };
+  return {
+    ok: true,
+    meta: m,
+    msg: `购入 ${item.name} ×${item.amount * n}`,
+    packs: n,
+    amount: item.amount * n,
+    cost,
+  };
+}
+
+/** How many more units of `key` fit in the loadout bag. */
+export function bagRoomForSupply(meta, key) {
+  if (!isSupplyKey(key)) return 0;
+  const lo = normalizeLoadoutSupplies(meta.loadout?.supplies);
+  let room = 0;
+  for (const slot of lo.bag) {
+    if (!slot) room += LOADOUT_STACK_MAX;
+    else if (slot.key === key) room += Math.max(0, LOADOUT_STACK_MAX - (slot.n | 0));
+  }
+  return room;
+}
+
+export function packSupply(meta, key) {
+  return packSupplyQty(meta, key, 1);
+}
+
+/** Move up to `qty` units of a supply from warehouse into the loadout bag. */
+export function packSupplyQty(meta, key, qty = 1) {
+  const w = normalizeSupplies(meta.warehouse?.supplies);
+  const lo = normalizeLoadoutSupplies(meta.loadout?.supplies);
+  if (!isSupplyKey(key)) return { ok: false, meta, msg: '无效物资' };
+  const want = Math.max(1, qty | 0);
+  const have = w[key] | 0;
+  if (have <= 0) return { ok: false, meta, msg: '仓库没有' };
+  let left = Math.min(want, have);
+  let moved = 0;
+  while (left > 0) {
+    let idx = lo.bag.findIndex((slot) => slot && slot.key === key && slot.n < LOADOUT_STACK_MAX);
+    if (idx < 0) idx = lo.bag.findIndex((slot) => !slot);
+    if (idx < 0) break;
+    if (!lo.bag[idx]) lo.bag[idx] = { key, n: 0 };
+    const take = Math.min(left, LOADOUT_STACK_MAX - (lo.bag[idx].n | 0));
+    if (take <= 0) break;
+    lo.bag[idx].n += take;
+    w[key] -= take;
+    left -= take;
+    moved += take;
+  }
+  if (!moved) {
+    return {
+      ok: false,
+      meta,
+      msg: (w[key] | 0) <= 0 ? '仓库没有' : '背包已满（8格）',
+    };
+  }
+  const next = normalizeLoadoutSupplies({ bag: lo.bag, baitKind: lo.baitKind });
+  const m = {
+    ...meta,
+    warehouse: { ...meta.warehouse, supplies: w },
+    loadout: { ...meta.loadout, supplies: next },
+  };
+  saveMeta(m);
+  const partial = moved < want;
+  return {
+    ok: true,
+    meta: m,
+    moved,
+    msg: partial ? `已装入 ${moved}（背包空间不足）` : `已装入 ${moved}`,
+  };
 }
 
 export function buyWarehouseFish(meta, defId) {
@@ -893,27 +968,6 @@ function supplyKindFromKey(key) {
   return Object.keys(BAIT_KINDS).find((k) => BAIT_KINDS[k].key === key) || null;
 }
 
-export function packSupply(meta, key) {
-  const w = normalizeSupplies(meta.warehouse?.supplies);
-  const lo = normalizeLoadoutSupplies(meta.loadout?.supplies);
-  if (!isSupplyKey(key)) return { ok: false, meta, msg: '\u65e0\u6548\u7269\u8d44' };
-  if ((w[key] | 0) <= 0) return { ok: false, meta, msg: '\u4ed3\u5e93\u6ca1\u6709' };
-  let idx = lo.bag.findIndex((slot) => slot && slot.key === key && slot.n < LOADOUT_STACK_MAX);
-  if (idx < 0) idx = lo.bag.findIndex((slot) => !slot);
-  if (idx < 0) return { ok: false, meta, msg: '\u80cc\u5305\u5df2\u6ee1\uff088\u683c\uff09' };
-  w[key] -= 1;
-  if (!lo.bag[idx]) lo.bag[idx] = { key, n: 0 };
-  lo.bag[idx].n += 1;
-  const next = normalizeLoadoutSupplies({ bag: lo.bag, baitKind: lo.baitKind });
-  const m = {
-    ...meta,
-    warehouse: { ...meta.warehouse, supplies: w },
-    loadout: { ...meta.loadout, supplies: next },
-  };
-  saveMeta(m);
-  return { ok: true, meta: m, msg: '\u5df2\u88c5\u5165\u80cc\u5305' };
-}
-
 export function unpackSupply(meta, keyOrIndex) {
   const w = normalizeSupplies(meta.warehouse?.supplies);
   const lo = normalizeLoadoutSupplies(meta.loadout?.supplies);
@@ -995,18 +1049,27 @@ export function sellWarehouseFishBelowRarity(meta, belowRarity = 4) {
 }
 
 
-export function discoverRelic(meta, defId) {
+function discoverRelicSilent(meta, defId) {
   if (!defId || !getRelicDef(defId)) return { ok: false, meta, neu: false };
   if (meta.relicCodex?.[defId]) return { ok: true, meta, neu: false };
-  const m = {
-    ...meta,
-    relicCodex: { ...(meta.relicCodex || {}), [defId]: true },
+  return {
+    ok: true,
+    meta: {
+      ...meta,
+      relicCodex: { ...(meta.relicCodex || {}), [defId]: true },
+    },
+    neu: true,
   };
-  saveMeta(m);
-  return { ok: true, meta: m, neu: true };
 }
 
-export function appraiseRelic(meta, warehouseIndex) {
+export function discoverRelic(meta, defId) {
+  const r = discoverRelicSilent(meta, defId);
+  if (r.ok && r.neu) saveMeta(r.meta);
+  return r;
+}
+
+/** Appraise one sealed warehouse relic without persisting. */
+function appraiseOneSilent(meta, warehouseIndex) {
   const list = [...(meta.warehouse?.relics || [])];
   const item = list[warehouseIndex];
   if (!item) return { ok: false, meta, msg: '无效宝物' };
@@ -1029,9 +1092,8 @@ export function appraiseRelic(meta, warehouseIndex) {
     warehouse: { ...meta.warehouse, relics: list },
     relicCodex: { ...(meta.relicCodex || {}) },
   };
-  const disc = discoverRelic(m, item.defId);
+  const disc = discoverRelicSilent(m, item.defId);
   m = disc.meta;
-  saveMeta(m);
   return {
     ok: true,
     meta: m,
@@ -1040,6 +1102,49 @@ export function appraiseRelic(meta, warehouseIndex) {
     def,
     neu: disc.neu,
   };
+}
+
+export function appraiseRelic(meta, warehouseIndex) {
+  const r = appraiseOneSilent(meta, warehouseIndex);
+  if (r.ok) saveMeta(r.meta);
+  return r;
+}
+
+/** Appraise as many sealed relics as fragments allow. One save. */
+export function appraiseRelicsBatch(meta) {
+  const relics = meta.warehouse?.relics || [];
+  const sealedIdxs = [];
+  for (let i = 0; i < relics.length; i++) {
+    if (relics[i]?.sealed) sealedIdxs.push(i);
+  }
+  if (!sealedIdxs.length) {
+    return { ok: false, meta, results: [], opened: 0, skipped: 0, msg: '没有未鉴定的包裹' };
+  }
+  let m = meta;
+  const results = [];
+  for (const idx of sealedIdxs) {
+    if ((m.fragments | 0) < APPRAISE_COST) break;
+    const r = appraiseOneSilent(m, idx);
+    if (!r.ok) break;
+    m = r.meta;
+    results.push({ def: r.def, relic: r.relic, neu: r.neu });
+  }
+  const skipped = sealedIdxs.length - results.length;
+  if (!results.length) {
+    return {
+      ok: false,
+      meta,
+      results: [],
+      opened: 0,
+      skipped: sealedIdxs.length,
+      msg: `碎片不足（需要 ${APPRAISE_COST}）`,
+    };
+  }
+  saveMeta(m);
+  const msg = skipped > 0
+    ? `一键鉴定 ${results.length} 件（余 ${skipped} 件碎片不足）`
+    : `一键鉴定 ${results.length} 件`;
+  return { ok: true, meta: m, results, opened: results.length, skipped, msg };
 }
 
 export function sellWarehouseRelic(meta, warehouseIndex) {
@@ -1068,7 +1173,8 @@ export function sellWarehouseRelic(meta, warehouseIndex) {
   return { ok: true, meta: m, msg: `售出 ${label} +${price} 海图碎片`, price };
 }
 
-/** Sell every warehouse relic with tier strictly below `belowTier` (default: under T3). */
+/** Sell every warehouse relic with tier strictly below `belowTier` (default: under T3).
+ *  Sealed (unidentified) packages are always included — their stored tier is hidden. */
 export function sellWarehouseRelicsBelowTier(meta, belowTier = 3) {
   const list = meta.warehouse?.relics || [];
   const keep = [];
@@ -1077,16 +1183,18 @@ export function sellWarehouseRelicsBelowTier(meta, belowTier = 3) {
   const limit = belowTier | 0;
   for (const item of list) {
     if (!item) continue;
-    const def = item.sealed ? null : getRelicDef(item.defId);
+    const sellSealed = !!item.sealed;
+    const def = sellSealed ? null : getRelicDef(item.defId);
     const tier = (item.tier | 0) || (def?.tier | 0) || 1;
-    if (tier > 0 && tier < limit) {
+    const hidden = !sellSealed && !!(item.hidden || def?.hidden);
+    if (sellSealed || (!hidden && tier > 0 && tier < limit)) {
       gained += relicSellPreview(item);
       count += 1;
     } else {
       keep.push(item);
     }
   }
-  if (!count) return { ok: false, meta, msg: '没有 T3 以下的宝物', count: 0, price: 0 };
+  if (!count) return { ok: false, meta, msg: '没有可一键出售的宝物', count: 0, price: 0 };
   const m = {
     ...meta,
     fragments: (meta.fragments || 0) + gained,

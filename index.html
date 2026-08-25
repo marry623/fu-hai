@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>浮骸 · 海上肉鸽</title>
-  <link rel="stylesheet" href="css/style.css?v=38t" />
+  <link rel="stylesheet" href="css/style.css?v=40b" />
 </head>
 <body>
   <div id="game-root">
@@ -12,14 +12,17 @@
     <div id="hud" class="hidden">
       <div class="hud-top">
         <div class="speed-panel">
-          <div class="player-row"><div class="avatar"></div><span class="player-name">浮骸船长</span></div>
+          <div class="player-row"><img class="boat-logo" src="art/boat-logo.svg" width="36" height="36" alt="帆船" draggable="false" /><span class="player-name">浮骸船长</span></div>
           <div class="speed-box"><span id="speed-value">000</span><span class="speed-unit">节</span></div>
           <div class="stat-row"><span class="stat-label hp">耐久</span><div class="stat-bar"><div id="hp-fill"></div></div><span id="hp-text">100</span></div>
           <div class="inv-text" id="inv-text"></div>
           <div class="inv-text" id="combo-text"></div>
         </div>
         <div class="map-panel">
-          <canvas id="minimap" width="140" height="140"></canvas>
+          <div class="map-row">
+            <div id="hud-resonance" class="hud-resonance hidden" aria-live="polite"></div>
+            <canvas id="minimap" width="140" height="140"></canvas>
+          </div>
           <div class="map-meta">
             <div class="meta-chip gold" id="zone-name">海域</div>
             <div class="meta-chip" id="frag-count">海图碎片 0</div>
@@ -171,22 +174,42 @@
         <p class="sea-map-hint">M / Esc 关闭</p>
       </div>
 
-      <div id="settle-modal" class="event-modal hidden">
-        <div class="event-card">
-          <h3 id="settle-title">本局结算</h3>
-          <p id="settle-stats">—</p>
-          <div class="event-btns">
-            <button type="button" id="btn-settle-hub" class="mini-btn">返回基地</button>
+                        <div id="settle-modal" class="event-modal result-modal hidden">
+        <div class="result-stage result-stage--win">
+          <div class="result-burst" aria-hidden="true"></div>
+          <div class="result-mascot" aria-hidden="true">
+            <img id="settle-fish" class="result-mascot-img" src="art/result-fish-win.svg?v=3" alt="" draggable="false" />
+          </div>
+          <div class="result-panel">
+            <div class="result-cream" aria-hidden="true"></div>
+            <span class="result-tassel result-tassel--l" aria-hidden="true"></span>
+            <span class="result-tassel result-tassel--r" aria-hidden="true"></span>
+            <h3 id="settle-title">成功归航</h3>
+            <div class="result-score">得分 <strong id="settle-score">0</strong></div>
+            <p id="settle-stats">—</p>
+            <div class="event-btns">
+              <button type="button" id="btn-settle-hub" class="result-cta">返回基地</button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div id="sink-modal" class="event-modal hidden">
-        <div class="event-card">
-          <h3>船只沉没</h3>
-          <p id="sink-stats">—</p>
-          <div class="event-btns">
-            <button type="button" id="btn-retry" class="mini-btn">返回基地</button>
+      <div id="sink-modal" class="event-modal result-modal hidden">
+        <div class="result-stage result-stage--lose">
+          <div class="result-burst" aria-hidden="true"></div>
+          <div class="result-mascot" aria-hidden="true">
+            <img id="sink-fish" class="result-mascot-img" src="art/result-fish-lose.svg?v=3" alt="" draggable="false" />
+          </div>
+          <div class="result-panel">
+            <div class="result-cream" aria-hidden="true"></div>
+            <span class="result-tassel result-tassel--l" aria-hidden="true"></span>
+            <span class="result-tassel result-tassel--r" aria-hidden="true"></span>
+            <h3 id="sink-title">沉船失败</h3>
+            <div class="result-score">得分 <strong id="sink-score">0</strong></div>
+            <p id="sink-stats">—</p>
+            <div class="event-btns">
+              <button type="button" id="btn-retry" class="result-cta">返回基地</button>
+            </div>
           </div>
         </div>
       </div>
@@ -204,6 +227,26 @@
           <button type="button" class="action-btn drift" id="btn-fish"><span class="cn" id="btn-fish-cn">抛竿</span><span class="en">空格</span></button>
           <button type="button" class="action-btn boost" id="btn-salvage"><span class="cn">打捞</span><span class="en">E</span></button>
         </div>
+      </div>
+    </div>
+
+    <div id="hub-bm-scratch" class="hub-bm-scratch hidden" aria-hidden="true">
+      <div class="hub-bm-scratch-card">
+        <div class="hub-bm-scratch-face" id="hub-bm-scratch-face"></div>
+        <canvas id="hub-bm-scratch-canvas" class="hub-bm-scratch-canvas" width="280" height="280"></canvas>
+      </div>
+      <p class="hub-bm-scratch-hint" id="hub-bm-scratch-hint">擦开涂层揭晓宝物</p>
+      <div class="hub-bm-scratch-acts">
+        <button type="button" class="bp-btn bright" id="hub-bm-scratch-skip">直接揭开</button>
+        <button type="button" class="bp-btn ghost hidden" id="hub-bm-scratch-close">完成</button>
+      </div>
+    </div>
+
+    <div id="hub-bm-batch" class="hub-bm-batch hidden" aria-hidden="true">
+      <div class="hub-bm-batch-panel">
+        <h3 class="hub-bm-batch-title">一键鉴定结果</h3>
+        <div id="hub-bm-batch-list" class="hub-bm-batch-list"></div>
+        <button type="button" class="bp-btn bright" id="hub-bm-batch-close">关闭</button>
       </div>
     </div>
 
@@ -349,11 +392,11 @@
                   <button type="button" id="btn-depart" class="bp-btn bright hub-depart-btn">出港航行</button>
                 </div>
                 <div id="hub-fs-left-shop" class="hub-clip-panel hidden">
-                  <p class="bp-clip-empty">归航和卖鱼获得海图碎片。买船出航，沉船后需重买。木筏免费。</p>
+                  <p class="bp-clip-empty">归航和卖鱼获得海图碎片。买船出航，沉船后需重买。帆船免费。</p>
                 </div>
                 <div id="hub-fs-left-blackmarket" class="hub-clip-panel hidden">
                   <h3 class="hub-clip-h">黑市鉴宝</h3>
-                  <p class="hub-fs-blurb">未鉴定的黑色包裹一律花费 20 海图碎片鉴定。鉴定后才知道档位与售价，物品留在仓库，可自行出售。</p>
+                  <p class="hub-fs-blurb">未鉴定黑色包裹每件 20 碎片。单开可刮擦揭晓；也可一键鉴定（按余额能付几件开几件）。物品仍留仓库。</p>
                   <div id="hub-bm-detail" class="hub-shop-detail"></div>
                 </div>
                 <div id="hub-fs-left-codex" class="hub-clip-panel hidden">
@@ -392,8 +435,8 @@
     window.addEventListener('unhandledrejection', (e) => show(e.reason && e.reason.stack || e.reason));
     const fileHint = '请勿直接双击 index.html。运行项目里的 play.bat，或打开 http://127.0.0.1:8787/\nChrome 在 file:// 下无法加载 ES 模块。';
     const urls = location.protocol === 'file:'
-      ? ['./js/main.js', './js/main.js?v=38t']
-      : ['./js/main.js?v=38t'];
+      ? ['./js/main.js', './js/main.js?v=40b']
+      : ['./js/main.js?v=40b'];
     if (location.protocol === 'file:') show(fileHint);
     let last = null;
     let ok = false;

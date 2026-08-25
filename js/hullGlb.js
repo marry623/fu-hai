@@ -91,6 +91,16 @@ function normalizeHullScene(source, targetLength) {
   root.position.x -= (box.min.x + box.max.x) * 0.5;
   root.position.z -= (box.min.z + box.max.z) * 0.5;
   root.position.y -= box.min.y;
+  root.updateMatrixWorld(true);
+  box = new THREE.Box3().setFromObject(root);
+  root.userData.hullExtents = {
+    minX: box.min.x,
+    maxX: box.max.x,
+    minY: box.min.y,
+    maxY: box.max.y,
+    minZ: box.min.z,
+    maxZ: box.max.z,
+  };
   return root;
 }
 
