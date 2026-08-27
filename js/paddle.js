@@ -24,6 +24,7 @@ export function createPaddleController() {
     yaw: 0,
     x: 0,
     z: 0,
+    anchored: false,
   };
 
   const BASE_PUSH = 22;
@@ -79,6 +80,24 @@ export function createPaddleController() {
     const thrustMul = opts.thrustMul ?? 1;
     const turnMul = opts.turnMul ?? 1;
     const autoThrust = opts.autoThrust ?? 0;
+
+    if (st.anchored) {
+      // 锚阻力：比普通漂移大约 3.5 倍，约 1.5–2 秒减到极低速
+      const ANCHOR_DRAG = 12;
+      // 锚定时允许的最大残余漂速（模拟水流轻推）
+      const ANCHOR_DRIFT = 0.75;
+      st.speed = Math.max(0, st.speed - ANCHOR_DRAG * dt);
+      // 完全停止后保留轻微水波漂动感
+      if (st.speed < ANCHOR_DRIFT) {
+        st.speed = Math.min(ANCHOR_DRIFT, Math.max(0,
+          st.speed + Math.sin(now * 0.7) * 0.06 * dt));
+      }
+      st.x += Math.sin(st.yaw) * st.speed * dt;
+      st.z += Math.cos(st.yaw) * st.speed * dt;
+      return { x: st.x, z: st.z, yaw: st.yaw, speed: st.speed,
+               drifting: true, sailing: false, combo: st.combo,
+               leftPhase: 0, rightPhase: 0 };
+    }
 
     if (lockedOar === 'left') st.leftDown = false;
     if (lockedOar === 'right') st.rightDown = false;
@@ -162,16 +181,19 @@ export function createPaddleController() {
     st.rightPhase = 0;
     st.leftCycle = 0;
     st.rightCycle = 0;
+    st.anchored = false;
   }
 
   return {
     setKey,
     setScramble,
     setLockedOar,
+    setAnchored(on) { st.anchored = !!on; },
     update,
     reset,
     get state() { return st; },
     get scramble() { return scramble; },
     get lockedOar() { return lockedOar; },
+    get anchored() { return st.anchored; },
   };
 }

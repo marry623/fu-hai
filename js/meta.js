@@ -1183,11 +1183,11 @@ export function sellWarehouseRelicsBelowTier(meta, belowTier = 3) {
   const limit = belowTier | 0;
   for (const item of list) {
     if (!item) continue;
-    const sellSealed = !!item.sealed;
-    const def = sellSealed ? null : getRelicDef(item.defId);
+    if (item.sealed) { keep.push(item); continue; }
+    const def = getRelicDef(item.defId);
     const tier = (item.tier | 0) || (def?.tier | 0) || 1;
-    const hidden = !sellSealed && !!(item.hidden || def?.hidden);
-    if (sellSealed || (!hidden && tier > 0 && tier < limit)) {
+    const hidden = !!(item.hidden || def?.hidden);
+    if (!hidden && tier > 0 && tier < limit) {
       gained += relicSellPreview(item);
       count += 1;
     } else {

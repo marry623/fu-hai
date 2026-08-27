@@ -1353,6 +1353,26 @@ export function createHub(deps) {
       <p class="hub-fs-blurb">${blurb}</p>
       <p class="hub-fs-blurb">海图碎片 <strong>${meta.fragments || 0}</strong></p>`;
     if (shopDetail) {
+      const isSupply = shopDetail.act === 'supply';
+      let qtyBlock = '';
+      if (isSupply && shopDetail.actId) {
+        const supplyItem = SHOP_SUPPLIES.find((s) => s.id === shopDetail.actId);
+        const frags = meta.fragments | 0;
+        const maxPacks = supplyItem
+          ? Math.max(0, Math.min(99, Math.floor(frags / supplyItem.cost)))
+          : 0;
+        const dis = maxPacks < 1 ? 'disabled' : '';
+        qtyBlock = `
+          <div class="hub-shop-qty">
+            <label class="hub-shop-qty-label">份数</label>
+            <input type="range" class="hub-shop-qty-range" data-wh-qty-range
+                   min="1" max="${Math.max(1, maxPacks)}" value="1" ${dis}/>
+            <input type="number" class="hub-shop-qty-num" data-wh-qty-num
+                   min="1" max="${Math.max(1, maxPacks)}" value="1"
+                   inputmode="numeric" ${dis}/>
+          </div>
+          <p class="hub-shop-qty-price" data-shop-qty-price></p>`;
+      }
       const actBtn = shopDetail.act
         ? `<button type="button" class="bp-btn bright hub-shop-act" data-shop-act="${shopDetail.act}" data-shop-act-id="${shopDetail.actId}">${shopDetail.actLabel}</button>`
         : '';
@@ -1360,12 +1380,32 @@ export function createHub(deps) {
         <strong>${shopDetail.title}</strong>
         <p>${shopDetail.desc || ''}</p>
         <p class="hub-shop-detail-price">${shopDetail.priceLine || ''}</p>
+        ${qtyBlock}
         ${actBtn}
       </div>`;
     } else {
       detail += `<p class="hub-fs-blurb muted">选中卡片查看说明</p>`;
     }
     panel.innerHTML = detail;
+    if (shopDetail?.act === 'supply' && shopDetail.actId) {
+      const supplyItem = SHOP_SUPPLIES.find((s) => s.id === shopDetail.actId);
+      const frags = meta.fragments | 0;
+      const maxPacks = supplyItem
+        ? Math.max(0, Math.min(99, Math.floor(frags / supplyItem.cost)))
+        : 0;
+      const paintQty = (qty) => {
+        const cost = (supplyItem?.cost || 0) * qty;
+        const units = (supplyItem?.amount || 0) * qty;
+        const priceEl = panel.querySelector('[data-shop-qty-price]');
+        const btn = panel.querySelector('[data-shop-act]');
+        if (priceEl) priceEl.textContent = `${cost} 碎片 · 入手 ×${units} · 余额 ${frags}`;
+        if (btn) {
+          btn.disabled = maxPacks < 1 || cost > frags;
+          btn.textContent = maxPacks < 1 ? '碎片不足' : `购入 ${qty} 份`;
+        }
+      };
+      wireWhQtyControls(panel, Math.max(1, maxPacks), paintQty);
+    }
     panel.querySelector('[data-shop-act]')?.addEventListener('click', () => {
       const act = shopDetail?.act;
       const actId = shopDetail?.actId;
@@ -1415,7 +1455,7 @@ export function createHub(deps) {
           sfx.uiSell();
           shopDetail = {
             title: '一键出售完成',
-            desc: `已卖掉 ${r.count} 件（T${below} 以下与未鉴定包裹）`,
+            desc: `已卖掉 ${r.count} 件（已鉴定 T${below} 以下）`,
             priceLine: `+${r.price} 海图碎片`,
           };
           deps.setMeta(r.meta);
@@ -1442,7 +1482,9 @@ export function createHub(deps) {
         return;
       }
       if (act === 'supply') {
-        const r = buySupply(deps.getMeta(), actId);
+        const qtyNum = panel.querySelector('[data-wh-qty-num]');
+        const qty = clampInt(qtyNum?.value || '1', 1, 99);
+        const r = buySupplyQty(deps.getMeta(), actId, qty);
         deps.toast(r.msg);
         if (r.ok) {
           sfx.uiBuy();
@@ -1524,7 +1566,7 @@ export function createHub(deps) {
         const relics = meta.warehouse?.relics || [];
         const bulkBar = `<div class="hub-shop-bulk">
           <button type="button" class="bp-btn bright hub-shop-bulk-btn" data-sell-relic-below="3">一键出售 T3 以下</button>
-          <span class="hub-shop-bulk-hint">含未鉴定包裹 · 保留已鉴定 T3 / 隐藏</span>
+          <span class="hub-shop-bulk-hint">保留已鉴定 T3 / 隐藏 / 未鉴定包裹</span>
         </div>`;
         if (!relics.length) {
           cards = `<div class="hub-shop-subtabs">${sellSub}</div>${bulkBar}<p class="hub-empty">仓库暂无宝物可售</p>`;
@@ -1698,7 +1740,7 @@ export function createHub(deps) {
         const below = Number(btn.dataset.sellRelicBelow) || 3;
         const low = (deps.getMeta().warehouse?.relics || []).filter((item) => {
           if (!item) return false;
-          if (item.sealed) return true;
+          if (item.sealed) return false;
           const def = getRelicDef(item.defId);
           if (item.hidden || def?.hidden) return false;
           const tier = (item.tier | 0) || (def?.tier | 0) || 1;
@@ -1710,11 +1752,9 @@ export function createHub(deps) {
           return;
         }
         const total = low.reduce((s, item) => s + relicSellPreview(item), 0);
-        const sealedN = low.filter((x) => x.sealed).length;
-        const idN = low.length - sealedN;
         shopDetail = {
           title: '一键出售 T3 以下',
-          desc: `将卖掉 T1/T2${idN ? ` ${idN} 件` : ''}与未鉴定包裹${sealedN ? ` ${sealedN} 件` : ''}（共 ${low.length} 件），保留已鉴定的 T3 与隐藏级。`,
+          desc: `将卖掉仓库里全部已鉴定的 T1/T2 宝物（共 ${low.length} 件），保留已鉴定 T3+、隐藏级与所有未鉴定包裹。`,
           priceLine: `预计 +${total} 海图碎片`,
           act: 'sellRelicBelow',
           actId: String(below),

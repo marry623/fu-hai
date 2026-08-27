@@ -1,7 +1,7 @@
 /** Full-screen scratch reveal for single black-market appraisal. */
 
-const THRESHOLD = 0.45;
-const BRUSH = 28;
+const THRESHOLD = 0.38;
+const BRUSH = 55;
 
 let root = null;
 let canvas = null;
@@ -166,7 +166,7 @@ export function openAppraiseScratch(opts) {
   painting = false;
   onDoneCb = typeof opts.onDone === 'function' ? opts.onDone : null;
 
-  const size = Math.min(280, Math.floor(window.innerWidth * 0.7));
+  const size = Math.min(420, Math.floor(window.innerWidth * 0.8));
   canvas.width = size;
   canvas.height = size;
   canvas.style.width = `${size}px`;

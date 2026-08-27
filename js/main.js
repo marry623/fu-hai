@@ -5,7 +5,7 @@ import {
   createFoamRings,
 } from './world.js';
 import { createBoat, createWakeSystem, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, resetRodPose } from './boat.js?v=39v';
-import { createPaddleController } from './paddle.js?v=29n';
+import { createPaddleController } from './paddle.js?v=29p';
 import { createHull, updateCorrosion, damageHull, repairHull } from './hull.js?v=16c';
 import {
   createFlotsamField, updateFlotsam, findNearestFlotsam, respawnFlotsam, rollSalvage,
@@ -39,7 +39,7 @@ import {
   chargeZoneTicket, canDepartZone, saveMeta,
 } from './meta.js?v=39c';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=35l';
-import { createHub } from './hub.js?v=39h';
+import { createHub } from './hub.js?v=40d';
 import { createCoverScene } from './coverScene.js?v=28m';
 import { createHubIsland } from './hubIsland.js?v=35b';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=39q';
@@ -50,7 +50,7 @@ import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { applyHudTheme } from './hudTheme.js?v=39j';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=40b';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=40e';
 import { renderManualHtml } from './hubManual.js?v=35l';
 import * as sfx from './audio.js?v=33f';
 
@@ -989,6 +989,28 @@ function setPrompt(el, msg) {
   el.classList.remove('hidden');
 }
 
+let anchorIndicatorEl = null;
+function ensureAnchorIndicator() {
+  if (anchorIndicatorEl) return anchorIndicatorEl;
+  anchorIndicatorEl = document.createElement('button');
+  anchorIndicatorEl.type = 'button';
+  anchorIndicatorEl.id = 'anchor-indicator';
+  anchorIndicatorEl.className = 'action-btn anchor-btn';
+  anchorIndicatorEl.innerHTML = '<span class="cn">\u629b\u9521</span><span class="en">S</span>';
+  anchorIndicatorEl.onclick = () => tryAnchor();
+  const panel = document.querySelector('.action-panel');
+  const fishBtn = document.getElementById('btn-fish');
+  if (panel && fishBtn) panel.insertBefore(anchorIndicatorEl, fishBtn);
+  else document.body.appendChild(anchorIndicatorEl);
+  return anchorIndicatorEl;
+}
+function setAnchorIndicator(on) {
+  const btn = ensureAnchorIndicator();
+  const cn = btn.querySelector('.cn');
+  if (cn) cn.textContent = on ? '\u8d77\u9521' : '\u629b\u9521';
+  btn.classList.toggle('anchored', on);
+}
+
 /** Practice bay — click-through narration cards */
 const TUT_STEPS = [
   {
@@ -1497,6 +1519,16 @@ function onSpace() {
   fishing.tryCast(true, state.runDistance, greenBonus, startZone, aim.x, aim.z, baitKind);
   sfx.fishCast();
   ui.btnFish.classList.add('pressed');
+}
+
+function tryAnchor() {
+  if (!state.started || hull.sunk) return;
+  if (state.fishPanelOpen || state.lighthouseOpen || state.seaMapOpen) return;
+  const on = !paddle.anchored;
+  paddle.setAnchored(on);
+  setAnchorIndicator(on);
+  showToast(on ? '\u629b\u9521' : '\u8d77\u9521');
+  sfx.uiClick();
 }
 
 function trySalvage() {
@@ -2283,6 +2315,8 @@ function tryJump() {
 function finishRun(outcome) {
   setBackpackOpen(false);
   setSeaMapOpen(false);
+  paddle.setAnchored(false);
+  setAnchorIndicator(false);
   state.started = false;
   tut.active = false;
   tut.dismissed = true;
@@ -3326,6 +3360,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); onSpace(); }
   if (e.code === 'KeyE') trySalvage();
   if (e.code === 'KeyQ') { e.preventDefault(); tryFlashSail(); }
+  if (e.code === 'KeyS') { e.preventDefault(); tryAnchor(); }
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') tryJump();
   const d = e.code.match(/^Digit([1-6])$/);
   if (d) {
@@ -3671,6 +3706,7 @@ updateHp();
 updateInv();
 refreshSlots();
 renderFishList();
+ensureAnchorIndicator();
 setWorldMode('cover');
 hub.hide();
 {
