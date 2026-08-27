@@ -51,7 +51,7 @@ import { applyHudTheme } from './hudTheme.js?v=39j';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
 import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=40e';
-import { renderManualHtml } from './hubManual.js?v=35l';
+import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=36a';
 import * as sfx from './audio.js?v=33f';
 
 const canvas = document.getElementById('c');
@@ -996,7 +996,7 @@ function ensureAnchorIndicator() {
   anchorIndicatorEl.type = 'button';
   anchorIndicatorEl.id = 'anchor-indicator';
   anchorIndicatorEl.className = 'action-btn anchor-btn';
-  anchorIndicatorEl.innerHTML = '<span class="cn">\u629b\u9521</span><span class="en">S</span>';
+  anchorIndicatorEl.innerHTML = '<span class="cn">\u629b\u951a</span><span class="en">S</span>';
   anchorIndicatorEl.onclick = () => tryAnchor();
   const panel = document.querySelector('.action-panel');
   const fishBtn = document.getElementById('btn-fish');
@@ -1007,7 +1007,7 @@ function ensureAnchorIndicator() {
 function setAnchorIndicator(on) {
   const btn = ensureAnchorIndicator();
   const cn = btn.querySelector('.cn');
-  if (cn) cn.textContent = on ? '\u8d77\u9521' : '\u629b\u9521';
+  if (cn) cn.textContent = on ? '\u8d77\u951a' : '\u629b\u951a';
   btn.classList.toggle('anchored', on);
 }
 
@@ -1081,7 +1081,7 @@ function tutStepBody(step) {
     case 0:
       return `\u5411\u5317\u5212\u5230\u5149\u6807\u5904\uff08\u7ea6 ${dist} \u7c73\uff09\u00b7 A / D \u4ea4\u66ff\u5212 \u00b7 A / D \u540c\u65f6\u6309\u76f4\u884c`;
     case 1:
-      return '\u811a\u4e0b\u6c34\u5708 \u00b7 \u7a7a\u683c\u629b\u7aff\uff0c\u7eff\u533a\u518d\u7a7a\u683c';
+      return '\u6309S\u629b\u951a/\u8d77\u951a \u00b7 \u811a\u4e0b\u6c34\u5708 \u00b7 \u7a7a\u683c\u629b\u7aff\uff0c\u7eff\u533a\u518d\u7a7a\u683c';
     case 2:
       return `\u7ee7\u7eed\u5411\u5317 \u00b7 \u9760\u8fd1\u6f02\u6d6e\u7269\u6309 E\uff08\u7ea6 ${dist} \u7c73\uff09`;
     case 3:
@@ -1527,7 +1527,7 @@ function tryAnchor() {
   const on = !paddle.anchored;
   paddle.setAnchored(on);
   setAnchorIndicator(on);
-  showToast(on ? '\u629b\u9521' : '\u8d77\u9521');
+  showToast(on ? '\u629b\u951a' : '\u8d77\u951a');
   sfx.uiClick();
 }
 
@@ -3626,7 +3626,7 @@ ui.btnCoverStart?.addEventListener('click', () => {
   if ((startZone | 0) === -1) startZone = 0;
   openHub();
 });
-if (ui.coverManualBody) ui.coverManualBody.innerHTML = renderManualHtml();
+if (ui.coverManualBody) ui.coverManualBody.innerHTML = renderControlsHtml();
 
 ui.btnCoverTutorial?.addEventListener('click', () => {
   sfx.unlockAudio();
