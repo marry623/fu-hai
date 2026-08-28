@@ -238,6 +238,20 @@ html, body {
   color: var(--ink-muted);
 }
 
+#combo-text.combo-hot {
+  color: var(--gold);
+}
+
+#combo-text.combo-drop {
+  animation: comboDrop 0.28s ease;
+}
+
+@keyframes comboDrop {
+  0% { transform: translateY(0); }
+  45% { transform: translateY(3px); opacity: 0.55; }
+  100% { transform: translateY(0); }
+}
+
 .cargo-label {
   font-size: 11px;
   font-weight: 900;
@@ -801,6 +815,17 @@ html, body {
   color: var(--ink-on-panel);
   margin-bottom: 8px;
   font-size: 14px;
+}
+
+.qte.qte-miss {
+  animation: qteMissRecoil 0.28s ease-out;
+}
+
+@keyframes qteMissRecoil {
+  0% { transform: translateX(0); }
+  28% { transform: translateX(-5px); }
+  58% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
 }
 
 .qte-track {

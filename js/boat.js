@@ -4,12 +4,24 @@ import {
   ensureAllHullGlbsLoading,
   ensureHullGlbLoading,
   onHullGlbReady,
-} from './hullGlb.js?v=39b';
+  hullUpscale,
+} from './hullGlb.js?v=39f';
 import { addOutline, toonMat } from './stylekit.js';
 
 const SLOT_KEYS = ['bow', 'stern', 'sideL', 'sideR', 'keel', 'sail'];
 /** Bump when hull/sail mesh layout changes so setBoatVariant rebuilds same boatId. */
-export const HULL_REV = 'hull-glb-v11';
+export const HULL_REV = 'hull-glb-v12';
+
+/**
+ * Rowlock mount + oar size per hull, in authored hull units (before hullUpscale).
+ * Hull AABBs are useless here: masts, yards and rigging swamp the box, and the GLBs
+ * use generic mesh names, so these are measured off the hull body of each model.
+ */
+const OAR_MOUNT = {
+  raft: { x: 1.05, y: 0.6, z: 0.25, scale: 1 },
+  heavyRaft: { x: 1.12, y: 0.77, z: 0.54, scale: 0.96 },
+  chargeBoat: { x: 1.42, y: 1.12, z: 0.15, scale: 1.19 },
+};
 
 /** Fallback mounts (pre-GLB / unknown hull). */
 const DEFAULT_MOUNTS = {
@@ -43,13 +55,12 @@ export function createBoat(gradientMap, boatId = 'raft') {
   buildHullVisual(hullGroup, root, gradientMap, root.userData.boatId);
 
   const leftOar = makeOar(gradientMap, -1);
-  leftOar.position.set(-1.05, 0.6, 0.25);
   root.add(leftOar);
   root.userData.leftOar = leftOar;
   const rightOar = makeOar(gradientMap, 1);
-  rightOar.position.set(1.05, 0.6, 0.25);
   root.add(rightOar);
   root.userData.rightOar = rightOar;
+  layoutOars(root);
 
   const rodArm = new THREE.Group();
   const pole = new THREE.Mesh(
@@ -113,6 +124,24 @@ export function layoutSlotMounts(boat) {
   mounts.sail.position.set(beam * 0.55, Math.max(2.4, maxY * 0.72), (minZ + maxZ) * 0.05);
 }
 
+/** Sit the oars on the hull side and scale them with the hull (boat-local). */
+export function layoutOars(boat) {
+  const oars = [boat?.userData?.leftOar, boat?.userData?.rightOar].filter(Boolean);
+  if (!oars.length) return;
+  const id = boat.userData.boatId || 'raft';
+  const m = OAR_MOUNT[id] || OAR_MOUNT.raft;
+  const up = hullUpscale(id);
+  const s = m.scale * up;
+  for (const oar of oars) {
+    const side = oar.userData.oarSide || 1;
+    oar.position.set(side * m.x * up, m.y * up, m.z * up);
+    oar.scale.setScalar(s);
+    oar.userData.oarScale = s;
+    oar.userData.restZ = null;
+    oar.userData.restY = null;
+  }
+}
+
 function readHullExtents(boat) {
   const hull = boat.userData?.hullGroup;
   if (!hull) return null;
@@ -152,9 +181,10 @@ export function setBoatVariant(boat, boatId) {
     });
   }
   boat.userData.sailMesh = null;
+  boat.userData.boatId = id;
   buildHullVisual(hull, boat, gm, id);
   layoutSlotMounts(boat);
-  boat.userData.boatId = id;
+  layoutOars(boat);
   boat.userData.hullRev = HULL_REV;
   return boat;
 }
@@ -229,7 +259,7 @@ function makeOar(gradientMap, side) {
   return g;
 }
 
-export { SLOT_KEYS };
+export { SLOT_KEYS, hullUpscale };
 
 export function setOarStroke(boat, side, amount) {
   const oar = side < 0 ? boat.userData.leftOar : boat.userData.rightOar;
@@ -239,10 +269,11 @@ export function setOarStroke(boat, side, amount) {
     oar.userData.restY = oar.position.y;
   }
   const a = Math.max(0, Math.min(1, amount));
+  const s = oar.userData.oarScale || 1;
   oar.rotation.x = -a * 0.9;
   oar.rotation.z = side * a * 0.14;
-  oar.position.z = oar.userData.restZ - 0.28 + a * 0.72;
-  oar.position.y = oar.userData.restY - a * 0.1;
+  oar.position.z = oar.userData.restZ + (-0.28 + a * 0.72) * s;
+  oar.position.y = oar.userData.restY - a * 0.1 * s;
   const sail = boat.userData.sailMesh;
   if (sail) sail.rotation.y = -0.12 + a * 0.06 * side;
 }
@@ -274,6 +305,15 @@ export function setRodWaitPose(boat) {
   rod.rotation.x = 0.35;
   rod.rotation.y = 0.15;
   rod.rotation.z = -0.35;
+}
+
+/** k: 0 = just bit, 1 = settled back to wait pose */
+export function setRodBitePose(boat, k) {
+  setRodWaitPose(boat);
+  const rod = boat.userData.rodArm;
+  if (!rod) return;
+  const u = Math.max(0, Math.min(1, k));
+  rod.rotation.x += 0.42 * (1 - u) * (1 - u);
 }
 
 export function resetRodPose(boat) {

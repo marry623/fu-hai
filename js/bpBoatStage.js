@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { createToonGradient } from './stylekit.js';
-import { createBoat, setBoatVariant } from './boat.js?v=39h';
+import { createBoat, setBoatVariant, hullUpscale } from './boat.js?v=42h';
 import { equipFish, SLOT_ORDER, SLOT_LABELS } from './slots.js?v=39b';
 import { getFishDef } from './fishCatalog.js?v=34b';
 import { getFishPortrait } from './fishPortrait.js?v=31d';
@@ -75,10 +75,17 @@ export function createBpBoatStage(opts) {
   sea.position.y = 0.02;
   scene.add(sea);
 
+  /** Big hulls divide by their in-run upscale so the callout stage keeps its old framing. */
+  const STAGE_BOAT_SCALE = {
+    raft: 1.32,
+    heavyRaft: 1.32 / hullUpscale('heavyRaft'),
+    chargeBoat: 1.32 / hullUpscale('chargeBoat'),
+  };
+
   const boat = createBoat(gm, 'raft');
   boat.position.set(0, 0.15, 0);
   boat.rotation.y = -Math.PI * 0.35;
-  boat.scale.setScalar(1.32);
+  boat.scale.setScalar(STAGE_BOAT_SCALE.raft);
   scene.add(boat);
 
   const slotsState = Object.fromEntries(SLOT_ORDER.map((k) => [k, null]));
@@ -98,7 +105,9 @@ export function createBpBoatStage(opts) {
 
   function sync(slots, boatId, sel) {
     selectedSlot = sel || selectedSlot;
-    setBoatVariant(boat, boatId || 'raft');
+    const bid = boatId || 'raft';
+    setBoatVariant(boat, bid);
+    boat.scale.setScalar(STAGE_BOAT_SCALE[bid] ?? STAGE_BOAT_SCALE.raft);
     clearAll();
     const src = slots || {};
     for (const slot of SLOT_ORDER) {

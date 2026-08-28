@@ -3,10 +3,24 @@ import { GLTFLoader } from '../vendor/three/GLTFLoader.js';
 
 export const HULL_GLB_IDS = ['raft', 'heavyRaft', 'chargeBoat'];
 
+/**
+ * Heavy raft / charge boat read too small in-run. Hub and backpack previews divide
+ * their root scale by the same factor, so only the in-run boat grows.
+ */
+const HULL_UPSCALE = {
+  heavyRaft: 1.3,
+  chargeBoat: 1.45,
+};
+
+/** How much a hull grew past its authored size — oar mounts follow this. */
+export function hullUpscale(boatId) {
+  return HULL_UPSCALE[boatId] || 1;
+}
+
 const HULL_CONFIG = {
   raft: { url: './models/raft.glb?v=6', targetLength: 7.9 },
-  heavyRaft: { url: './models/heavy-raft.glb', targetLength: 8.4 },
-  chargeBoat: { url: './models/charge-boat.glb?v=2', targetLength: 10.5 },
+  heavyRaft: { url: './models/heavy-raft.glb', targetLength: 8.4 * hullUpscale('heavyRaft') },
+  chargeBoat: { url: './models/charge-boat.glb?v=2', targetLength: 10.5 * hullUpscale('chargeBoat') },
 };
 
 const templates = {};

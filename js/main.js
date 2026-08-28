@@ -4,15 +4,15 @@ import {
   createDuskSky, createClouds, createWater, updateWater,
   createFoamRings,
 } from './world.js';
-import { createBoat, createWakeSystem, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, resetRodPose } from './boat.js?v=39v';
-import { createPaddleController } from './paddle.js?v=29p';
+import { createBoat, createWakeSystem, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, setRodBitePose, resetRodPose } from './boat.js?v=42h';
+import { createPaddleController } from './paddle.js?v=42e';
 import { createHull, updateCorrosion, damageHull, repairHull } from './hull.js?v=16c';
 import {
   createFlotsamField, updateFlotsam, findNearestFlotsam, respawnFlotsam, rollSalvage,
 } from './flotsam.js?v=35d';
 import {
   createVortexField, updateVortices, findNearestVortex, createFishingController, CAST_AIM_DIST, tintVortexField, VORTEX_COUNT,
-} from './fishing.js?v=42a';
+} from './fishing.js?v=42e';
 import { createHazards } from './hazards.js?v=41e';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
@@ -22,7 +22,7 @@ import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS, familyOf,
 import { previewCraftOdds, rollCraft, fmtCraftPct } from './fishCraft.js?v=41c';
 import { createFamilyVfx } from './familyVfx.js?v=32p';
 import { createFishMesh } from './fishMeshes.js?v=31c';
-import { beginHitFlash, beginDeathAnim } from './monsterMeshes.js?v=41e';
+import { beginHitFlash, beginDeathAnim, createDamageFloats } from './monsterMeshes.js?v=42e';
 import { createGpuSparks } from './vfx/gpuSparks.js?v=32s';
 import { createBurstSystem, BurstMode } from './vfx/burstSphere.js?v=32s';
 import { createRewardFlight } from './rewardFlight.js?v=42d';
@@ -44,17 +44,17 @@ import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=35l';
 import { createHub } from './hub.js?v=40d';
 import { createCoverScene } from './coverScene.js?v=28m';
 import { createHubIsland } from './hubIsland.js?v=35b';
-import { createHubBoatPreview } from './hubBoatPreview.js?v=39q';
-import { createBpBoatStage } from './bpBoatStage.js?v=31e';
+import { createHubBoatPreview } from './hubBoatPreview.js?v=39s';
+import { createBpBoatStage } from './bpBoatStage.js?v=31g';
 import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=39d';
 import { ensureAllPropGlbsLoading } from './propGlb.js?v=38x';
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { applyHudTheme } from './hudTheme.js?v=42b';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=42d';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=43c';
 import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=41f';
-import * as sfx from './audio.js?v=42a';
+import * as sfx from './audio.js?v=42e';
 
 const canvas = document.getElementById('c');
 const minimapCtx = document.getElementById('minimap').getContext('2d');
@@ -145,6 +145,7 @@ const ui = {
   hud: document.getElementById('hud'),
   oarL: document.getElementById('oar-l'),
   oarR: document.getElementById('oar-r'),
+  steerKnob: document.getElementById('steer-knob'),
 };
 
 if (ui.tutGuide && ui.hud) ui.hud.appendChild(ui.tutGuide);
@@ -234,6 +235,10 @@ const legendFx = {
 const skillCdUntil = [0, 0, 0];
 let _prevLeftPulled = false;
 let _prevRightPulled = false;
+let lastPaddleCombo = 0;
+let rodBiteUntil = 0;
+let bobberBiteUntil = 0;
+let anchorSettleUntil = 0;
 
 function equippedRunCard(slot) {
   const skills = (state.started && Array.isArray(state.runSkills) && state.runSkills.length)
@@ -692,6 +697,7 @@ vRoot.visible = false;
 
 const hitSparks = createGpuSparks(scene);
 const hitBursts = createBurstSystem(scene);
+const dmgFloats = createDamageFloats(scene);
 /** Camera shake: amp decays over time (stronger on kill). */
 const camShake = { amp: 0, until: 0 };
 function addCamShake(amp, ms = 220) {
@@ -775,6 +781,9 @@ const monsterHitFx = {
         radius: 0.6,
       });
       if (!quiet) addCamShake(0.12, 110);
+      if (!quiet && (amount | 0) > 0) {
+        dmgFloats.spawn(px, y + 0.35, pz, amount, false);
+      }
       return;
     }
 
@@ -819,6 +828,9 @@ const monsterHitFx = {
     });
     const shakeAmp = (k === 'suction' ? 0.72 : 0.55) * inten;
     addCamShake(Math.min(0.85, shakeAmp), 380);
+    if (!quiet && (amount | 0) > 0) {
+      dmgFloats.spawn(px, y + 0.35, pz, amount, true);
+    }
   },
 };
 const hazards = createHazards(gradientMap, scene, monsterHitFx);
@@ -1394,6 +1406,10 @@ function applyDamage(amount, reason, quiet = false) {
   }
   if (!quiet && amount >= 2) showToast(`${reason} −${Math.round(dmg)}`);
   updateHp();
+  if (!quiet && dmg >= 2) {
+    pulseRewardHud(ui.hpText);
+    addCamShake(Math.min(0.32, dmg / 45), 180);
+  }
   if (hull.sunk) onSink();
 }
 
@@ -1420,6 +1436,13 @@ const fishing = createFishingController({
   toast: showToast,
   onMiss() {
     sfx.fishMiss();
+    if (ui.qte) {
+      ui.qte.classList.remove('qte-miss');
+      void ui.qte.offsetWidth;
+      ui.qte.classList.add('qte-miss');
+      setTimeout(() => ui.qte.classList.remove('qte-miss'), 300);
+    }
+    addCamShake(0.07, 120);
   },
   onPhase(ph) {
     if (ph === 'qte') {
@@ -1427,6 +1450,9 @@ const fishing = createFishingController({
       if (ui.qteHits) ui.qteHits.textContent = '';
       ui.btnFishCn.textContent = '收竿';
       sfx.fishBite();
+      rodBiteUntil = now() + 0.18;
+      bobberBiteUntil = now() + 0.16;
+      addCamShake(0.05, 90);
     } else if (ph === 'wait' || ph === 'cast') {
       ui.qte.classList.add('hidden');
       ui.btnFishCn.textContent = '等待';
@@ -1443,6 +1469,7 @@ const fishing = createFishingController({
   onHit(done, needed) {
     if (ui.qteHits) ui.qteHits.textContent = `${done}/${needed}`;
     pulseRewardHud(ui.qteGreen);
+    if (done < needed) sfx.uiConfirm();
     if (done >= needed) pulseQteSuccess();
   },
   onRod(on) {
@@ -1468,6 +1495,9 @@ const fishing = createFishingController({
     setRodWaitPose(boat);
     bobberMesh.visible = true;
     bobberMesh.position.set(bob.x, 0.22, bob.z);
+    vel.set(0, 0.4, 0);
+    tmp.set(bob.x, 0.12, bob.z);
+    wake.spawn(tmp, vel, 0.55);
   },
   onWaitTick(bob, near) {
     setRodWaitPose(boat);
@@ -1510,6 +1540,7 @@ const fishing = createFishingController({
       }
       renderFishList();
       pulseRewardHud();
+      sfx.fishCatch();
     };
     const shown = showCatchLift(caught, from, finishCatch);
     if (!shown) finishCatch();
@@ -1585,7 +1616,8 @@ function tryAnchor() {
   paddle.setAnchored(on);
   setAnchorIndicator(on);
   showToast(on ? '\u629b\u951a' : '\u8d77\u951a');
-  sfx.uiClick();
+  sfx.uiConfirm();
+  if (on) anchorSettleUntil = now() + 0.4;
 }
 
 function trySalvage() {
@@ -2460,6 +2492,9 @@ function doEquip() {
   state.selectedFish = -1;
   state.mods++;
   if (f.defId === 'shell') state.shellBlocks = 1;
+  sfx.uiEquip();
+  const chip = document.querySelector(`.slot-chip[data-slot="${def.slot}"]`);
+  pulseRewardHud(chip);
   showToast(res.msg);
   renderFishList();
   refreshSlots();
@@ -2756,6 +2791,7 @@ function startRun(fromCheckpoint = false) {
   fishing.reset();
   hideFishingFx();
   clearRewardFeedback();
+  lastPaddleCombo = 0;
   resetMonsterFx();
   selectedBoat = clampBoatId(meta.unlocks, meta.loadout?.boatId || selectedBoat);
   setBoatVariant(boat, selectedBoat);
@@ -3346,15 +3382,32 @@ function tick() {
     lastBoatZ = phys.z;
     state.maxZ = Math.max(state.maxZ, phys.z);
     ui.runDist.textContent = String(Math.floor(state.runDistance));
-    if (ui.comboText) ui.comboText.textContent = `×${phys.combo}`;
+    const comboNow = phys.combo | 0;
+    if (ui.comboText) {
+      ui.comboText.textContent = `×${comboNow}`;
+      ui.comboText.classList.toggle('combo-hot', comboNow >= 4);
+      if (comboNow > lastPaddleCombo) pulseRewardHud(ui.comboText);
+      else if (comboNow < lastPaddleCombo) {
+        ui.comboText.classList.remove('combo-drop');
+        void ui.comboText.offsetWidth;
+        ui.comboText.classList.add('combo-drop');
+      }
+    }
+    lastPaddleCombo = comboNow;
     ui.speed.textContent = String(Math.round(phys.speed * 4)).padStart(3, '0');
     const lp = phys.leftPhase > 0.4;
     const rp = phys.rightPhase > 0.4;
-    if ((lp && !_prevLeftPulled) || (rp && !_prevRightPulled)) sfx.paddle();
+    if ((lp && !_prevLeftPulled) || (rp && !_prevRightPulled)) {
+      sfx.paddle({ combo: comboNow });
+    }
     _prevLeftPulled = lp;
     _prevRightPulled = rp;
     ui.oarL.classList.toggle('pulled', lp);
     ui.oarR.classList.toggle('pulled', rp);
+    if (ui.steerKnob) {
+      const bias = (phys.rightPhase || 0) - (phys.leftPhase || 0);
+      ui.steerKnob.style.transform = `translateX(${bias * 10}px)`;
+    }
     setOarStroke(boat, -1, phys.leftPhase);
     setOarStroke(boat, 1, phys.rightPhase);
 
@@ -3381,10 +3434,13 @@ function tick() {
     const roll = Number.isFinite(hull.durability) && Number.isFinite(hull.maxDurability) && hull.maxDurability > 0
       ? (1 - hull.durability / hull.maxDurability) * 0.15
       : 0;
+    const settle = paddle.anchored && now() < anchorSettleUntil
+      ? (1 - (anchorSettleUntil - now()) / 0.4) * -roll
+      : 0;
     boat.rotation.set(
       0,
       phys.yaw + Math.PI,
-      roll
+      roll + settle
         + (monsterFx.tiltAmt || 0) * Math.sin((monsterFx.tiltUntil - now()) * 6)
         + (now() < monsterFx.shakeUntil ? Math.sin(t * 22) * 0.18 : 0)
     );
@@ -3393,7 +3449,7 @@ function tick() {
     foam.rotation.y = phys.yaw;
 
     wakeAcc += dt;
-    if (phys.speed > 3 && wakeAcc > 0.08) {
+    if (!paddle.anchored && phys.speed > 3 && wakeAcc > 0.08) {
       wakeAcc = 0;
       vel.set(Math.sin(phys.yaw) * phys.speed, 0, Math.cos(phys.yaw) * phys.speed);
       tmp.set(phys.x - Math.sin(phys.yaw) * 2, 0.15, phys.z - Math.cos(phys.yaw) * 2);
@@ -3406,10 +3462,12 @@ function tick() {
     fishing.update(dt, bobHit);
     updateAimPreview();
     if (fishing.phase === 'qte') {
-      setRodWaitPose(boat);
+      const biteK = rodBiteUntil > now() ? 1 - (rodBiteUntil - now()) / 0.18 : 1;
+      setRodBitePose(boat, biteK);
       bobberMesh.visible = true;
       const bob = fishing.bobber;
-      bobberMesh.position.set(bob.x, 0.18 + Math.sin(performance.now() * 0.012) * 0.1, bob.z);
+      const dip = bobberBiteUntil > now() ? -0.12 * (bobberBiteUntil - now()) / 0.16 : 0;
+      bobberMesh.position.set(bob.x, 0.18 + dip + Math.sin(performance.now() * 0.012) * 0.1, bob.z);
       if (boat.userData.rodTip) boat.userData.rodTip.getWorldPosition(tipWorld);
       setFishLine(tipWorld.x, tipWorld.y, tipWorld.z, bob.x, bobberMesh.position.y, bob.z);
     }
@@ -3615,6 +3673,7 @@ function tick() {
     rewardFlight.update(dt);
     hitSparks.update(dt);
     hitBursts.update(dt);
+    dmgFloats.update(dt);
     familyVfx.update(dt, paddle.state?.speed || 0);
     updateFlotsam(flotsam, t);
     updateVortices(vortices, t);
@@ -3793,6 +3852,9 @@ function tryCastSkill() {
   skillCdUntil[state.weapon] = t + card.cd;
   updateWeaponCds();
   sfx.skill();
+  addCamShake(0.08, 90);
+  const chip = document.querySelector(`.weapon-chip[data-w="${state.weapon}"]`);
+  pulseRewardHud(chip);
   if (card.id === 'ice') {
     let iceAnnounced = false;
     const hitEnemies = new Set();

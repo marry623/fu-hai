@@ -173,6 +173,7 @@ export function createFishingController(hooks) {
     speed: 0.5,
     hitsNeeded: 1,
     hitsDone: 0,
+    freezeT: 0,
     pendingFish: null,
     depthZone: 0,
     aim: { x: 0, z: 0 },
@@ -183,6 +184,7 @@ export function createFishingController(hooks) {
   function reset() {
     st.phase = 'idle';
     st.hitsDone = 0;
+    st.freezeT = 0;
     st.nearVortex = false;
     st.castT = 0;
     st.waitElapsed = 0;
@@ -210,6 +212,7 @@ export function createFishingController(hooks) {
     st.speed = (1 / q.cycle) * 0.85;
     st.hitsNeeded = q.hits;
     st.hitsDone = 0;
+    st.freezeT = 0;
     st.greenCenter = 0.35 + Math.random() * 0.3;
     st.pointer = 0;
     st.dir = 1;
@@ -240,6 +243,8 @@ export function createFishingController(hooks) {
       hooks.toast?.(`判定 ${st.hitsDone}/${st.hitsNeeded}`);
       st.greenCenter = 0.3 + Math.random() * 0.4;
       st.pointer = 0;
+      st.freezeT = 0.07;
+      if (st.hitsDone < st.hitsNeeded) shrinkGreen(0.9);
       if (st.hitsDone >= st.hitsNeeded) {
         hooks.onCatch?.(st.pendingFish);
         reset();
@@ -295,6 +300,11 @@ export function createFishingController(hooks) {
     }
 
     if (st.phase === 'qte') {
+      if (st.freezeT > 0) {
+        st.freezeT -= dt;
+        hooks.onQte?.(st.pointer, st.greenCenter, st.greenWidth);
+        return;
+      }
       st.pointer += st.dir * st.speed * dt;
       if (st.pointer >= 1) { st.pointer = 1; st.dir = -1; }
       if (st.pointer <= 0) { st.pointer = 0; st.dir = 1; }

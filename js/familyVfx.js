@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { FAMILIES } from './fishCatalog.js?v=34b';
 import { createGpuSparks } from './vfx/gpuSparks.js?v=32p';
 import { createBurstSystem, BurstMode } from './vfx/burstSphere.js?v=32p';
-import { BOAT_WATERLINE_Y } from './boat.js?v=39h';
+import { BOAT_WATERLINE_Y } from './boat.js?v=42h';
 
 const R_ORDER = 11;
 /** Boat-local Y for water surface (foam sits at world ~0.05). */

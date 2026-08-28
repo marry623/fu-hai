@@ -197,7 +197,10 @@ export function uiSell() { playSfx('uiSell', { gapMs: 70 }); }
 export function uiDeny() { playSfx('uiDeny', { gapMs: 80 }); }
 export function uiEquip() { playSfx('uiEquip', { gapMs: 60 }); }
 
-export function paddle() { playSfx('paddle', { gapMs: 160 }); }
+export function paddle(opts = {}) {
+  const combo = opts.combo | 0;
+  playSfx('paddle', { gapMs: combo >= 4 ? 90 : 160 });
+}
 export function fishCast() { playSfx('fishCast', { gapMs: 120 }); }
 export function fishBite() { playSfx('fishBite', { gapMs: 100 }); }
 export function fishCatch() { playSfx('fishCatch', { gapMs: 100 }); }

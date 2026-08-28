@@ -1,7 +1,7 @@
 /** Hub boat showcase — loadout preview with mount projections for callouts */
 
 import * as THREE from 'three';
-import { createBoat, setBoatVariant, BOAT_WATERLINE_Y } from './boat.js?v=39h';
+import { createBoat, setBoatVariant, BOAT_WATERLINE_Y, hullUpscale } from './boat.js?v=42h';
 import { getFishDef } from './fishCatalog.js?v=34b';
 import { equipFish, SLOT_ORDER } from './slots.js?v=39b';
 
@@ -23,11 +23,14 @@ export function createHubBoatPreview(scene, gradientMap) {
   boat.scale.setScalar(1.35);
   scene.add(boat);
 
-  /** Prep showcase only — heavy raft reads small vs sailboat/charge at same scale. */
+  /**
+   * Prep showcase only — heavy raft reads small vs sailboat/charge at same scale.
+   * Big hulls divide by their in-run upscale so the prep stage keeps its old framing.
+   */
   const PREP_BOAT_SCALE = {
     raft: 1.35,
-    heavyRaft: 1.85,
-    chargeBoat: 1.35,
+    heavyRaft: 1.85 / hullUpscale('heavyRaft'),
+    chargeBoat: 1.35 / hullUpscale('chargeBoat'),
   };
 
   /** @type {Record<string, object|null>} */
