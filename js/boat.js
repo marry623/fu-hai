@@ -233,22 +233,24 @@ function clearOarChildren(oar) {
 
 function fillOarVisual(oar, gradientMap, side) {
   clearOarChildren(oar);
+  // Shaft and blade share one arm so the blade always sits on the shaft tip.
+  const arm = new THREE.Group();
+  arm.position.set(side * 0.2, -0.3, 0.45);
+  arm.rotation.z = side * 0.4;
+  arm.rotation.x = 0.45;
+  oar.add(arm);
   const shaft = new THREE.Mesh(
     new THREE.CylinderGeometry(0.04, 0.05, 2.1, 5),
     toonMat(0x7a4a22, gradientMap)
   );
-  shaft.rotation.z = side * 0.4;
-  shaft.rotation.x = 0.45;
-  shaft.position.set(side * 0.2, -0.3, 0.45);
-  oar.add(shaft);
+  arm.add(shaft);
   addOutline(shaft, 1.15);
   const blade = new THREE.Mesh(
     new THREE.BoxGeometry(0.1, 0.42, 0.28),
     toonMat(0x9a6030, gradientMap)
   );
-  blade.position.set(side * 0.42, -1.05, 1.2);
-  blade.rotation.x = 0.5;
-  oar.add(blade);
+  blade.position.y = -1.22;
+  arm.add(blade);
   addOutline(blade, 1.12);
 }
 

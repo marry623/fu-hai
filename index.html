@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>浮骸 · 海上肉鸽</title>
-  <link rel="stylesheet" href="css/style.css?v=43c" />
+  <link rel="stylesheet" href="css/style.css?v=43d" />
 </head>
 <body>
   <div id="game-root">
@@ -441,8 +441,8 @@
     window.addEventListener('unhandledrejection', (e) => show(e.reason && e.reason.stack || e.reason));
     const fileHint = '请勿直接双击 index.html。运行项目里的 play.bat，或打开 http://127.0.0.1:8787/\nChrome 在 file:// 下无法加载 ES 模块。';
     const urls = location.protocol === 'file:'
-      ? ['./js/main.js', './js/main.js?v=43c']
-      : ['./js/main.js?v=43c'];
+      ? ['./js/main.js', './js/main.js?v=43d']
+      : ['./js/main.js?v=43d'];
     if (location.protocol === 'file:') show(fileHint);
     let last = null;
     let ok = false;

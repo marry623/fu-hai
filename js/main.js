@@ -4,7 +4,7 @@ import {
   createDuskSky, createClouds, createWater, updateWater,
   createFoamRings,
 } from './world.js';
-import { createBoat, createWakeSystem, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, setRodBitePose, resetRodPose } from './boat.js?v=42h';
+import { createBoat, createWakeSystem, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, setRodBitePose, resetRodPose } from './boat.js?v=42i';
 import { createPaddleController } from './paddle.js?v=42e';
 import { createHull, updateCorrosion, damageHull, repairHull } from './hull.js?v=16c';
 import {
@@ -52,7 +52,7 @@ import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { applyHudTheme } from './hudTheme.js?v=42b';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=43c';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=43d';
 import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=41f';
 import * as sfx from './audio.js?v=42e';
 
