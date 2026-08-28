@@ -3760,20 +3760,70 @@ html, body {
   overflow: auto;
 }
 .hub-warehouse-stage .bp-craft {
+  --bp-craft-cell: clamp(96px, 12vw, 180px);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   padding: 4px 2px 12px;
+  overflow: hidden;
 }
-.hub-warehouse-stage .bp-craft .bp-cell,
-.hub-warehouse-stage .bp-craft .bp-cell.empty {
-  width: auto;
+.hub-warehouse-stage .bp-craft-board {
+  flex: 1;
   min-height: 0;
-  aspect-ratio: auto;
+  gap: 28px;
 }
-.hub-fs-left-warehouse .bp-btn {
-  width: 100%;
-  margin-top: 6px;
+/* Square thumbs keep the polaroid proportion used by every other warehouse card.
+   Height is derived from the column width instead of aspect-ratio: during grid row
+   sizing some Chrome builds treat the ratio height as 0 and collapse the row. */
+.hub-warehouse-stage .bp-craft-slots .bp-thumb,
+.hub-warehouse-stage .bp-craft-preview .bp-thumb {
+  height: calc(var(--bp-craft-cell) - 16px);
+}
+.hub-warehouse-stage .bp-craft-slots {
+  gap: 12px;
+}
+.hub-warehouse-stage .bp-craft-label {
+  font-size: 13px;
+}
+.hub-warehouse-stage .bp-craft-arrow {
+  font-size: 30px;
+}
+.bp-craft-odds {
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.72);
+}
+.bp-craft-acts {
+  display: flex;
+  justify-content: center;
+  gap: 8%;
+  padding: 0 4px 4px;
+}
+.bp-craft-acts .bp-btn {
+  width: min(260px, 26%);
+  padding: 14px 6px;
+  font-size: 15px;
+}
+.hub-craft-bag {
+  --bag-cell: 128px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, var(--bag-cell));
+  /* Auto rows would shrink back to min-content once the list scrolls, letting each
+     card overlap the row below it. */
+  grid-auto-rows: max-content;
+  justify-content: space-evenly;
+  gap: 10px;
+  align-content: start;
+  padding-right: 2px;
+}
+.hub-craft-bag .bp-thumb {
+  height: calc(var(--bag-cell) - 16px);
 }
 .hub-wh-grid.bp-grid,
 .hub-drawer .hub-wh-grid {

@@ -1126,64 +1126,73 @@ export function createHub(deps) {
     return `${famChip}<div class="bp-polaroid"><div class="bp-thumb">${thumb}</div><div class="bp-cell-name">${fish.name}</div><div class="bp-rarity-bar r${rarity}"></div></div>`;
   }
 
-  function renderHubCraftClip(meta, fish) {
+  function doHubCraft() {
+    pruneHubCraftSlots(deps.getMeta().warehouse?.fish || []);
+    const indices = [...new Set(hubCraftSlots.filter((i) => i != null))];
+    const r = craftWarehouseFish(deps.getMeta(), indices);
+    if (!r.ok) {
+      deps.toast(r.msg || '放入 2–4 条鱼获');
+      sfx.uiDeny();
+      return;
+    }
+    hubCraftSlots = [null, null, null, null];
+    hubCraftPreview = r.fish;
+    clearTimeout(hubCraftPreviewTimer);
+    hubCraftPreviewTimer = setTimeout(() => {
+      hubCraftPreview = null;
+      if (warehouseTab === 'craft') render();
+    }, 800);
+    sfx.fishCatch();
+    if (r.newIds?.length) deps.toast(`合成新鱼种！${r.fish.name}`);
+    else if (r.hidden) deps.toast(`合成隐藏！${r.fish.name}`);
+    else deps.toast(`合成 ${r.fish.name}（${rarityStars(r.rarity)}）`);
+    deps.setMeta(r.meta);
+    render();
+  }
+
+  /** Craft tab borrows the clip panel as the material source. */
+  function renderHubCraftBag(fish) {
     const panel = els.clipPanels.warehouse;
     if (!panel) return;
-    pruneHubCraftSlots(fish);
-    const mats = hubCraftSlots.map((i) => (i == null ? null : fish[i])).filter(Boolean);
-    const odds = previewCraftOdds(mats);
-    const n = mats.length;
-    const lines = odds
-      ? [
-        `降 1 阶 ${fmtCraftPct(odds.down)}（${rarityStars(odds.rarityDown)}）`,
-        `同阶 ${fmtCraftPct(odds.same)}（${rarityStars(odds.raritySame)}）`,
-        `升 1 阶 ${fmtCraftPct(odds.up)}（${rarityStars(odds.rarityUp)}）`,
-        `隐藏六星 ${fmtCraftPct(odds.hidden)}`,
-      ]
-      : ['放入 2–4 条鱼获'];
-    const tag = n < 2 ? '至少放入 2 条' : `最高 ${rarityStars(odds.R)} · ${n} 条`;
+    const used = new Set(hubCraftSlots.filter((i) => i != null));
     panel.replaceChildren();
-    panel.innerHTML = `
-      <h3 class="hub-clip-h">合成台</h3>
-      <p class="hub-fs-blurb">${n} / 4 · ${tag}</p>
-      <p class="hub-fs-blurb">产物从全图鉴抽取，含裂口传说与海沟隐藏。</p>
-      <p class="hub-fs-blurb">${lines.join('<br>')}</p>
-      <button type="button" class="bp-btn bright" id="hub-wh-craft" ${n >= 2 ? '' : 'disabled'}>合成</button>
-      <button type="button" class="bp-btn dim" id="hub-wh-craft-clear" ${n > 0 ? '' : 'disabled'}>清空</button>`;
-    panel.querySelector('#hub-wh-craft')?.addEventListener('click', () => {
-      pruneHubCraftSlots(deps.getMeta().warehouse?.fish || []);
-      const indices = [...new Set(hubCraftSlots.filter((i) => i != null))];
-      const r = craftWarehouseFish(deps.getMeta(), indices);
-      if (!r.ok) {
-        deps.toast(r.msg || '放入 2–4 条鱼获');
-        sfx.uiDeny();
-        return;
+    const h = document.createElement('h3');
+    h.className = 'hub-clip-h';
+    h.textContent = '背包';
+    const hint = document.createElement('p');
+    hint.className = 'hub-fs-blurb';
+    hint.textContent = '仓库鱼获 · 点击放入材料槽';
+    const grid = document.createElement('div');
+    grid.className = 'hub-craft-bag';
+    const pickable = fish.map((f, i) => ({ f, i })).filter((row) => !used.has(row.i));
+    const cells = Math.max(6, Math.ceil((pickable.length + 1) / 2) * 2);
+    for (let p = 0; p < cells; p++) {
+      const row = pickable[p];
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'bp-cell' + (row ? '' : ' empty');
+      btn.innerHTML = `<span class="bp-tape top"></span>${hubCraftThumb(row ? row.f : null, '—')}`;
+      if (row) {
+        btn.addEventListener('click', () => {
+          sfx.uiClick();
+          const empty = hubCraftSlots.findIndex((x) => x == null);
+          if (empty < 0) {
+            deps.toast('四个槽已满');
+            sfx.uiDeny();
+            return;
+          }
+          hubCraftSlots[empty] = row.i;
+          render();
+        });
       }
-      hubCraftSlots = [null, null, null, null];
-      hubCraftPreview = r.fish;
-      clearTimeout(hubCraftPreviewTimer);
-      hubCraftPreviewTimer = setTimeout(() => {
-        hubCraftPreview = null;
-        if (warehouseTab === 'craft') render();
-      }, 800);
-      sfx.fishCatch();
-      if (r.newIds?.length) deps.toast(`合成新鱼种！${r.fish.name}`);
-      else if (r.hidden) deps.toast(`合成隐藏！${r.fish.name}`);
-      else deps.toast(`合成 ${r.fish.name}（${rarityStars(r.rarity)}）`);
-      deps.setMeta(r.meta);
-      render();
-    });
-    panel.querySelector('#hub-wh-craft-clear')?.addEventListener('click', () => {
-      sfx.uiClick();
-      hubCraftSlots = [null, null, null, null];
-      render();
-    });
+      grid.appendChild(btn);
+    }
+    panel.append(h, hint, grid);
   }
 
   function renderWarehouseCraft(meta) {
     const fish = meta.warehouse?.fish || [];
     pruneHubCraftSlots(fish);
-    const used = new Set(hubCraftSlots.filter((i) => i != null));
     els.warehouse.className = 'bp-craft';
     els.warehouse.replaceChildren();
 
@@ -1211,7 +1220,7 @@ export function createHub(deps) {
           render();
           return;
         }
-        deps.toast('点下方鱼获放入');
+        deps.toast('点右侧背包放入');
       });
       slotsWrap.appendChild(btn);
     }
@@ -1240,40 +1249,38 @@ export function createHub(deps) {
     board.appendChild(outCol);
     els.warehouse.appendChild(board);
 
-    const sep = document.createElement('div');
-    sep.className = 'bp-craft-sep';
-    sep.textContent = '仓库鱼类 · 点击放入';
-    els.warehouse.appendChild(sep);
+    const mats = hubCraftSlots.map((i) => (i == null ? null : fish[i])).filter(Boolean);
+    const odds = previewCraftOdds(mats);
+    const n = mats.length;
+    const info = document.createElement('p');
+    info.className = 'bp-craft-odds';
+    info.textContent = odds
+      ? `${n} / 4 · 最高 ${rarityStars(odds.R)} · 降 1 阶 ${fmtCraftPct(odds.down)} · 同阶 ${fmtCraftPct(odds.same)} · 升 1 阶 ${fmtCraftPct(odds.up)} · 隐藏六星 ${fmtCraftPct(odds.hidden)}`
+      : `${n} / 4 · 从右侧背包放入 2–4 条鱼获，产物从全图鉴抽取`;
+    els.warehouse.appendChild(info);
 
-    const picker = document.createElement('div');
-    picker.className = 'bp-craft-picker';
-    const pickable = fish.map((f, i) => ({ f, i })).filter((row) => !used.has(row.i));
-    const cells = Math.max(10, Math.ceil((pickable.length + 1) / 5) * 5);
-    for (let p = 0; p < cells; p++) {
-      const row = pickable[p];
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'bp-cell' + (row ? '' : ' empty');
-      btn.innerHTML = row
-        ? `<span class="bp-tape top"></span>${hubCraftThumb(row.f)}`
-        : `<span class="bp-tape top"></span>${hubCraftThumb(null, '—')}`;
-      if (row) {
-        btn.addEventListener('click', () => {
-          sfx.uiClick();
-          const empty = hubCraftSlots.findIndex((x) => x == null);
-          if (empty < 0) {
-            deps.toast('四个槽已满');
-            sfx.uiDeny();
-            return;
-          }
-          hubCraftSlots[empty] = row.i;
-          render();
-        });
-      }
-      picker.appendChild(btn);
-    }
-    els.warehouse.appendChild(picker);
-    renderHubCraftClip(meta, fish);
+    const acts = document.createElement('div');
+    acts.className = 'bp-craft-acts';
+    const craftBtn = document.createElement('button');
+    craftBtn.type = 'button';
+    craftBtn.className = 'bp-btn bright';
+    craftBtn.textContent = '合成';
+    craftBtn.disabled = n < 2;
+    craftBtn.addEventListener('click', doHubCraft);
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'bp-btn dim';
+    clearBtn.textContent = '清空';
+    clearBtn.disabled = n < 1;
+    clearBtn.addEventListener('click', () => {
+      sfx.uiClick();
+      hubCraftSlots = [null, null, null, null];
+      render();
+    });
+    acts.append(craftBtn, clearBtn);
+    els.warehouse.appendChild(acts);
+
+    renderHubCraftBag(fish);
   }
 
   function renderWarehouse(meta) {

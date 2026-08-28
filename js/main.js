@@ -41,7 +41,7 @@ import {
   chargeZoneTicket, canDepartZone, saveMeta,
 } from './meta.js?v=43m';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=35l';
-import { createHub } from './hub.js?v=43m';
+import { createHub } from './hub.js?v=43q';
 import { createCoverScene } from './coverScene.js?v=43l';
 import { createHubIsland } from './hubIsland.js?v=43l';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=39s';
@@ -53,7 +53,7 @@ import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { applyHudTheme } from './hudTheme.js?v=42b';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=43p';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=43t';
 import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=43n';
 import * as sfx from './audio.js?v=42e';
 
