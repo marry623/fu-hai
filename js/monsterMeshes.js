@@ -12,6 +12,20 @@ let _sharkGlbTemplate = null;
   _loader.load(
     './models/anglerfish-shark.glb?v=1',
     (gltf) => {
+      // GLB contains SkinnedMesh (rigged). Three.js clone() cannot correctly
+      // duplicate a skeleton, so demote every SkinnedMesh to a regular Mesh
+      // first (keeps the bind-pose geometry, drops animation data).
+      const skinned = [];
+      gltf.scene.traverse((o) => { if (o.isSkinnedMesh) skinned.push(o); });
+      for (const sm of skinned) {
+        const m = new THREE.Mesh(sm.geometry, sm.material);
+        m.name = sm.name;
+        m.position.copy(sm.position);
+        m.quaternion.copy(sm.quaternion);
+        m.scale.copy(sm.scale);
+        if (sm.parent) { sm.parent.add(m); sm.parent.remove(sm); }
+      }
+
       const root = new THREE.Group();
       root.add(gltf.scene);
       // Auto-scale: target longest axis = 4.5 world units
@@ -27,7 +41,7 @@ let _sharkGlbTemplate = null;
       root.position.x -= (box2.min.x + box2.max.x) * 0.5;
       root.position.y -= box2.min.y;
       root.position.z -= (box2.min.z + box2.max.z) * 0.5;
-      root.rotation.y = Math.PI;  // face forward
+      root.rotation.y = Math.PI;
       _sharkGlbTemplate = root;
     },
     undefined,
