@@ -126,6 +126,11 @@ export function isPropGlbReady(id) {
   return !!templates[id];
 }
 
+/** Read from the template, not a clone — clones pay a JSON deep copy per instance. */
+export function getPropCollProfile(id) {
+  return templates[id]?.userData?.collProfile || null;
+}
+
 export function onPropGlbReady(cb) {
   readyListeners.add(cb);
   for (const id of Object.keys(templates)) cb(id);
@@ -211,11 +216,58 @@ function toBasicMat(source, fallbackHex) {
   });
 }
 
+// 32 bands: a 40m tree scaled up gets ~1.2m slices, fine enough that the disc
+// stops at the trunk instead of swallowing the first branch fork.
+const COLL_BANDS = 32;
+/** Percentile per band — a single stray root or drooping branch must not widen it. */
+const COLL_PERCENTILE = 0.9;
+
+/**
+ * Height-to-radius profile in base units: for each of COLL_BANDS slices, how far
+ * the geometry reaches from the model's vertical axis. Collision reads only the
+ * slices a hull can strike, so a wide canopy on a thin trunk stops producing a
+ * huge invisible wall. Empty bands inherit the nearest filled band below.
+ * Plain arrays only — Object3D.copy JSON-clones userData and mangles typed arrays.
+ */
+function buildCollProfile(meshes, box) {
+  const h = Math.max(box.max.y - box.min.y, 1e-6);
+  // Radii are measured from the geometry origin, not the AABB center: scatter
+  // code places the prop (and its disc) on that origin and drops the recentering
+  // offset below. For a tree the origin is the trunk, which is the whole point.
+  const buckets = Array.from({ length: COLL_BANDS }, () => []);
+  for (const mesh of meshes) {
+    const pos = mesh.geometry.getAttribute('position');
+    if (!pos) continue;
+    for (let i = 0; i < pos.count; i++) {
+      let band = Math.floor(((pos.getY(i) - box.min.y) / h) * COLL_BANDS);
+      if (band < 0) band = 0;
+      else if (band >= COLL_BANDS) band = COLL_BANDS - 1;
+      buckets[band].push(Math.hypot(pos.getX(i), pos.getZ(i)));
+    }
+  }
+  const bands = new Array(COLL_BANDS).fill(0);
+  let lastFilled = 0;
+  for (let b = 0; b < COLL_BANDS; b++) {
+    const list = buckets[b];
+    if (!list.length) {
+      bands[b] = lastFilled;
+      continue;
+    }
+    list.sort((a, c) => a - c);
+    bands[b] = list[Math.min(list.length - 1, Math.floor(list.length * COLL_PERCENTILE))];
+    lastFilled = bands[b];
+  }
+  // y0 lets callers map a world height back to a band: scatter code overrides
+  // the recentering below, so geometry often starts below the waterline.
+  return { h, y0: box.min.y, bands };
+}
+
 function bakeGltfScene(source) {
   const root = new THREE.Group();
   root.name = 'propGlbRoot';
   source.updateMatrixWorld(true);
 
+  const meshes = [];
   source.traverse((o) => {
     if (!o.isMesh) return;
     const geo = o.geometry.clone();
@@ -225,6 +277,7 @@ function bakeGltfScene(source) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     root.add(mesh);
+    meshes.push(mesh);
   });
 
   root.updateMatrixWorld(true);
@@ -233,6 +286,7 @@ function bakeGltfScene(source) {
   box.getSize(size);
   root.userData.baseSize = Math.max(size.x, size.y, size.z, 1e-6);
   root.userData.baseSizeXZ = Math.max(size.x, size.z, 1e-6);
+  root.userData.collProfile = buildCollProfile(meshes, box);
   root.position.x -= (box.min.x + box.max.x) * 0.5;
   root.position.z -= (box.min.z + box.max.z) * 0.5;
   root.position.y -= box.min.y;

@@ -4,7 +4,7 @@ import {
   createDuskSky, createClouds, createWater, updateWater,
   createFoamRings,
 } from './world.js';
-import { createBoat, createWakeSystem, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, setRodBitePose, resetRodPose } from './boat.js?v=42i';
+import { createBoat, createWakeSystem, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, setRodBitePose, resetRodPose } from './boat.js?v=43k';
 import { createPaddleController } from './paddle.js?v=42e';
 import { createHull, updateCorrosion, damageHull, repairHull } from './hull.js?v=16c';
 import {
@@ -17,7 +17,7 @@ import { createHazards } from './hazards.js?v=41f';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot, ramCdForRarity,
-} from './slots.js?v=39b';
+} from './slots.js?v=41h';
 import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS, familyOf, familyLabel } from './fishCatalog.js?v=41c';
 import { previewCraftOdds, rollCraft, fmtCraftPct } from './fishCraft.js?v=41c';
 import { createFamilyVfx } from './familyVfx.js?v=32p';
@@ -46,13 +46,14 @@ import { createCoverScene } from './coverScene.js?v=28m';
 import { createHubIsland } from './hubIsland.js?v=35b';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=39s';
 import { createBpBoatStage } from './bpBoatStage.js?v=31g';
-import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=39d';
-import { ensureAllPropGlbsLoading } from './propGlb.js?v=38x';
+import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=43k';
+import { ensureAllPropGlbsLoading } from './propGlb.js?v=43k';
+import { hullLength } from './hullGlb.js?v=43k';
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { applyHudTheme } from './hudTheme.js?v=42b';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=43g';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=43k';
 import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=41f';
 import * as sfx from './audio.js?v=42e';
 
@@ -103,6 +104,10 @@ const ui = {
   bpMeta: document.getElementById('bp-meta'),
   bpSlotPick: document.getElementById('bp-slot-pick'),
   bpSlotRow: document.getElementById('bp-slot-row'),
+  bpFeedPick: document.getElementById('bp-feed-pick'),
+  bpFeedLabel: document.querySelector('#bp-feed-pick .bp-slot-label'),
+  bpFeedRow: document.getElementById('bp-feed-row'),
+  bpFeedEmpty: document.getElementById('bp-feed-empty'),
   btnCloseBp: document.getElementById('bp-close'),
   btnBackpack: document.getElementById('btn-backpack'),
   btnDiscard: document.getElementById('btn-discard'),
@@ -913,6 +918,7 @@ const bpBoatStage = createBpBoatStage({
   grid: ui.bpGrid,
   gradientMap,
   onSelectSlot: (slot) => {
+    feedPickerOpen = false;
     state.selectedSlot = slot;
     state.selectedFish = -1;
     state.selectedSupply = null;
@@ -1842,6 +1848,7 @@ function setBackpackOpen(open) {
     }
     renderBackpack();
   } else {
+    feedPickerOpen = false;
     bpBoatStage?.setActive(false);
   }
 }
@@ -1868,6 +1875,7 @@ function isBagpackKey(e) {
 
 let craftPreviewFish = null;
 let craftPreviewTimer = 0;
+let feedPickerOpen = false;
 
 function remapCraftSlots(removedIndex) {
   if (removedIndex == null || removedIndex < 0) return;
@@ -1931,6 +1939,7 @@ function renderBackpack() {
     if (allowed) {
       b.onclick = () => {
         sfx.uiClick();
+        feedPickerOpen = false;
         state.selectedSlot = slot;
         refreshSlots();
         renderBackpack();
@@ -1950,6 +1959,7 @@ function renderBackpack() {
         item: f,
         selected: i === state.selectedFish && !!f,
         onClick: f ? () => {
+          if (state.selectedFish !== i) feedPickerOpen = false;
           state.selectedFish = i;
           state.selectedSupply = null;
           const d = getFishDef(f.defId);
@@ -2163,6 +2173,73 @@ function makePolaroidCell({ kind, index, item, selected, onClick, badge, emptyLa
   return btn;
 }
 
+function feedPickerMode() {
+  if (state.backpackTab === 'slots') {
+    const target = state.slots[state.selectedSlot];
+    return target && (target.vitality ?? 0) < 100 ? 'source' : null;
+  }
+  if (state.backpackTab === 'catch') {
+    const held = state.fishHold[state.selectedFish];
+    return held && getFishDef(held.defId).category === 'food' ? 'target' : null;
+  }
+  return null;
+}
+
+function renderFeedPicker() {
+  if (!ui.bpFeedPick || !ui.bpFeedRow || !ui.bpFeedEmpty) return;
+  const mode = feedPickerMode();
+  const open = feedPickerOpen && !!mode;
+  ui.bpFeedPick.classList.toggle('hidden', !open);
+  ui.btnFeed.textContent = open ? '\u6536\u8d77\u6295\u5582' : '\u6295\u5582';
+  ui.bpFeedRow.replaceChildren();
+  if (!open) {
+    ui.bpFeedEmpty.classList.add('hidden');
+    return;
+  }
+
+  if (mode === 'source') {
+    ui.bpFeedLabel.textContent = '\u9009\u62e9\u6295\u5582\u9c7c';
+    ui.bpFeedEmpty.textContent = '\u9c7c\u83b7\u4e2d\u6ca1\u6709\u53ef\u6295\u5582\u7684\u9c7c';
+    const food = state.fishHold
+      .map((fish, index) => ({ fish, index }))
+      .filter(({ fish }) => getFishDef(fish.defId).category === 'food');
+    ui.bpFeedEmpty.classList.toggle('hidden', food.length > 0);
+    for (const { fish, index } of food) {
+      const cell = makePolaroidCell({
+        kind: 'fish',
+        index,
+        item: fish,
+        selected: false,
+        onClick: () => feedFishAtIndex(index),
+      });
+      cell.classList.add('bp-feed-cell');
+      cell.title = `\u6295\u5582 ${fish.name}`;
+      ui.bpFeedRow.appendChild(cell);
+    }
+    return;
+  }
+
+  ui.bpFeedLabel.textContent = '\u9009\u62e9\u6295\u5582\u76ee\u6807';
+  ui.bpFeedEmpty.textContent = '\u6ca1\u6709\u9700\u8981\u6295\u5582\u7684\u5df2\u6539\u88c5\u9c7c';
+  const targets = SLOT_ORDER
+    .map((slot) => ({ slot, fish: state.slots[slot] }))
+    .filter(({ fish }) => fish && (fish.vitality ?? 0) < 100);
+  ui.bpFeedEmpty.classList.toggle('hidden', targets.length > 0);
+  for (const { slot, fish } of targets) {
+    const cell = makePolaroidCell({
+      kind: 'fish',
+      index: SLOT_ORDER.indexOf(slot),
+      item: fish,
+      selected: slot === state.selectedSlot,
+      badge: SLOT_LABELS[slot],
+      onClick: () => feedFishAtIndex(state.selectedFish, slot),
+    });
+    cell.classList.add('bp-feed-cell');
+    cell.title = `${SLOT_LABELS[slot]} \u00b7 ${fish.name} \u6d3b\u6027${Math.floor(fish.vitality ?? 0)}`;
+    ui.bpFeedRow.appendChild(cell);
+  }
+}
+
 function renderBackpackDetail() {
   const tab = state.backpackTab;
   let show = false;
@@ -2206,6 +2283,8 @@ function renderBackpackDetail() {
     const f = state.slots[state.selectedSlot];
     const def = getFishDef(f.defId);
     const r = RARITY[f.rarity] || RARITY[1];
+    const vitality = Math.floor(f.vitality ?? 0);
+    const canFeed = vitality < 100;
     fillDetail({
       name: f.name,
       serial: `槽· ${SLOT_LABELS[state.selectedSlot]}`,
@@ -2215,10 +2294,17 @@ function renderBackpackDetail() {
       ribbon: r.label,
       tagline: `已绑定 · ${categoryLabel(def.category)}${familyLabel(def) ? ` · ${familyLabel(def)}` : ''}`,
       desc: fishBlurb(def),
-      meta: `活性${Math.floor(f.vitality ?? 0)} / 100<br>${familyLabel(def) ? `族：${familyLabel(def)}（同族双装共鸣）<br>` : ''}力竭后会自动脱落回海里。`,
+      meta: `\u6d3b\u6027${vitality} / 100<br>${familyLabel(def) ? `\u65cf\uff1a${familyLabel(def)}\uff08\u540c\u65cf\u53cc\u88c5\u5171\u9e23\uff09<br>` : ''}${canFeed ? '\u6d3b\u6027\u672a\u6ee1\uff0c\u53ef\u9009\u62e9\u9c7c\u83b7\u4e2d\u7684\u98df\u7269\u9c7c\u6295\u5582\u3002' : '\u5f53\u524d\u6d3b\u6027\u5df2\u6ee1\uff0c\u4e0d\u9700\u8981\u6295\u5582\u3002'}<br>\u529b\u7aed\u540e\u4f1a\u81ea\u52a8\u8131\u843d\u56de\u6d77\u91cc\u3002`,
       showSlots: false,
       fish: f,
-      actions: { discard: false, eat: false, equip: false, feed: false, use: false },
+      actions: {
+        discard: false,
+        eat: false,
+        equip: false,
+        feed: canFeed,
+        feedVisible: true,
+        use: false,
+      },
     });
   } else if (tab === 'craft') {
     show = true;
@@ -2295,6 +2381,7 @@ function renderBackpackDetail() {
 
   ui.bpEmpty.classList.toggle('hidden', show);
   ui.bpDetail.classList.toggle('hidden', !show);
+  renderFeedPicker();
   if (tab !== 'craft') {
     if (ui.btnCraft) ui.btnCraft.style.display = 'none';
     if (ui.btnCraftClear) ui.btnCraftClear.style.display = 'none';
@@ -2334,6 +2421,7 @@ function fillDetail({ name, serial, color, defId, itemId, rarity, ribbon, taglin
     eat: !!actions.eat,
     equip: !!actions.equip,
     feed: !!actions.feed,
+    feedVisible: actions.feedVisible == null ? !!actions.feed : !!actions.feedVisible,
     discard: !!actions.discard,
     craft: !!actions.craft,
     craftClear: !!actions.craftClear,
@@ -2346,7 +2434,7 @@ function fillDetail({ name, serial, color, defId, itemId, rarity, ribbon, taglin
   ui.btnUse.style.display = show.use ? '' : 'none';
   ui.btnEat.style.display = show.eat ? '' : 'none';
   ui.btnEquip.style.display = show.equip ? '' : 'none';
-  ui.btnFeed.style.display = show.feed ? '' : 'none';
+  ui.btnFeed.style.display = show.feedVisible ? '' : 'none';
   ui.btnDiscard.style.display = show.discard ? '' : 'none';
   if (ui.btnCraft) {
     ui.btnCraft.style.display = (show.craft || show.craftClear || state.backpackTab === 'craft') ? 'block' : 'none';
@@ -2503,21 +2591,44 @@ function doEquip() {
   ui.btnEquip?.classList.remove('tut-equip-hl');
 }
 
-function doFeed() {
+function feedFishAtIndex(index, slotOverride = null) {
   if (isTutEquipLock()) {
     showToast('\u6559\u5b66\u6b65\uff1a\u53ea\u80fd\u70b9\u300c\u6539\u88c5\u300d');
     sfx.uiDeny();
+    return false;
+  }
+  const f = state.fishHold[index];
+  if (!f || getFishDef(f.defId).category !== 'food') {
+    showToast('\u9700\u8981\u98df\u7269\u9c7c\u6295\u5582');
+    return false;
+  }
+  const slot = slotOverride || state.selectedSlot;
+  if (!feedSlot(state.slots, slot, 30)) {
+    showToast('\u8be5\u69fd\u65e0\u9700\u6295\u5582\uff08\u6d3b\u6027\u5df2\u6ee1\u6216\u7a7a\uff09');
+    return false;
+  }
+  remapCraftSlots(index);
+  state.fishHold.splice(index, 1);
+  if (state.selectedFish === index) state.selectedFish = -1;
+  else if (state.selectedFish > index) state.selectedFish--;
+  feedPickerOpen = false;
+  showToast(`\u6295\u5582 ${SLOT_LABELS[slot]} +30 \u6d3b\u6027`);
+  refreshSlots();
+  renderFishList();
+  return true;
+}
+
+function doFeed() {
+  const mode = feedPickerMode();
+  if (!mode) {
+    showToast(state.backpackTab === 'slots'
+      ? '\u8be5\u69fd\u65e0\u9700\u6295\u5582\uff08\u6d3b\u6027\u5df2\u6ee1\u6216\u7a7a\uff09'
+      : '\u9700\u8981\u98df\u7269\u9c7c\u6295\u5582');
+    sfx.uiDeny();
     return;
   }
-  const f = state.fishHold[state.selectedFish];
-  if (!f || getFishDef(f.defId).category !== 'food') return showToast('需要食物鱼投喂');
-  const slot = state.selectedSlot;
-  if (!feedSlot(state.slots, slot, 30)) return showToast('该槽无需投喂（活性≥30或空）');
-  remapCraftSlots(state.selectedFish);
-  state.fishHold.splice(state.selectedFish, 1);
-  state.selectedFish = -1;
-  showToast(`投喂 ${SLOT_LABELS[slot]} +30 活性`);
-  renderFishList();
+  feedPickerOpen = !feedPickerOpen;
+  renderFeedPicker();
 }
 
 function clearCraftSlots() {
@@ -2682,6 +2793,7 @@ function finishRun(outcome) {
   meta = m;
   selectedBoat = clampBoatId(meta.unlocks, meta.loadout?.boatId || selectedBoat);
   setBoatVariant(boat, selectedBoat);
+  seaWorld.setHullExtent(hullLength(selectedBoat));
   hubBoatPreview?.applyBoatId?.(selectedBoat);
   if (wasTutorial && success) startZone = 0;
   const title = success
@@ -2795,6 +2907,7 @@ function startRun(fromCheckpoint = false) {
   resetMonsterFx();
   selectedBoat = clampBoatId(meta.unlocks, meta.loadout?.boatId || selectedBoat);
   setBoatVariant(boat, selectedBoat);
+  seaWorld.setHullExtent(hullLength(selectedBoat));
   const maxHp = hullMaxForBoat(meta.unlocks, selectedBoat);
   hull = createHull(maxHp);
 
@@ -3736,6 +3849,7 @@ window.addEventListener('keydown', (e) => {
       });
     }
     if (n >= 1 && n <= 6) {
+      feedPickerOpen = false;
       state.selectedSlot = SLOT_ORDER[n - 1];
       refreshSlots();
     }
@@ -3925,6 +4039,7 @@ document.querySelectorAll('#backpack .bp-tab').forEach((el) => {
       sfx.uiDeny();
       return;
     }
+    feedPickerOpen = false;
     state.backpackTab = el.dataset.tab;
     state.selectedFish = state.backpackTab === 'catch' && state.fishHold.length
       ? Math.max(0, Math.min(state.selectedFish < 0 ? 0 : state.selectedFish, state.fishHold.length - 1))
@@ -4032,7 +4147,12 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 document.querySelectorAll('.slot-chip[data-slot]').forEach((el) => {
-  el.onclick = () => { sfx.uiClick(); state.selectedSlot = el.dataset.slot; refreshSlots(); };
+  el.onclick = () => {
+    sfx.uiClick();
+    feedPickerOpen = false;
+    state.selectedSlot = el.dataset.slot;
+    refreshSlots();
+  };
 });
 document.querySelectorAll('.weapon-chip').forEach((el) => {
   el.onclick = () => {

@@ -8,7 +8,8 @@ import { scatterBiomeDecor, updateBiomeDecor } from './biomeDecor.js?v=30j';
 import {
   clonePropGlb, ensureAllPropGlbsLoading, ensureZonePropGlbsLoading,
   isPropGlbReady, onPropGlbReady, styleCoralProp, areZonePropsReady, propIdsForZone,
-} from './propGlb.js?v=39d';
+  getPropCollProfile,
+} from './propGlb.js?v=43k';
 
 function M(geo, color, gradientMap, outline = 1.05) {
   const m = new THREE.Mesh(geo, toonMat(color, gradientMap, { flatShading: true }));
@@ -243,12 +244,42 @@ function propHit(discs, x, z, margin) {
 }
 
 /**
- * XZ disc radius from applied uniform scale + mesh AABB.
- * ~0.52 of long-axis extent: covers most of the footprint without the old
- * hard 8–22m caps that caused air walls / clipping on zone 2–4 stones.
+ * XZ disc radius from applied uniform scale + mesh AABB. Fallback for props
+ * baked before collision profiles existed — the AABB of a tree is its canopy,
+ * which is why this alone produced air walls under the branches.
  */
 function meshPropDiscR(appliedScale, baseSizeXZ, minR = 2.5) {
   return Math.max(minR, appliedScale * baseSizeXZ * 0.52);
+}
+
+/** World height above the waterline a hull can actually strike. */
+const HULL_STRIKE_H = 2.4;
+
+/**
+ * Disc radius from the prop's height/radius profile: widest slice between the
+ * waterline and HULL_STRIKE_H. Everything overhead (canopy) and everything
+ * submerged (root ball, rock base) is ignored, so a tree collides on its trunk
+ * while a boulder still collides on its full section at the surface.
+ * Scatter code places props with their local origin at y = 0.
+ */
+function propCollR(propId, tpl, scaleXZ, scaleY, minR = 2.5) {
+  const prof = getPropCollProfile(propId);
+  if (!prof?.bands?.length) {
+    return meshPropDiscR(scaleXZ, tpl?.userData?.baseSizeXZ || 4, minR);
+  }
+  const n = prof.bands.length;
+  const bandBase = prof.h / n;
+  const sY = Math.max(scaleY, 1e-6);
+  const y0 = prof.y0 || 0;
+  // World strike band -> model-local height -> band index.
+  let lo = Math.floor((0 / sY - y0) / bandBase);
+  let hi = Math.floor((HULL_STRIKE_H / sY - y0) / bandBase);
+  if (hi < 0) return minR;
+  lo = Math.min(n - 1, Math.max(0, lo));
+  hi = Math.min(n - 1, Math.max(lo, hi));
+  let r = 0;
+  for (let b = lo; b <= hi; b++) if (prof.bands[b] > r) r = prof.bands[b];
+  return Math.max(minR, r * scaleXZ);
 }
 
 /** Island collision radius — oblong mesh stretches to 1.28× on the long axis. */
@@ -351,9 +382,8 @@ function scatterZone0Rocks(root, map, propDiscs = null) {
     rock.scale.set(sx * 0.7, sy * 0.7, sz * 0.7);
     root.add(rock);
     if (propDiscs) {
-      const baseXZ = tpl.userData.baseSizeXZ || baseSize;
-      const collScale = Math.max(sx, sz) * 0.7;
-      propDiscs.push({ x: pt.x, z: pt.z, r: meshPropDiscR(collScale, baseXZ, 2) });
+      const r = propCollR('zone0Rock', tpl, Math.max(sx, sz) * 0.7, sy * 0.7, 2);
+      propDiscs.push({ x: pt.x, z: pt.z, r });
     }
   }
 }
@@ -463,9 +493,8 @@ function scatterZone0ExtraRocks(root, map, propDiscs = null) {
     rock.scale.set(sx * 0.7, sy * 0.7, sz * 0.7);
     root.add(rock);
     if (propDiscs) {
-      const baseXZ = tpl.userData.baseSizeXZ || baseSize;
-      const collScale = Math.max(sx, sz) * 0.7;
-      propDiscs.push({ x: pt.x, z: pt.z, r: meshPropDiscR(collScale, baseXZ, 2) });
+      const r = propCollR('zone0RockB', tpl, Math.max(sx, sz) * 0.7, sy * 0.7, 2);
+      propDiscs.push({ x: pt.x, z: pt.z, r });
     }
   }
 }
@@ -609,9 +638,8 @@ function scatterZone0MoreRocks(root, map, propDiscs = null) {
     rock.scale.set(sx * 0.7, sy * 0.7, sz * 0.7);
     root.add(rock);
     if (propDiscs) {
-      const baseXZ = tpl.userData.baseSizeXZ || baseSize;
-      const collScale = Math.max(sx, sz) * 0.7;
-      propDiscs.push({ x: pt.x, z: pt.z, r: meshPropDiscR(collScale, baseXZ, 2) });
+      const r = propCollR('zone0RockC', tpl, Math.max(sx, sz) * 0.7, sy * 0.7, 2);
+      propDiscs.push({ x: pt.x, z: pt.z, r });
     }
   }
 }
@@ -622,7 +650,7 @@ function scatterZone0NewRocks(root, map, propDiscs = null) {
   const propIds = ['zone0RockNew1', 'zone0RockNew2', 'zone0RockNew3'];
   const tpls = propIds
     .filter(id => isPropGlbReady(id))
-    .map(id => { const t = clonePropGlb(id); return t ? { tpl: t, baseSize: t.userData.baseSize || 6 } : null; })
+    .map(id => { const t = clonePropGlb(id); return t ? { id, tpl: t, baseSize: t.userData.baseSize || 6 } : null; })
     .filter(Boolean);
   if (tpls.length === 0) return;
 
@@ -636,7 +664,7 @@ function scatterZone0NewRocks(root, map, propDiscs = null) {
   for (const pt of pts) {
     // 不做 propHit，允许在珊瑚旁刷新，少量重叠无妨
     const idx = Math.floor(hash2(pt.x + 13, pt.z + 7) * tpls.length) % tpls.length;
-    const { tpl, baseSize } = tpls[idx];
+    const { id: rockId, tpl, baseSize } = tpls[idx];
     const rock = tpl.clone(true);
     rock.position.set(pt.x, 0, pt.z);
     rock.rotation.y = hash2(pt.x + 5, pt.z) * Math.PI * 2;
@@ -650,8 +678,7 @@ function scatterZone0NewRocks(root, map, propDiscs = null) {
     rock.scale.setScalar(s);
     root.add(rock);
     if (propDiscs) {
-      const baseXZ = tpl.userData.baseSizeXZ || baseSize;
-      propDiscs.push({ x: pt.x, z: pt.z, r: meshPropDiscR(s, baseXZ, 3) });
+      propDiscs.push({ x: pt.x, z: pt.z, r: propCollR(rockId, tpl, s, s, 3) });
     }
   }
 }
@@ -967,7 +994,6 @@ function scatterZone1GlbProps(root, map, biome, gradientMap) {
     const tpl = clonePropGlb(id);
     if (!tpl) continue;
     const baseSize = tpl.userData.baseSize || 4;
-    const baseSizeXZ = tpl.userData.baseSizeXZ || baseSize;
     tpl.position.set(pt.x, 0, pt.z);
     tpl.rotation.y = hash2(pt.x, pt.z) * Math.PI * 2;
     const stoneScaleBoost = stoneScaleBoostMap[id] ?? 11;
@@ -975,7 +1001,7 @@ function scatterZone1GlbProps(root, map, biome, gradientMap) {
     const appliedScale = (2.5 * sizeMul) / baseSize * 0.7;
     tpl.scale.setScalar(appliedScale);
     root.add(tpl);
-    propDiscs.push({ x: pt.x, z: pt.z, r: meshPropDiscR(appliedScale, baseSizeXZ, 3) });
+    propDiscs.push({ x: pt.x, z: pt.z, r: propCollR(id, tpl, appliedScale, appliedScale, 3) });
   }
 
   // Decor kept modest — old 3200×clone froze zone entry for seconds.
@@ -1108,8 +1134,7 @@ function scatterZone2GlbProps(root, map, biome, gradientMap) {
     const appliedScale = (2.5 * sizeMul) / baseSize * 0.9;
     tpl.scale.setScalar(appliedScale);
     root.add(tpl);
-    const baseSizeXZ = tpl.userData.baseSizeXZ || baseSize;
-    propDiscs.push({ x: pt.x, z: pt.z, r: meshPropDiscR(appliedScale, baseSizeXZ, 3) });
+    propDiscs.push({ x: pt.x, z: pt.z, r: propCollR(id, tpl, appliedScale, appliedScale, 3) });
   }
 
   // Decor: 1–3× varied sizes, brownish-yellow tones dominate via fallbackColor in propGlb config
@@ -1204,8 +1229,7 @@ function scatterZone3GlbProps(root, map, biome, gradientMap) {
     const appliedScale = (2.5 * sizeMul) / baseSize * 0.9;
     tpl.scale.setScalar(appliedScale);
     root.add(tpl);
-    const baseSizeXZ = tpl.userData.baseSizeXZ || baseSize;
-    propDiscs.push({ x: pt.x, z: pt.z, r: meshPropDiscR(appliedScale, baseSizeXZ, 3) });
+    propDiscs.push({ x: pt.x, z: pt.z, r: propCollR(id, tpl, appliedScale, appliedScale, 3) });
   }
 
   const decorCount = 200;
@@ -1296,8 +1320,7 @@ function scatterZone4GlbProps(root, map, biome, gradientMap) {
     const appliedScale = (2.5 * sizeMul) / baseSize * 0.7;
     tpl.scale.setScalar(appliedScale);
     root.add(tpl);
-    const baseSizeXZ = tpl.userData.baseSizeXZ || baseSize;
-    propDiscs.push({ x: pt.x, z: pt.z, r: meshPropDiscR(appliedScale, baseSizeXZ, 3) });
+    propDiscs.push({ x: pt.x, z: pt.z, r: propCollR(id, tpl, appliedScale, appliedScale, 3) });
   }
 
   const decorCount = 200;
@@ -1408,9 +1431,19 @@ export function createSeaWorld() {
   let lighthouses = [];
   /** @type {THREE.Group|null} */
   let decorRoot = null;
+  /** @type {THREE.LineSegments|null} */
+  let discDebug = null;
+  // Hull footprint used by constrainBoat — updated when the boat variant changes.
+  let hullHalfLen = 3.2;
+  let hullHalfBeam = 1.2;
 
   /** @type {{ zoneId: number, scene: THREE.Scene, gradientMap: any, water: THREE.Mesh }|null} */
   let lastLoadArgs = null;
+
+  function setHullExtent(lengthM, beamM) {
+    hullHalfLen = Math.max(1, (lengthM || 7.9) * 0.5);
+    hullHalfBeam = Math.max(0.6, (beamM || (lengthM || 7.9) * 0.3) * 0.5);
+  }
 
   function reset() {
     while (root.children.length) {
@@ -1419,6 +1452,7 @@ export function createSeaWorld() {
     }
     lighthouses = [];
     decorRoot = null;
+    discDebug = null;
     current = null;
   }
 
@@ -1520,7 +1554,40 @@ export function createSeaWorld() {
       propsReloadKey = '';
     }
 
+    buildDiscDebug(map);
+
     return map;
+  }
+
+  /** ?discs=1 draws every collision disc as a ring — the only way to see them. */
+  function buildDiscDebug(map) {
+    discDebug = null;
+    let on = false;
+    try {
+      on = new URLSearchParams(location.search).get('discs') === '1';
+    } catch (_) { on = false; }
+    if (!on) return;
+    const discs = map?._propDiscs || [];
+    if (!discs.length) return;
+    const SEG = 24;
+    const pts = new Float32Array(discs.length * SEG * 6);
+    let i = 0;
+    for (const d of discs) {
+      for (let s = 0; s < SEG; s++) {
+        const a0 = (s / SEG) * Math.PI * 2;
+        const a1 = ((s + 1) / SEG) * Math.PI * 2;
+        pts[i++] = d.x + Math.cos(a0) * d.r; pts[i++] = 0.35; pts[i++] = d.z + Math.sin(a0) * d.r;
+        pts[i++] = d.x + Math.cos(a1) * d.r; pts[i++] = 0.35; pts[i++] = d.z + Math.sin(a1) * d.r;
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+    discDebug = new THREE.LineSegments(
+      geo,
+      new THREE.LineBasicMaterial({ color: 0xff3355, depthTest: false, transparent: true, opacity: 0.9 })
+    );
+    discDebug.renderOrder = 999;
+    root.add(discDebug);
   }
 
   ensureAllPropGlbsLoading();
@@ -1556,9 +1623,17 @@ export function createSeaWorld() {
     let x = r.x, z = r.z;
     let hit = r.hit;
 
-    // Boat is a point; pads approximate hull extent once discs match mesh AABB.
+    // Prop discs test three points along the keel, so the pad only covers beam.
     const ISLAND_PAD = 1.5;
-    const PROP_PAD = 1.6;
+    const PROP_PAD = hullHalfBeam;
+    // Bow / midship / stern offsets along the heading, 0.8 of half length so the
+    // very tip may overhang a disc edge instead of stopping the boat short.
+    const fwdX = Math.sin(paddleState.yaw || 0);
+    const fwdZ = Math.cos(paddleState.yaw || 0);
+    const lead = hullHalfLen * 0.8;
+    const sampleX = [0, fwdX * lead, -fwdX * lead];
+    const sampleZ = [0, fwdZ * lead, -fwdZ * lead];
+    const broadR = hullHalfLen + hullHalfBeam + 2;
     // GLB zones assign _propDiscs (even empty before assets load); map.reefs /
     // islands are placement anchors only — colliding them creates invisible air walls.
     const skipAnchorDiscs = Array.isArray(current._propDiscs);
@@ -1595,25 +1670,34 @@ export function createSeaWorld() {
         }
       }
       for (const disc of (current._propDiscs || [])) {
-        const dx = x - disc.x, dz = z - disc.z;
-        const d = Math.hypot(dx, dz);
+        // Broadphase on the hull circle before the three keel samples.
+        const cdx = x - disc.x, cdz = z - disc.z;
+        const reach = disc.r + broadR;
+        if (cdx * cdx + cdz * cdz > reach * reach) continue;
         const target = disc.r + PROP_PAD;
-        if (d < target) {
+        for (let s = 0; s < 3; s++) {
+          const dx = x + sampleX[s] - disc.x;
+          const dz = z + sampleZ[s] - disc.z;
+          const d = Math.hypot(dx, dz);
+          if (d >= target) continue;
           hit = true;
           if (d < 0.01) {
-            const ex = paddleState.speed > 0.1 ? Math.sin(paddleState.yaw) : 1;
-            const ez = paddleState.speed > 0.1 ? Math.cos(paddleState.yaw) : 0;
-            x = disc.x + ex * target; z = disc.z + ez * target;
+            const ex = paddleState.speed > 0.1 ? fwdX : 1;
+            const ez = paddleState.speed > 0.1 ? fwdZ : 0;
+            x = disc.x + ex * target - sampleX[s];
+            z = disc.z + ez * target - sampleZ[s];
             paddleState.speed = 0;
             continue;
           }
-          const s = target / d;
-          x = disc.x + dx * s; z = disc.z + dz * s;
+          // Push the sample point out, then carry the same offset on the hull center.
+          const push = target / d - 1;
+          x += dx * push;
+          z += dz * push;
           if (pass === 0) {
             // Remove velocity component pointing into the disc so boat doesn't push back in.
             const nx = dx / d, nz = dz / d;
-            const vx = Math.sin(paddleState.yaw) * paddleState.speed;
-            const vz = Math.cos(paddleState.yaw) * paddleState.speed;
+            const vx = fwdX * paddleState.speed;
+            const vz = fwdZ * paddleState.speed;
             const vDotN = vx * nx + vz * nz;
             if (vDotN < 0) {
               const newVx = vx - vDotN * nx;
@@ -1774,6 +1858,7 @@ export function createSeaWorld() {
     load,
     reset,
     constrainBoat,
+    setHullExtent,
     scatterProps,
     setTutorialReveal,
     updateBeacons,

@@ -5,7 +5,7 @@ import {
   ensureHullGlbLoading,
   onHullGlbReady,
   hullUpscale,
-} from './hullGlb.js?v=39f';
+} from './hullGlb.js?v=43k';
 import { addOutline, toonMat } from './stylekit.js';
 
 const SLOT_KEYS = ['bow', 'stern', 'sideL', 'sideR', 'keel', 'sail'];

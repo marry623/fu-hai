@@ -32,6 +32,11 @@ export function isHullGlbId(id) {
   return HULL_GLB_IDS.includes(id);
 }
 
+/** Bow-to-stern length in metres — collision samples the hull along this axis. */
+export function hullLength(boatId) {
+  return HULL_CONFIG[boatId]?.targetLength || HULL_CONFIG.raft.targetLength;
+}
+
 export function hullPortraitRev() {
   return portraitRev;
 }

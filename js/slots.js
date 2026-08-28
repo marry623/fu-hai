@@ -93,7 +93,7 @@ export function spendVitality(slotsState, defId, amount = 10) {
 
 export function feedSlot(slotsState, slot, amount = 30) {
   const s = slotsState[slot];
-  if (!s || s.vitality >= 30) return false;
+  if (!s || s.vitality >= 100) return false;
   s.vitality = Math.min(100, s.vitality + amount);
   return true;
 }

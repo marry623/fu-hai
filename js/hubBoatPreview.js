@@ -1,7 +1,7 @@
 /** Hub boat showcase — loadout preview with mount projections for callouts */
 
 import * as THREE from 'three';
-import { createBoat, setBoatVariant, BOAT_WATERLINE_Y, hullUpscale } from './boat.js?v=42i';
+import { createBoat, setBoatVariant, BOAT_WATERLINE_Y, hullUpscale } from './boat.js?v=43k';
 import { getFishDef } from './fishCatalog.js?v=34b';
 import { equipFish, SLOT_ORDER } from './slots.js?v=39b';
 

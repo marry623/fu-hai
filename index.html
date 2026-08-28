@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>浮骸 · 海上肉鸽</title>
-  <link rel="stylesheet" href="css/style.css?v=43g" />
+  <link rel="stylesheet" href="css/style.css?v=43k" />
 </head>
 <body>
   <div id="game-root">
@@ -137,6 +137,11 @@
                 <div class="bp-slot-pick" id="bp-slot-pick">
                   <span class="bp-slot-label">绑定槽位</span>
                   <div class="bp-slot-row" id="bp-slot-row"></div>
+                </div>
+                <div class="bp-feed-pick hidden" id="bp-feed-pick">
+                  <span class="bp-slot-label">选择投喂鱼</span>
+                  <div class="bp-feed-row" id="bp-feed-row"></div>
+                  <p class="bp-feed-empty hidden" id="bp-feed-empty">鱼获中没有可投喂的鱼</p>
                 </div>
                 <div class="bp-actions">
                   <button type="button" id="btn-use" class="bp-btn bright">使用</button>
@@ -441,8 +446,8 @@
     window.addEventListener('unhandledrejection', (e) => show(e.reason && e.reason.stack || e.reason));
     const fileHint = '请勿直接双击 index.html。运行项目里的 play.bat，或打开 http://127.0.0.1:8787/\nChrome 在 file:// 下无法加载 ES 模块。';
     const urls = location.protocol === 'file:'
-      ? ['./js/main.js', './js/main.js?v=43g']
-      : ['./js/main.js?v=43g'];
+      ? ['./js/main.js', './js/main.js?v=43k']
+      : ['./js/main.js?v=43k'];
     if (location.protocol === 'file:') show(fileHint);
     let last = null;
     let ok = false;
