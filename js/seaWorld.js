@@ -334,7 +334,8 @@ function scatterZone0Coral(root, map, biome, gradientMap, propDiscs = null) {
     const col = colors[Math.floor(hash2(pt.x + pt.z, pt.z) * colors.length) % colors.length];
     styleCoralProp(c, col, gradientMap);
     root.add(c);
-    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 3.87 * pt.s * sizeMul * 0.28) });
+    // decor: keeps other props from spawning on top, but never blocks the boat.
+    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 3.87 * pt.s * sizeMul * 0.28), decor: true });
   }
 }
 
@@ -468,7 +469,7 @@ function scatterZone0ExtraCoral(root, map, biome, gradientMap, propDiscs = null)
     const col = colors[Math.floor(hash2(pt.x + pt.z, pt.seed) * colors.length) % colors.length];
     styleCoralProp(c, col, gradientMap);
     root.add(c);
-    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 4.13 * s * sizeMul * 0.28) });
+    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 4.13 * s * sizeMul * 0.28), decor: true });
   }
 }
 
@@ -601,7 +602,7 @@ function scatterZone0MoreCoral(root, map, biome, gradientMap, propId, pickFn, si
     const col = colors[Math.floor(hash2(pt.x + pt.z, pt.seed) * colors.length) % colors.length];
     styleCoralProp(c, col, gradientMap);
     root.add(c);
-    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 4.27 * s * sizeMul * 0.28) });
+    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 4.27 * s * sizeMul * 0.28), decor: true });
   }
 }
 
@@ -704,7 +705,7 @@ function scatterZone0SmallCoral(root, map, biome, gradientMap, propId, pickFn, p
     const col = colors[Math.floor(hash2(pt.x + pt.z, pt.seed) * colors.length) % colors.length];
     styleCoralProp(c, col, gradientMap);
     root.add(c);
-    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 4.27 * s * sizeMul * 0.28) });
+    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 4.27 * s * sizeMul * 0.28), decor: true });
   }
 }
 
@@ -756,7 +757,7 @@ function scatterTutorialRimCoral(root, map, biome, gradientMap, propDiscs = null
     const col = colors[Math.floor(hash2(x + z, i) * colors.length) % colors.length];
     styleCoralProp(c, col, gradientMap);
     root.add(c);
-    if (propDiscs) propDiscs.push({ x, z, r: Math.max(1.5, 3.2 * sizeMul * 0.28) });
+    if (propDiscs) propDiscs.push({ x, z, r: Math.max(1.5, 3.2 * sizeMul * 0.28), decor: true });
   }
 }
 
@@ -796,7 +797,7 @@ function scatterZone0GapCoral(root, map, biome, gradientMap, propDiscs = null) {
       const col = colors[Math.floor(hash2(x + z, i + j) * colors.length) % colors.length];
       styleCoralProp(c, col, gradientMap);
       root.add(c);
-      if (propDiscs) propDiscs.push({ x, z, r: Math.max(1.5, 3.67 * s * sizeMul * 0.28) });
+      if (propDiscs) propDiscs.push({ x, z, r: Math.max(1.5, 3.67 * s * sizeMul * 0.28), decor: true });
     }
   }
 }
@@ -916,7 +917,9 @@ function scatterZone0Props(root, map, biome, gradientMap) {
     if (_decorZid === 0 || _decorZid === -1) scatterZone0SurfDecor(root, map, biome, gradientMap);
     if (_decorZid === 0) scatterZone0Noc002(root, map, biome, gradientMap);
   }, 0);
-  return propDiscs;
+  // Coral discs only reserved space during scatter — drop them so they neither
+  // block the boat nor show up as obstacles on the minimap.
+  return propDiscs.filter((d) => !d.decor);
 }
 
 /** Zone 1 (缠绕藻林) — GLB stone models with collision + decor models without collision */

@@ -437,7 +437,7 @@ html, body {
   box-shadow: 0 0 0 2px var(--border), 0 6px 0 #000;
   display: grid;
   grid-template-columns: min-content minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
   column-gap: 14px;
   row-gap: 2px;
   align-items: center;
@@ -502,6 +502,37 @@ html, body {
 .tut-guide-btn:not(:disabled):active {
   transform: translateY(2px);
   box-shadow: 0 0 0 3px var(--pink), 0 2px 0 #000;
+}
+.tut-guide-skip {
+  grid-column: 3;
+  grid-row: 3;
+  margin-top: 4px;
+  padding: 8px 12px;
+  font-size: 13px;
+  animation: none;
+  background: linear-gradient(180deg, #7ff0ff, #12a7d6);
+  color: #06222e;
+  box-shadow: 0 0 0 3px #0a5f80, 0 4px 0 #000;
+}
+.tut-guide-skip:not(:disabled):active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 3px #0a5f80, 0 2px 0 #000;
+}
+.tut-guide.skip-only {
+  grid-template-columns: auto;
+  grid-template-rows: auto;
+  width: auto;
+}
+.tut-guide.skip-only .tut-guide-step,
+.tut-guide.skip-only .tut-guide-title,
+.tut-guide.skip-only .tut-guide-body,
+.tut-guide.skip-only #tut-guide-next {
+  display: none;
+}
+.tut-guide.skip-only .tut-guide-skip {
+  grid-column: 1;
+  grid-row: 1;
+  margin-top: 0;
 }
 @keyframes tut-next-pulse {
   0%, 100% { filter: brightness(1); }
@@ -3727,6 +3758,22 @@ html, body {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+.hub-warehouse-stage .bp-craft {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 2px 12px;
+}
+.hub-warehouse-stage .bp-craft .bp-cell,
+.hub-warehouse-stage .bp-craft .bp-cell.empty {
+  width: auto;
+  min-height: 0;
+  aspect-ratio: auto;
+}
+.hub-fs-left-warehouse .bp-btn {
+  width: 100%;
+  margin-top: 6px;
 }
 .hub-wh-grid.bp-grid,
 .hub-drawer .hub-wh-grid {

@@ -21,9 +21,10 @@ function lighthouse(gradientMap) {
   const cottage = M(new THREE.BoxGeometry(2.2, 1.6, 1.8), 0xf5f0e6, gradientMap, 1.05);
   cottage.position.set(0, 1.9, 1.5);
   g.add(cottage);
-  const cottageRoof = M(new THREE.ConeGeometry(1.7, 1.0, 4), 0xe85d4c, gradientMap, 1.06);
+  // Eave sits on the wall top (1.9 + 1.6/2), otherwise the roof swallows the walls.
+  const cottageRoof = M(new THREE.ConeGeometry(1.7, 1.25, 4), 0xe85d4c, gradientMap, 1.06);
   cottageRoof.rotation.y = Math.PI / 4;
-  cottageRoof.position.set(0, 3.0, 1.5);
+  cottageRoof.position.set(0, 3.3, 1.5);
   g.add(cottageRoof);
   const door = M(new THREE.BoxGeometry(0.55, 0.95, 0.08), 0xe85d4c, gradientMap, 1.1);
   door.position.set(0, 1.55, 2.42);

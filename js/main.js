@@ -5,15 +5,15 @@ import {
   createFoamRings,
 } from './world.js';
 import { createBoat, createWakeSystem, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, setRodBitePose, resetRodPose } from './boat.js?v=43k';
-import { createPaddleController } from './paddle.js?v=42e';
+import { createPaddleController } from './paddle.js?v=43n';
 import { createHull, updateCorrosion, damageHull, repairHull } from './hull.js?v=16c';
 import {
   createFlotsamField, updateFlotsam, findNearestFlotsam, respawnFlotsam, rollSalvage,
 } from './flotsam.js?v=35d';
 import {
   createVortexField, updateVortices, findNearestVortex, createFishingController, CAST_AIM_DIST, tintVortexField, VORTEX_COUNT,
-} from './fishing.js?v=42e';
-import { createHazards } from './hazards.js?v=41f';
+} from './fishing.js?v=43p';
+import { createHazards } from './hazards.js?v=43p';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot, ramCdForRarity,
@@ -30,7 +30,7 @@ import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=37a';
 import { getRelicPortrait } from './relicPortrait.js?v=35c';
 import { RELIC_CARRY_CAP, trimRelicCarry } from './salvageTables.js?v=35e';
-import { getSeaMap, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=32y';
+import { getSeaMap, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=43p';
 import { getZone } from './zones.js?v=31y';
 import {
   loadMeta, settleRun, hullMaxForBoat, thrustMulForBoat, hasWeaponUnlock,
@@ -39,22 +39,22 @@ import {
   skillLevel, scaledSkillCard, fishmongerGreenMul, ghostWakeCorrMul, talentLevel,
   equippedTalents, driftSalvageMul, ramBlacksmithMul,
   chargeZoneTicket, canDepartZone, saveMeta,
-} from './meta.js?v=39o';
+} from './meta.js?v=43m';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=35l';
-import { createHub } from './hub.js?v=40e';
-import { createCoverScene } from './coverScene.js?v=28m';
-import { createHubIsland } from './hubIsland.js?v=35b';
+import { createHub } from './hub.js?v=43m';
+import { createCoverScene } from './coverScene.js?v=43l';
+import { createHubIsland } from './hubIsland.js?v=43l';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=39s';
 import { createBpBoatStage } from './bpBoatStage.js?v=31g';
-import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=43k';
+import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=43m';
 import { ensureAllPropGlbsLoading } from './propGlb.js?v=43k';
 import { hullLength } from './hullGlb.js?v=43k';
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { applyHudTheme } from './hudTheme.js?v=42b';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=43k';
-import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=41f';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=43p';
+import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=43n';
 import * as sfx from './audio.js?v=42e';
 
 const canvas = document.getElementById('c');
@@ -77,6 +77,7 @@ const ui = {
   tutGuideTitle: document.getElementById('tut-guide-title'),
   tutGuideBody: document.getElementById('tut-guide-body'),
   tutGuideNext: document.getElementById('tut-guide-next'),
+  tutGuideSkip: document.getElementById('tut-guide-skip'),
   comboHint: document.getElementById('combo-hint'),
   resonance: document.getElementById('hud-resonance'),
   qte: document.getElementById('qte'),
@@ -244,6 +245,7 @@ let lastPaddleCombo = 0;
 let rodBiteUntil = 0;
 let bobberBiteUntil = 0;
 let anchorSettleUntil = 0;
+let weighToastAt = 0;
 
 function equippedRunCard(slot) {
   const skills = (state.started && Array.isArray(state.runSkills) && state.runSkills.length)
@@ -1253,13 +1255,17 @@ function updateTutMarker(time) {
 
 function hideTutGuide() {
   ui.tutGuide?.classList.add('hidden');
+  ui.tutGuide?.classList.remove('skip-only');
 }
 
 function renderTutGuide() {
-  if (!tut.active || tut.dismissed || !ui.tutGuide) {
+  if (!tut.active || !ui.tutGuide) {
     hideTutGuide();
     return;
   }
+  ui.tutGuide.classList.remove('hidden');
+  ui.tutGuide.classList.toggle('skip-only', !!tut.dismissed);
+  if (tut.dismissed) return;
   const s = TUT_STEPS[tut.step];
   if (!s) {
     hideTutGuide();
@@ -1273,7 +1279,6 @@ function renderTutGuide() {
     ui.tutGuideNext.textContent = tut.gateMet ? s.btn : '\u5148\u5b8c\u6210\u6b64\u6b65';
     ui.tutGuideNext.disabled = !tut.gateMet;
   }
-  ui.tutGuide.classList.remove('hidden');
   setPrompt(ui.prompt, '');
 }
 
@@ -1311,8 +1316,13 @@ function onTutGuideNext() {
   }
   tut.dismissed = true;
   applyTutorialWorld();
-  hideTutGuide();
+  renderTutGuide();
   setPrompt(ui.prompt, `\u5f00\u8fdb\u706f\u5854\u7eff\u5708\uff0c\u505c ${EVAC_HOLD} \u79d2\u5f52\u822a`);
+}
+
+function skipTutorial() {
+  if (!tut.active || !state.started || hull.sunk) return;
+  finishRun('return');
 }
 
 function tickTutorialGuide(_dt) {
@@ -3478,6 +3488,13 @@ function tick() {
       turnMul: b.turnMul,
       autoThrust: engineOk ? b.autoThrust + heatThrust : 0,
     });
+    if (phys.autoWeigh) {
+      setAnchorIndicator(false);
+      if (now() - weighToastAt > 1) {
+        weighToastAt = now();
+        showToast('\u8d77\u951a');
+      }
+    }
 
     if (seaWorld.constrainBoat(paddle.state)) {
       phys.x = paddle.state.x;
@@ -4119,6 +4136,12 @@ ui.tutGuideNext?.addEventListener('click', (e) => {
   e.stopPropagation();
   sfx.uiClick();
   onTutGuideNext();
+});
+ui.tutGuideSkip?.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  sfx.uiClick();
+  skipTutorial();
 });
 ui.btnTutorialClose?.addEventListener('click', () => {
   sfx.uiClose();

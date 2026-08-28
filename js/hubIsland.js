@@ -103,9 +103,11 @@ function buildPort(gradientMap) {
   const office = M(new THREE.BoxGeometry(2.4, 1.8, 2.0), 0xf5efe0, gradientMap);
   office.position.set(-2.2, 1.5, -0.1);
   g.add(office);
-  const officeRoof = M(new THREE.ConeGeometry(1.9, 1.1, 4), 0x3db8a8, gradientMap, 1.06);
+  // Eave sits on the wall top (1.5 + 1.8/2); lower than that and the roof
+  // clips the walls and the life ring hung beside the door.
+  const officeRoof = M(new THREE.ConeGeometry(1.9, 1.3, 4), 0x3db8a8, gradientMap, 1.06);
   officeRoof.rotation.y = Math.PI / 4;
-  officeRoof.position.set(-2.2, 2.7, -0.1);
+  officeRoof.position.set(-2.2, 3.05, -0.1);
   g.add(officeRoof);
   const door = M(new THREE.BoxGeometry(0.55, 1.0, 0.08), 0xe85d4c, gradientMap, 1.12);
   door.position.set(-2.2, 1.15, 0.95);

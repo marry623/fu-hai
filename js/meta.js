@@ -1,6 +1,7 @@
 /** Meta progression via localStorage — hub / warehouse / codex / zones */
 
 import { getFishDef, shopBuyCost, BAIT_KINDS } from './fishCatalog.js?v=34b';
+import { rollCraft } from './fishCraft.js?v=41c';
 import {
   APPRAISE_COST,
   RELIC_CARRY_CAP,
@@ -1238,6 +1239,38 @@ export function thrustMulForBoat(selected, unlocks) {
 export function hasWeaponUnlock(meta, weaponIndex) {
   const skills = equippedSkills(meta);
   return weaponIndex >= 0 && weaponIndex < 3 && !!skills[weaponIndex];
+}
+
+export function craftWarehouseFish(meta, indices) {
+  const list = [...(meta.warehouse?.fish || [])];
+  const unique = [...new Set((indices || []).map((i) => i | 0))]
+    .filter((i) => i >= 0 && i < list.length && list[i]);
+  const mats = unique.map((i) => list[i]);
+  if (unique.length !== mats.length || mats.length < 2 || mats.length > 4) {
+    return { ok: false, meta, msg: '放入 2–4 条鱼获' };
+  }
+  const rolled = rollCraft(mats);
+  if (!rolled.ok || !rolled.fish) {
+    return { ok: false, meta, msg: '放入 2–4 条鱼获' };
+  }
+  const next = [...list];
+  for (const i of unique.sort((a, b) => b - a)) next.splice(i, 1);
+  next.push(rolled.fish);
+  let m = {
+    ...meta,
+    warehouse: { ...meta.warehouse, fish: next },
+  };
+  const disc = discoverFish(m, [rolled.fish.defId]);
+  m = disc.meta;
+  saveMeta(m);
+  return {
+    ok: true,
+    meta: m,
+    fish: rolled.fish,
+    hidden: !!rolled.hidden,
+    rarity: rolled.rarity,
+    newIds: disc.newIds || [],
+  };
 }
 
 export function hubFeedFish(meta, warehouseIndex, amount = 30) {
