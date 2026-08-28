@@ -13,7 +13,7 @@ import {
 import {
   createVortexField, updateVortices, findNearestVortex, createFishingController, CAST_AIM_DIST, tintVortexField, VORTEX_COUNT,
 } from './fishing.js?v=42e';
-import { createHazards } from './hazards.js?v=41e';
+import { createHazards } from './hazards.js?v=41f';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot, ramCdForRarity,
@@ -29,7 +29,7 @@ import { createRewardFlight } from './rewardFlight.js?v=42d';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=37a';
 import { getRelicPortrait } from './relicPortrait.js?v=35c';
-import { RELIC_CARRY_CAP, trimRelicCarry } from './salvageTables.js?v=35d';
+import { RELIC_CARRY_CAP, trimRelicCarry } from './salvageTables.js?v=35e';
 import { getSeaMap, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=32y';
 import { getZone } from './zones.js?v=31y';
 import {
@@ -39,9 +39,9 @@ import {
   skillLevel, scaledSkillCard, fishmongerGreenMul, ghostWakeCorrMul, talentLevel,
   equippedTalents, driftSalvageMul, ramBlacksmithMul,
   chargeZoneTicket, canDepartZone, saveMeta,
-} from './meta.js?v=39c';
+} from './meta.js?v=39o';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=35l';
-import { createHub } from './hub.js?v=40d';
+import { createHub } from './hub.js?v=40e';
 import { createCoverScene } from './coverScene.js?v=28m';
 import { createHubIsland } from './hubIsland.js?v=35b';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=39s';
@@ -52,7 +52,7 @@ import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { applyHudTheme } from './hudTheme.js?v=42b';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=43d';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=43g';
 import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=41f';
 import * as sfx from './audio.js?v=42e';
 

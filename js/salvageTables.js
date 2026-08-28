@@ -1,8 +1,8 @@
 /** Salvage loot tables: bottle events, barrel supplies, relics by zone */
 
 export const APPRAISE_COST = 20;
-export const SEALED_SELL_MIN = 15;
-export const SEALED_SELL_MAX = 25;
+export const SEALED_SELL_MIN = 20;
+export const SEALED_SELL_MAX = 20;
 /** Per-run carry: only the most recently picked packages return to warehouse. */
 export const RELIC_CARRY_CAP = 8;
 
@@ -222,7 +222,7 @@ export function rollSellPrice(min, max) {
 }
 
 export function sealedSellPrice() {
-  return rollSellPrice(SEALED_SELL_MIN, SEALED_SELL_MAX);
+  return APPRAISE_COST;
 }
 
 /** Keep only the most recently picked packages (tail). Returns dropped count. */

@@ -4371,6 +4371,31 @@ button.hub-bp-card {
 .hub-bm-batch-panel > .bp-btn {
   width: 100%;
 }
+.hub-confirm {
+  z-index: 82;
+}
+.hub-confirm .hub-bm-batch-panel {
+  width: min(88vw, 320px);
+  gap: 12px;
+}
+.hub-confirm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hub-confirm-body p {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.hub-confirm-acts {
+  display: flex;
+  gap: 8px;
+}
+.hub-confirm-acts .bp-btn {
+  flex: 1;
+}
 
 .hub-drawer #hub-fs-left-blackmarket {
   overflow: auto;

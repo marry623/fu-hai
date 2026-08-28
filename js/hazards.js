@@ -277,6 +277,14 @@ export function createHazards(gradientMap, scene, hitFx = null) {
     // Rebuild enemy pool for this zone so meshes match catalog
     for (const e of enemies) root.remove(e);
     enemies.length = 0;
+    // Practice-bay only marker: drop it on every layout so it cannot survive
+    // into a formal run (root is reused across runs).
+    if (tutMonsterRing) {
+      root.remove(tutMonsterRing);
+      tutMonsterRing.geometry.dispose();
+      tutMonsterRing.material.dispose();
+      tutMonsterRing = null;
+    }
     // Pool of combat meshes capped — anchors can be denser but we do not build
     // one heavy mesh per anchor (old Math.max(anchors, …) created 500+ monsters).
     const wantEnemies = enemyAnchors.length > 0
@@ -312,9 +320,8 @@ export function createHazards(gradientMap, scene, hitFx = null) {
       enemies[i].userData.chasing = false;
       enemies[i].userData.tutLocked = zid === -1;
       enemies[i].visible = false;
+      enemies[i].scale.setScalar(zid === -1 && i === 0 ? 1.35 : 1);
       if (zid === -1 && i === 0) {
-        enemies[i].scale.setScalar(1.35);
-        if (tutMonsterRing) root.remove(tutMonsterRing);
         tutMonsterRing = new THREE.Mesh(
           new THREE.RingGeometry(5.5, 9, 32),
           new THREE.MeshBasicMaterial({
@@ -1132,7 +1139,7 @@ export function createHazards(gradientMap, scene, hitFx = null) {
         e.userData.chasing = false;
       }
     }
-    if (tutMonsterRing) tutMonsterRing.visible = unlock;
+    if (tutMonsterRing) tutMonsterRing.visible = unlock && !dismissed;
   }
 
   return {

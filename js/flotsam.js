@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { addOutline, toonMat, hash2 } from './stylekit.js';
-import { rollSalvageTyped } from './salvageTables.js?v=35d';
+import { rollSalvageTyped } from './salvageTables.js?v=35e';
 
 /**
  * Floating salvage: black package / barrel / drift bottle

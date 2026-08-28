@@ -8,7 +8,7 @@ import {
   rollSellPrice,
   sealedSellPrice,
   trimRelicCarry,
-} from './salvageTables.js?v=35d';
+} from './salvageTables.js?v=35e';
 
 const KEY = 'fuhai_meta_v1';
 
@@ -1154,7 +1154,7 @@ export function sellWarehouseRelic(meta, warehouseIndex) {
   let price;
   let label;
   if (item.sealed) {
-    price = item.sellPrice > 0 ? item.sellPrice : sealedSellPrice();
+    price = sealedSellPrice();
     label = '黑色包裹';
   } else {
     const def = getRelicDef(item.defId);
@@ -1212,7 +1212,7 @@ export function sellWarehouseRelicsBelowTier(meta, belowTier = 3) {
 
 export function relicSellPreview(item) {
   if (!item) return 0;
-  if (item.sealed) return item.sellPrice > 0 ? item.sellPrice : 20;
+  if (item.sealed) return sealedSellPrice();
   if (item.sellPrice > 0) return item.sellPrice;
   const def = getRelicDef(item.defId);
   if (!def) return 20;

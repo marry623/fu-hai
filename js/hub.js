@@ -54,7 +54,7 @@ import {
   LOADOUT_BAG_SIZE,
   zoneTicketCost,
   canDepartZone,
-} from './meta.js?v=39n';
+} from './meta.js?v=39o';
 import { HUB_SPOTS } from './hubIsland.js?v=35b';
 import { renderManualHtml } from './hubManual.js?v=41f';
 import * as sfx from './audio.js?v=33f';
@@ -63,7 +63,7 @@ import {
   listRelicIds,
   getRelicDef,
   tierLabel,
-} from './salvageTables.js?v=35d';
+} from './salvageTables.js?v=35e';
 import { openAppraiseScratch } from './appraiseReveal.js?v=39n';
 
 const TAB_TITLES = {
@@ -1944,6 +1944,49 @@ export function createHub(deps) {
       </div>`;
   }
 
+  /** In-game confirm card — replaces native window.confirm inside the hub. */
+  function openHubConfirm({ title, lines = [], confirmLabel = '确认', cancelLabel = '取消', onConfirm }) {
+    document.getElementById('hub-confirm')?.remove();
+    const host = document.getElementById('hub-bm-batch')?.parentElement || document.body;
+    const wrap = document.createElement('div');
+    wrap.id = 'hub-confirm';
+    wrap.className = 'hub-bm-batch hub-confirm';
+    wrap.innerHTML = `
+      <div class="hub-bm-batch-panel">
+        <h3 class="hub-bm-batch-title">${title}</h3>
+        <div class="hub-confirm-body">${lines.map((l) => `<p>${l}</p>`).join('')}</div>
+        <div class="hub-confirm-acts">
+          <button type="button" class="bp-btn bright" data-confirm-ok>${confirmLabel}</button>
+          <button type="button" class="bp-btn ghost" data-confirm-cancel>${cancelLabel}</button>
+        </div>
+      </div>`;
+    host.appendChild(wrap);
+    const close = () => {
+      document.removeEventListener('keydown', onKey, true);
+      wrap.remove();
+    };
+    function onKey(e) {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      sfx.uiClick();
+      close();
+    }
+    document.addEventListener('keydown', onKey, true);
+    wrap.querySelector('[data-confirm-ok]')?.addEventListener('click', () => {
+      sfx.uiClick();
+      close();
+      onConfirm?.();
+    });
+    wrap.querySelector('[data-confirm-cancel]')?.addEventListener('click', () => {
+      sfx.uiClick();
+      close();
+    });
+    wrap.addEventListener('click', (e) => {
+      if (e.target === wrap) close();
+    });
+    wrap.querySelector('[data-confirm-ok]')?.focus();
+  }
+
   function showBmBatchResults(results, msg) {
     const panel = document.getElementById('hub-bm-batch');
     const list = document.getElementById('hub-bm-batch-list');
@@ -2003,19 +2046,29 @@ export function createHub(deps) {
         return;
       }
       sfx.uiClick();
-      const ok = window.confirm(`一键鉴定 ${canOpen} 件黑色包裹？\n费用 ${batchCost} 海图碎片（余额 ${bal}）`);
-      if (!ok) return;
-      const r = appraiseRelicsBatch(deps.getMeta());
-      deps.toast(r.msg);
-      if (r.ok) {
-        sfx.uiBuy();
-        deps.setMeta(r.meta);
-        showBmBatchResults(r.results, r.msg);
-        if (els.bmDetail) {
-          els.bmDetail.innerHTML = `<strong>一键鉴定</strong><p>${r.msg}</p>`;
-        }
-        render();
-      } else sfx.uiDeny();
+      openHubConfirm({
+        title: '一键鉴定',
+        lines: [
+          `鉴定 ${canOpen} 件黑色包裹？`,
+          `费用 ${batchCost} 海图碎片 · 余额 ${bal}`,
+        ],
+        confirmLabel: `确认 · ${batchCost} 碎片`,
+        onConfirm: () => {
+          const r = appraiseRelicsBatch(deps.getMeta());
+          deps.toast(r.msg);
+          if (!r.ok) {
+            sfx.uiDeny();
+            return;
+          }
+          sfx.uiBuy();
+          deps.setMeta(r.meta);
+          showBmBatchResults(r.results, r.msg);
+          if (els.bmDetail) {
+            els.bmDetail.innerHTML = `<strong>一键鉴定</strong><p>${r.msg}</p>`;
+          }
+          render();
+        },
+      });
     });
 
     els.blackmarket.querySelectorAll('[data-shop-key]').forEach((btn) => {
