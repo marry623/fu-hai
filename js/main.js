@@ -682,6 +682,7 @@ const { root: flotRoot, list: flotsam } = createFlotsamField(gradientMap, 22);
 scene.add(flotRoot);
 const { root: vRoot, list: vortices } = createVortexField(gradientMap, VORTEX_COUNT);
 scene.add(vRoot);
+vRoot.visible = false;
 
 const hitSparks = createGpuSparks(scene);
 const hitBursts = createBurstSystem(scene);

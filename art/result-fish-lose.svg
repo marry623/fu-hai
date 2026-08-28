@@ -1,16 +1,40 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 150" fill="none">
-  <ellipse cx="80" cy="88" rx="54" ry="48" fill="#9bb0d8" stroke="#1a1008" stroke-width="5"/>
-  <ellipse cx="62" cy="78" rx="14" ry="10" fill="#d0daf0" opacity=".8"/>
-  <g transform="translate(24,92) rotate(25)">
-    <ellipse cx="0" cy="0" rx="15" ry="11" fill="#9bb0d8" stroke="#1a1008" stroke-width="4"/>
-  </g>
-  <g transform="translate(136,92) rotate(-25)">
-    <ellipse cx="0" cy="0" rx="15" ry="11" fill="#9bb0d8" stroke="#1a1008" stroke-width="4"/>
-  </g>
-  <path d="M58 76 L72 90 M72 76 L58 90" stroke="#1a1008" stroke-width="4.5" stroke-linecap="round"/>
-  <path d="M88 76 L102 90 M102 76 L88 90" stroke="#1a1008" stroke-width="4.5" stroke-linecap="round"/>
-  <path d="M68 112 Q80 102 92 112" stroke="#1a1008" stroke-width="3.5" stroke-linecap="round" fill="none"/>
-  <ellipse cx="98" cy="58" rx="7" ry="5" fill="#7a90c0" stroke="#1a1008" stroke-width="2.5"/>
-  <path d="M108 94 Q114 104 108 112 Q102 104 108 94Z" fill="#6ec8e8" stroke="#1a1008" stroke-width="2.5"/>
-  <path d="M128 100 Q148 88 150 110 Q148 122 128 112" fill="#7a92c0" stroke="#1a1008" stroke-width="4" stroke-linejoin="round"/>
+  <!-- Stormy ocean (darker) -->
+  <ellipse cx="80" cy="120" rx="70" ry="28" fill="#2478b0" stroke="#1a1008" stroke-width="4.5"/>
+  <!-- Choppy wave lines -->
+  <path d="M10 104 Q30 94 50 104 Q70 114 90 104 Q110 94 130 104 Q145 110 155 106"
+        stroke="#3aace0" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M8 116 Q28 108 48 116 Q68 124 88 116 Q108 108 128 116 Q144 120 156 118"
+        stroke="#1a5e94" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- Capsized hull (dome arch pointing up = bottom of boat facing up) -->
+  <path d="M44 96 Q52 74 80 72 Q108 74 116 96 Z"
+        fill="#c07830" stroke="#1a1008" stroke-width="4.5" stroke-linejoin="round"/>
+  <!-- Inner hull (lighter) -->
+  <path d="M50 96 Q58 76 80 74 Q102 76 110 96 Z"
+        fill="#d8923c"/>
+  <!-- Flat deck / keel line now at waterline -->
+  <line x1="44" y1="96" x2="116" y2="96" stroke="#1a1008" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Mast pointing down into water -->
+  <rect x="77" y="96" width="6" height="42" rx="2"
+        fill="#7a4e24" stroke="#1a1008" stroke-width="3"/>
+  <!-- Submerged sail (faded / waterlogged) -->
+  <path d="M82 98 L82 128 L110 114 Z"
+        fill="#8ab8cc" stroke="#1a1008" stroke-width="2.5" stroke-linejoin="round" opacity="0.5"/>
+
+  <!-- Floating debris plank -->
+  <rect x="14" y="86" width="30" height="8" rx="3.5"
+        fill="#c07830" stroke="#1a1008" stroke-width="2.5"
+        transform="rotate(-18, 29, 90)"/>
+
+  <!-- Bubbles -->
+  <circle cx="65" cy="112" r="5" stroke="#1a1008" stroke-width="2" fill="white" opacity="0.6"/>
+  <circle cx="98" cy="120" r="3.5" stroke="#1a1008" stroke-width="2" fill="white" opacity="0.55"/>
+  <circle cx="118" cy="108" r="4.5" stroke="#1a1008" stroke-width="2" fill="white" opacity="0.5"/>
+  <circle cx="78" cy="128" r="3" stroke="#1a1008" stroke-width="1.8" fill="white" opacity="0.45"/>
+
+  <!-- Splash sprays -->
+  <path d="M130 80 Q134 72 140 78" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.75"/>
+  <path d="M18 82 Q24 74 30 80" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.75"/>
 </svg>
