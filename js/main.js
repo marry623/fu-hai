@@ -13,15 +13,16 @@ import {
 import {
   createVortexField, updateVortices, findNearestVortex, createFishingController, CAST_AIM_DIST, tintVortexField, VORTEX_COUNT,
 } from './fishing.js?v=33c';
-import { createHazards } from './hazards.js?v=39d';
+import { createHazards } from './hazards.js?v=41e';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot, ramCdForRarity,
 } from './slots.js?v=39b';
-import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS, familyOf, familyLabel } from './fishCatalog.js?v=34b';
+import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS, familyOf, familyLabel } from './fishCatalog.js?v=41c';
+import { previewCraftOdds, rollCraft, fmtCraftPct } from './fishCraft.js?v=41c';
 import { createFamilyVfx } from './familyVfx.js?v=32p';
 import { createFishMesh } from './fishMeshes.js?v=31c';
-import { beginHitFlash, beginDeathAnim } from './monsterMeshes.js?v=35j';
+import { beginHitFlash, beginDeathAnim } from './monsterMeshes.js?v=41e';
 import { createGpuSparks } from './vfx/gpuSparks.js?v=32s';
 import { createBurstSystem, BurstMode } from './vfx/burstSphere.js?v=32s';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
@@ -50,8 +51,8 @@ import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { applyHudTheme } from './hudTheme.js?v=39j';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=40e';
-import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=36a';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=41f';
+import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=41f';
 import * as sfx from './audio.js?v=33f';
 
 const canvas = document.getElementById('c');
@@ -87,6 +88,7 @@ const ui = {
   btnStart: null,
   backpack: document.getElementById('backpack'),
   bpGrid: document.getElementById('bp-grid'),
+  bpColNums: document.querySelector('#backpack .bp-col-nums'),
   bpMatTitle: document.getElementById('bp-mat-title'),
   fishCount: document.getElementById('fish-count'),
   bpEmpty: document.getElementById('bp-empty'),
@@ -107,6 +109,8 @@ const ui = {
   btnEat: document.getElementById('btn-eat'),
   btnEquip: document.getElementById('btn-equip'),
   btnFeed: document.getElementById('btn-feed'),
+  btnCraft: document.getElementById('btn-craft'),
+  btnCraftClear: document.getElementById('btn-craft-clear'),
   eventModal: document.getElementById('event-modal'),
   eventTitle: document.getElementById('event-title'),
   eventDesc: document.getElementById('event-desc'),
@@ -178,6 +182,7 @@ const state = {
   seaMapOpen: false,
   fishPanelOpen: false,
   backpackTab: 'catch',
+  craftSlots: [null, null, null, null],
   selectedSupply: null,
   runDistance: 0,
   maxZ: 0,
@@ -1756,12 +1761,44 @@ function isBagpackKey(e) {
     || e.code === 'KeyB' || e.key === 'b' || e.key === 'B';
 }
 
+let craftPreviewFish = null;
+let craftPreviewTimer = 0;
+
+function remapCraftSlots(removedIndex) {
+  if (removedIndex == null || removedIndex < 0) return;
+  state.craftSlots = (state.craftSlots || [null, null, null, null]).map((i) => {
+    if (i == null) return null;
+    if (i === removedIndex) return null;
+    if (i > removedIndex) return i - 1;
+    return i;
+  });
+}
+
+function pruneCraftSlots() {
+  const next = [null, null, null, null];
+  (state.craftSlots || []).forEach((i, k) => {
+    if (k < 4 && i != null && state.fishHold[i]) next[k] = i;
+  });
+  state.craftSlots = next;
+}
+
+function craftMaterialsFromSlots() {
+  pruneCraftSlots();
+  return state.craftSlots.map((i) => (i == null ? null : state.fishHold[i])).filter(Boolean);
+}
+
 function renderBackpack() {
   const tab = state.backpackTab;
-  document.querySelectorAll('.bp-tab').forEach((el) => {
+  document.querySelectorAll('#backpack .bp-tab').forEach((el) => {
     el.classList.toggle('active', el.dataset.tab === tab);
   });
-  ui.bpMatTitle.textContent = tab === 'catch' ? '鱼获' : tab === 'slots' ? '船槽' : tab === 'relics' ? '宝物' : '物资';
+  ui.bpMatTitle.textContent = tab === 'catch' ? '鱼获'
+    : tab === 'slots' ? '船槽'
+    : tab === 'relics' ? '宝物'
+    : tab === 'craft' ? '合成台'
+    : '物资';
+  ui.bpGrid.className = tab === 'craft' ? 'bp-craft' : 'bp-grid';
+  ui.bpColNums?.classList.toggle('hidden', tab === 'craft');
   ui.bpGrid.innerHTML = '';
   ui.bpSlotRow.innerHTML = '';
   if (tab !== 'slots') bpBoatStage?.setActive(false);
@@ -1821,6 +1858,94 @@ function renderBackpack() {
     ui.fishCount.textContent = String(SLOT_ORDER.filter((s) => state.slots[s]).length);
     bpBoatStage?.setActive(true);
     bpBoatStage?.sync(state.slots, selectedBoat, state.selectedSlot);
+  } else if (tab === 'craft') {
+    pruneCraftSlots();
+    const used = new Set(state.craftSlots.filter((i) => i != null));
+    ui.fishCount.textContent = String(used.size);
+    const board = document.createElement('div');
+    board.className = 'bp-craft-board';
+    const matCol = document.createElement('div');
+    matCol.className = 'bp-craft-col';
+    const matLabel = document.createElement('span');
+    matLabel.className = 'bp-craft-label';
+    matLabel.textContent = '\u6750\u6599 2\u20134';
+    matCol.appendChild(matLabel);
+    const slotsWrap = document.createElement('div');
+    slotsWrap.className = 'bp-craft-slots';
+    for (let s = 0; s < 4; s++) {
+      const idx = state.craftSlots[s];
+      const f = idx == null ? null : state.fishHold[idx];
+      slotsWrap.appendChild(makePolaroidCell({
+        kind: 'fish',
+        index: s,
+        item: f,
+        selected: false,
+        emptyLabel: '+',
+        onClick: () => {
+          if (f) {
+            state.craftSlots[s] = null;
+            renderBackpack();
+            return;
+          }
+          showToast('\u70b9\u4e0b\u65b9\u9c7c\u83b7\u653e\u5165');
+        },
+      }));
+    }
+    matCol.appendChild(slotsWrap);
+    board.appendChild(matCol);
+    const arrow = document.createElement('div');
+    arrow.className = 'bp-craft-arrow';
+    arrow.textContent = '\u2192';
+    board.appendChild(arrow);
+    const outCol = document.createElement('div');
+    outCol.className = 'bp-craft-col';
+    const outLabel = document.createElement('span');
+    outLabel.className = 'bp-craft-label';
+    outLabel.textContent = '\u4ea7\u7269';
+    outCol.appendChild(outLabel);
+    const previewWrap = document.createElement('div');
+    previewWrap.className = 'bp-craft-preview';
+    previewWrap.appendChild(makePolaroidCell({
+      kind: 'fish',
+      index: -1,
+      item: craftPreviewFish,
+      selected: !!craftPreviewFish,
+      emptyLabel: '?',
+    }));
+    if (craftPreviewFish) previewWrap.querySelector('.bp-cell')?.classList.add('flash');
+    outCol.appendChild(previewWrap);
+    board.appendChild(outCol);
+    ui.bpGrid.appendChild(board);
+    const sep = document.createElement('div');
+    sep.className = 'bp-craft-sep';
+    sep.textContent = '\u9c7c\u83b7 \u00b7 \u70b9\u51fb\u653e\u5165';
+    ui.bpGrid.appendChild(sep);
+    const picker = document.createElement('div');
+    picker.className = 'bp-craft-picker';
+    const pickable = state.fishHold
+      .map((f, i) => ({ f, i }))
+      .filter((row) => !used.has(row.i));
+    const cells = Math.max(10, Math.ceil((pickable.length + 1) / 5) * 5);
+    for (let p = 0; p < cells; p++) {
+      const row = pickable[p];
+      picker.appendChild(makePolaroidCell({
+        kind: 'fish',
+        index: row ? row.i : p,
+        item: row ? row.f : null,
+        selected: false,
+        onClick: row ? () => {
+          const empty = state.craftSlots.findIndex((x) => x == null);
+          if (empty < 0) {
+            showToast('\u56db\u4e2a\u69fd\u5df2\u6ee1');
+            sfx.uiDeny();
+            return;
+          }
+          state.craftSlots[empty] = row.i;
+          renderBackpack();
+        } : null,
+      }));
+    }
+    ui.bpGrid.appendChild(picker);
   } else if (tab === 'relics') {
     const relics = state.inventory.relics || [];
     ui.fishCount.textContent = String(relics.length);
@@ -1871,7 +1996,7 @@ function renderBackpack() {
   syncDeckFish(boat, state.fishHold, gradientMap);
 }
 
-function makePolaroidCell({ kind, index, item, selected, onClick, badge }) {
+function makePolaroidCell({ kind, index, item, selected, onClick, badge, emptyLabel }) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'bp-cell'
@@ -1881,7 +2006,10 @@ function makePolaroidCell({ kind, index, item, selected, onClick, badge }) {
   btn.style.setProperty('--tilt', '0deg');
 
   if (!item) {
-    btn.innerHTML = `<div class="bp-polaroid"><div class="bp-thumb"></div><div class="bp-cell-name">—</div></div>`;
+    const mark = emptyLabel === '+' || emptyLabel === '?' ? emptyLabel : '';
+    const name = emptyLabel || '\u2014';
+    btn.innerHTML = `<div class="bp-polaroid"><div class="bp-thumb${mark ? ' bp-thumb-plus' : ''}">${mark}</div><div class="bp-cell-name">${name}</div></div>`;
+    if (onClick) btn.onclick = (e) => { sfx.uiClick(); onClick(e); };
     return btn;
   }
 
@@ -1987,6 +2115,39 @@ function renderBackpackDetail() {
       fish: f,
       actions: { discard: false, eat: false, equip: false, feed: false, use: false },
     });
+  } else if (tab === 'craft') {
+    show = true;
+    const mats = craftMaterialsFromSlots();
+    const odds = previewCraftOdds(mats);
+    const n = mats.length;
+    const lines = odds
+      ? [
+        `\u964d 1 \u9636 ${fmtCraftPct(odds.down)}\uff08${rarityStars(odds.rarityDown)}\uff09`,
+        `\u540c\u9636 ${fmtCraftPct(odds.same)}\uff08${rarityStars(odds.raritySame)}\uff09`,
+        `\u5347 1 \u9636 ${fmtCraftPct(odds.up)}\uff08${rarityStars(odds.rarityUp)}\uff09`,
+        `\u9690\u85cf\u516d\u661f ${fmtCraftPct(odds.hidden)}`,
+      ]
+      : ['\u653e\u5165 2\u20134 \u6761\u9c7c\u83b7'];
+    fillDetail({
+      name: '\u5408\u6210\u53f0',
+      serial: `${n} / 4`,
+      color: 0xd07050,
+      rarity: odds ? Math.min(5, odds.R) : 1,
+      ribbon: '\u5408\u6210',
+      tagline: n < 2 ? '\u81f3\u5c11\u653e\u5165 2 \u6761' : `\u6700\u9ad8 ${rarityStars(odds.R)} \u00b7 ${n} \u6761`,
+      desc: '\u4ea7\u7269\u4ece\u5168\u56fe\u9274\u62bd\u53d6\uff0c\u542b\u88c2\u53e3\u4f20\u8bf4\u4e0e\u6d77\u6c9f\u9690\u85cf\u3002',
+      meta: lines.join('<br>'),
+      showSlots: false,
+      actions: {
+        discard: false,
+        eat: false,
+        equip: false,
+        feed: false,
+        use: false,
+        craft: n >= 2,
+        craftClear: n > 0,
+      },
+    });
   } else if (tab === 'supplies' && state.selectedSupply) {
     show = true;
     const map = {
@@ -2029,6 +2190,10 @@ function renderBackpackDetail() {
 
   ui.bpEmpty.classList.toggle('hidden', show);
   ui.bpDetail.classList.toggle('hidden', !show);
+  if (tab !== 'craft') {
+    if (ui.btnCraft) ui.btnCraft.style.display = 'none';
+    if (ui.btnCraftClear) ui.btnCraftClear.style.display = 'none';
+  }
 }
 
 function fillDetail({ name, serial, color, defId, itemId, rarity, ribbon, tagline, desc, meta, showSlots, actions, fish }) {
@@ -2065,6 +2230,8 @@ function fillDetail({ name, serial, color, defId, itemId, rarity, ribbon, taglin
     equip: !!actions.equip,
     feed: !!actions.feed,
     discard: !!actions.discard,
+    craft: !!actions.craft,
+    craftClear: !!actions.craftClear,
   };
   ui.btnUse.disabled = !show.use;
   ui.btnEat.disabled = !show.eat;
@@ -2076,6 +2243,14 @@ function fillDetail({ name, serial, color, defId, itemId, rarity, ribbon, taglin
   ui.btnEquip.style.display = show.equip ? '' : 'none';
   ui.btnFeed.style.display = show.feed ? '' : 'none';
   ui.btnDiscard.style.display = show.discard ? '' : 'none';
+  if (ui.btnCraft) {
+    ui.btnCraft.style.display = (show.craft || show.craftClear || state.backpackTab === 'craft') ? 'block' : 'none';
+    ui.btnCraft.disabled = !show.craft;
+  }
+  if (ui.btnCraftClear) {
+    ui.btnCraftClear.style.display = (show.craft || show.craftClear || state.backpackTab === 'craft') ? 'block' : 'none';
+    ui.btnCraftClear.disabled = !show.craftClear;
+  }
   ui.btnEquip.classList.toggle('tut-equip-hl', isTutEquipLock() && show.equip);
 }
 
@@ -2099,6 +2274,7 @@ function discardFish() {
   }
   const f = state.fishHold[state.selectedFish];
   if (!f) return showToast('先选鱼');
+  remapCraftSlots(state.selectedFish);
   state.fishHold.splice(state.selectedFish, 1);
   state.selectedFish = Math.min(state.selectedFish, state.fishHold.length - 1);
   showToast(`丢弃 ${f.name}`);
@@ -2170,6 +2346,7 @@ function eatOrRepair() {
   if (!f) return showToast('先选鱼');
   const def = getFishDef(f.defId);
   const eat = f.eat || def.eat || {};
+  remapCraftSlots(state.selectedFish);
   state.fishHold.splice(state.selectedFish, 1);
   state.selectedFish = -1;
   if (def.id === 'glue' || eat.glue) {
@@ -2205,6 +2382,7 @@ function doEquip() {
   refreshSlots();
   const res = equipFish(boat, state.slots, f, def.slot, gradientMap);
   if (!res.ok) return showToast(res.msg);
+  remapCraftSlots(state.selectedFish);
   state.fishHold.splice(state.selectedFish, 1);
   state.selectedFish = -1;
   state.mods++;
@@ -2227,9 +2405,54 @@ function doFeed() {
   if (!f || getFishDef(f.defId).category !== 'food') return showToast('需要食物鱼投喂');
   const slot = state.selectedSlot;
   if (!feedSlot(state.slots, slot, 30)) return showToast('该槽无需投喂（活性≥30或空）');
+  remapCraftSlots(state.selectedFish);
   state.fishHold.splice(state.selectedFish, 1);
   state.selectedFish = -1;
   showToast(`投喂 ${SLOT_LABELS[slot]} +30 活性`);
+  renderFishList();
+}
+
+function clearCraftSlots() {
+  state.craftSlots = [null, null, null, null];
+  renderBackpack();
+}
+
+function doCraftFish() {
+  pruneCraftSlots();
+  const indices = [...new Set(state.craftSlots.filter((i) => i != null))].sort((a, b) => b - a);
+  const mats = indices.map((i) => state.fishHold[i]).filter(Boolean);
+  const rolled = rollCraft(mats);
+  if (!rolled.ok || !rolled.fish) {
+    showToast('\u653e\u5165 2\u20134 \u6761\u9c7c\u83b7');
+    sfx.uiDeny();
+    return;
+  }
+  for (const i of indices) state.fishHold.splice(i, 1);
+  state.fishHold.push(rolled.fish);
+  state.craftSlots = [null, null, null, null];
+  state.selectedFish = state.fishHold.length - 1;
+  craftPreviewFish = rolled.fish;
+  clearTimeout(craftPreviewTimer);
+  craftPreviewTimer = setTimeout(() => {
+    craftPreviewFish = null;
+    if (state.backpackTab === 'craft') renderBackpack();
+  }, 800);
+  sfx.fishCatch();
+  const stars = rarityStars(rolled.rarity);
+  if (tut.active) {
+    showToast(`\u5408\u6210 ${rolled.fish.name}\uff08\u6559\u5b66\u5173\uff0c\u4e0d\u4f1a\u5165\u5e93\uff09`);
+  } else {
+    const disc = discoverFish(meta, [rolled.fish.defId]);
+    meta = disc.meta;
+    if (disc.newIds.length) {
+      runNewFish += disc.newIds.length;
+      showToast(`\u5408\u6210\u65b0\u9c7c\u79cd\uff01${rolled.fish.name}`);
+    } else if (rolled.hidden) {
+      showToast(`\u5408\u6210\u9690\u85cf\uff01${rolled.fish.name}`);
+    } else {
+      showToast(`\u5408\u6210 ${rolled.fish.name}\uff08${stars}\uff09`);
+    }
+  }
   renderFishList();
 }
 
@@ -2493,6 +2716,7 @@ function startRun(fromCheckpoint = false) {
     state.kills = 0;
     state.mods = 0;
     runNewFish = 0;
+    state.craftSlots = [null, null, null, null];
     if (isTut) {
       // Sandbox kit — do not sync/consume warehouse loadout
       Object.keys(boat.userData.mounts || {}).forEach((k) => {
@@ -2511,6 +2735,7 @@ function startRun(fromCheckpoint = false) {
         relics: [],
       };
       state.selectedFish = -1;
+      state.craftSlots = [null, null, null, null];
       syncDeckFish(boat, state.fishHold, gradientMap);
     } else {
       if (!loadoutSuppliesPacked(meta.loadout?.supplies)) {
@@ -3553,7 +3778,9 @@ ui.btnUse.onclick = () => { sfx.uiClick(); useSupply(); };
 ui.btnEat.onclick = () => { sfx.uiClick(); eatOrRepair(); };
 ui.btnEquip.onclick = () => { sfx.uiClick(); doEquip(); };
 ui.btnFeed.onclick = () => { sfx.uiClick(); doFeed(); };
-document.querySelectorAll('.bp-tab').forEach((el) => {
+ui.btnCraft?.addEventListener('click', () => { sfx.uiClick(); doCraftFish(); });
+ui.btnCraftClear?.addEventListener('click', () => { sfx.uiClick(); clearCraftSlots(); });
+document.querySelectorAll('#backpack .bp-tab').forEach((el) => {
   el.onclick = () => {
     sfx.uiClick();
     if (isTutEquipLock() && el.dataset.tab !== 'catch') {

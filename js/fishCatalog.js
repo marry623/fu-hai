@@ -330,7 +330,7 @@ export function foodEatColor(eat) {
   return 0x4ecdc4;
 }
 
-function makeCaught(id, extra = {}) {
+export function makeCaught(id, extra = {}) {
   const def = getFishDef(id);
   const eat = extra.eat || def.eat || null;
   return {
@@ -344,6 +344,26 @@ function makeCaught(id, extra = {}) {
     vitality: 100,
     eat,
   };
+}
+
+/** Slotted species at a rarity (excludes food/glue). Ignores map pools. */
+export function listFishIdsByRarity(rarity, { slottedOnly = true } = {}) {
+  const r = rarity | 0;
+  return Object.keys(FISH_CATALOG).filter((id) => {
+    const d = FISH_CATALOG[id];
+    if ((d.rarity | 0) !== r) return false;
+    if (slottedOnly && !d.slot) return false;
+    return true;
+  });
+}
+
+export function spawnFishOfRarity(rarity) {
+  const r = Math.max(1, Math.min(6, rarity | 0));
+  const ids = listFishIdsByRarity(r, { slottedOnly: true });
+  const id = ids.length
+    ? ids[Math.floor(Math.random() * ids.length)]
+    : 'dullSnout';
+  return makeCaught(id);
 }
 
 export function qteForFish(defId) {

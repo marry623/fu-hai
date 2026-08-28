@@ -1,53 +1,8 @@
 /** Low-poly monster meshes for combat + bestiary portraits */
 
 import * as THREE from 'three';
-import { GLTFLoader } from '../vendor/three/GLTFLoader.js';
 import { addOutline, toonMat, ensureOutlineMaterials } from './stylekit.js?v=34a';
 import { resolveMonsterId, monsterHp } from './monsterCatalog.js?v=31g';
-
-/* ---- Anglerfish GLB pre-loader (replaces makeClassicShark) ---- */
-let _sharkGlbTemplate = null;
-{
-  const _loader = new GLTFLoader();
-  _loader.load(
-    './models/anglerfish-shark.glb?v=1',
-    (gltf) => {
-      // GLB contains SkinnedMesh (rigged). Three.js clone() cannot correctly
-      // duplicate a skeleton, so demote every SkinnedMesh to a regular Mesh
-      // first (keeps the bind-pose geometry, drops animation data).
-      const skinned = [];
-      gltf.scene.traverse((o) => { if (o.isSkinnedMesh) skinned.push(o); });
-      for (const sm of skinned) {
-        const m = new THREE.Mesh(sm.geometry, sm.material);
-        m.name = sm.name;
-        m.position.copy(sm.position);
-        m.quaternion.copy(sm.quaternion);
-        m.scale.copy(sm.scale);
-        if (sm.parent) { sm.parent.add(m); sm.parent.remove(sm); }
-      }
-
-      const root = new THREE.Group();
-      root.add(gltf.scene);
-      // Auto-scale: target longest axis = 4.5 world units
-      root.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(root);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      const target = 4.5;
-      const sc = target / Math.max(size.x, size.y, size.z, 1e-6);
-      root.scale.setScalar(sc);
-      root.updateMatrixWorld(true);
-      const box2 = new THREE.Box3().setFromObject(root);
-      root.position.x -= (box2.min.x + box2.max.x) * 0.5;
-      root.position.y -= box2.min.y;
-      root.position.z -= (box2.min.z + box2.max.z) * 0.5;
-      root.rotation.y = Math.PI;
-      _sharkGlbTemplate = root;
-    },
-    undefined,
-    (err) => console.warn('[monsterMeshes] anglerfish GLB load failed, using fallback:', err),
-  );
-}
 
 function addPart(g, mesh, outlineScale = 1.08) {
   g.add(mesh);
@@ -427,7 +382,6 @@ export function makeClassicShark(gm) {
     addPart(bodyRoot, eye, 1.2);
   }
 
-  splash(g, gm, 1.6);
   bodyRoot.rotation.x = -0.75;
   bodyRoot.position.y = 2.6;
   return g;
@@ -567,15 +521,7 @@ const BUILDERS = {
   voidOctopus: makeVoidOctopus,
   waveWhale: makeWaveWhale,
   trenchWorm: makeTrenchWorm,
-  shark: (gm) => {
-    if (_sharkGlbTemplate) {
-      const clone = _sharkGlbTemplate.clone(true);
-      clone.position.y = 2.6;
-      splash(clone, gm, 1.6);
-      return clone;
-    }
-    return makeClassicShark(gm);
-  },
+  shark: makeClassicShark,
   serpent: makeClassicSerpent,
   kraken: makeClassicKraken,
 };

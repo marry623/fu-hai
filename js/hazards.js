@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
 import { pointInPoly, EVAC_RADIUS, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=32y';
 import { pickMonsterForZone, getMonsterDef, monstersForZone, monsterHp, hullTouchDamage, hullShotDamage, wrapDps, wrapCountForZone } from './monsterCatalog.js?v=39d';
-import { createCombatMonster, createMonsterMesh, syncHpBar, tickHitFlash, tickDeathAnim, finishDeathAnim } from './monsterMeshes.js?v=35j';
+import { createCombatMonster, createMonsterMesh, syncHpBar, tickHitFlash, tickDeathAnim, finishDeathAnim } from './monsterMeshes.js?v=41e';
 
 export { createMonsterMesh, EVAC_RADIUS, EVAC_HOLD };
 

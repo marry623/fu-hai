@@ -7,7 +7,7 @@ import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=37a';
 import { getRelicPortrait, relicFaceHtml } from './relicPortrait.js?v=35c';
 import { listMonsterIds, getMonsterDef } from './monsterCatalog.js?v=31g';
-import { getMonsterPortrait } from './monsterPortrait.js?v=29p';
+import { getMonsterPortrait } from './monsterPortrait.js?v=41e';
 import {
   SHOP_TABS,
   SHOP_HULLS,
@@ -56,7 +56,7 @@ import {
   canDepartZone,
 } from './meta.js?v=39n';
 import { HUB_SPOTS } from './hubIsland.js?v=35b';
-import { renderManualHtml } from './hubManual.js?v=39n';
+import { renderManualHtml } from './hubManual.js?v=41f';
 import * as sfx from './audio.js?v=33f';
 import {
   APPRAISE_COST,

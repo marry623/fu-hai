@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>浮骸 · 海上肉鸽</title>
-  <link rel="stylesheet" href="css/style.css?v=40e" />
+  <link rel="stylesheet" href="css/style.css?v=41f" />
 </head>
 <body>
   <div id="game-root">
@@ -104,6 +104,10 @@
               <span class="bp-tab-icon bp-ico-relic"></span>
               <span class="bp-tab-label">宝物</span>
             </button>
+            <button type="button" class="bp-tab" data-tab="craft">
+              <span class="bp-tab-icon bp-ico-craft"></span>
+              <span class="bp-tab-label">合成台</span>
+            </button>
             <p class="bp-nav-hint">Tab 关闭</p>
           </aside>
           <section class="bp-mat">
@@ -140,6 +144,8 @@
                   <button type="button" id="btn-equip" class="bp-btn bright">改装</button>
                   <button type="button" id="btn-feed" class="bp-btn bright">投喂</button>
                   <button type="button" id="btn-discard" class="bp-btn dim">丢弃</button>
+                  <button type="button" id="btn-craft" class="bp-btn bright">合成</button>
+                  <button type="button" id="btn-craft-clear" class="bp-btn dim">清空</button>
                 </div>
               </div>
             </div>
@@ -435,8 +441,8 @@
     window.addEventListener('unhandledrejection', (e) => show(e.reason && e.reason.stack || e.reason));
     const fileHint = '请勿直接双击 index.html。运行项目里的 play.bat，或打开 http://127.0.0.1:8787/\nChrome 在 file:// 下无法加载 ES 模块。';
     const urls = location.protocol === 'file:'
-      ? ['./js/main.js', './js/main.js?v=40e']
-      : ['./js/main.js?v=40e'];
+      ? ['./js/main.js', './js/main.js?v=41f']
+      : ['./js/main.js?v=41f'];
     if (location.protocol === 'file:') show(fileHint);
     let last = null;
     let ok = false;
