@@ -100,6 +100,18 @@ export const HUD_THEMES = {
 };
 
 /**
+ * Zone accent as a numeric hex — lets 3D effects match the HUD palette.
+ * @param {number} zoneId
+ * @returns {number}
+ */
+export function hudAccentHex(zoneId) {
+  const theme = HUD_THEMES[zoneId | 0] || HUD_THEMES[0];
+  const raw = theme.vars['--border'] || '#ffe7aa';
+  const parsed = Number.parseInt(raw.replace('#', ''), 16);
+  return Number.isFinite(parsed) ? parsed : 0xffe7aa;
+}
+
+/**
  * @param {number} zoneId
  * @param {HTMLElement | null} [hudEl]
  */

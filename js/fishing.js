@@ -236,6 +236,7 @@ export function createFishingController(hooks) {
     const hit = st.pointer >= st.greenCenter - half && st.pointer <= st.greenCenter + half;
     if (hit) {
       st.hitsDone += 1;
+      hooks.onHit?.(st.hitsDone, st.hitsNeeded);
       hooks.toast?.(`判定 ${st.hitsDone}/${st.hitsNeeded}`);
       st.greenCenter = 0.3 + Math.random() * 0.4;
       st.pointer = 0;

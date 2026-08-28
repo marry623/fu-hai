@@ -12,7 +12,7 @@ import {
 } from './flotsam.js?v=35d';
 import {
   createVortexField, updateVortices, findNearestVortex, createFishingController, CAST_AIM_DIST, tintVortexField, VORTEX_COUNT,
-} from './fishing.js?v=33c';
+} from './fishing.js?v=42a';
 import { createHazards } from './hazards.js?v=41e';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
@@ -25,6 +25,7 @@ import { createFishMesh } from './fishMeshes.js?v=31c';
 import { beginHitFlash, beginDeathAnim } from './monsterMeshes.js?v=41e';
 import { createGpuSparks } from './vfx/gpuSparks.js?v=32s';
 import { createBurstSystem, BurstMode } from './vfx/burstSphere.js?v=32s';
+import { createRewardFlight } from './rewardFlight.js?v=42d';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=37a';
 import { getRelicPortrait } from './relicPortrait.js?v=35c';
@@ -48,12 +49,12 @@ import { createBpBoatStage } from './bpBoatStage.js?v=31e';
 import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=39d';
 import { ensureAllPropGlbsLoading } from './propGlb.js?v=38x';
 import { getSeaBiome } from './seaBiomes.js?v=30h';
-import { applyHudTheme } from './hudTheme.js?v=39j';
+import { applyHudTheme } from './hudTheme.js?v=42b';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=41f';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=42d';
 import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=41f';
-import * as sfx from './audio.js?v=33f';
+import * as sfx from './audio.js?v=42a';
 
 const canvas = document.getElementById('c');
 const minimapCtx = document.getElementById('minimap').getContext('2d');
@@ -697,6 +698,41 @@ function addCamShake(amp, ms = 220) {
   camShake.amp = Math.min(0.85, Math.max(camShake.amp, amp));
   camShake.until = Math.max(camShake.until, performance.now() + ms);
 }
+
+let salvageBusy = false;
+
+function pulseRewardHud(el = ui.invText) {
+  if (!el) return;
+  el.classList.remove('reward-pulse');
+  void el.offsetWidth;
+  el.classList.add('reward-pulse');
+  setTimeout(() => el.classList.remove('reward-pulse'), 380);
+}
+
+function pulseQteSuccess() {
+  if (!ui.qte) return;
+  ui.qte.classList.add('reward-success');
+  ui.qte.classList.remove('hidden');
+  setTimeout(() => {
+    ui.qte.classList.remove('reward-success');
+    ui.qte.classList.add('hidden');
+  }, 285);
+}
+
+const rewardFlight = createRewardFlight({
+  scene,
+  camera,
+  getTarget(out) {
+    out.set(paddle.state.x, Math.max(1.25, boat.position.y + 1.15), paddle.state.z);
+  },
+  addCameraShake: addCamShake,
+});
+
+function clearRewardFeedback() {
+  rewardFlight.clear();
+  salvageBusy = false;
+}
+
 const monsterHitFx = {
   pulse(target, { amount, killed, quiet, from, dir, element, kind, intensity }) {
     if (!target) return;
@@ -883,6 +919,7 @@ function clearCombatVfx() {
   skillVfx.clear();
   hitSparks.clear();
   hitBursts.clear();
+  clearRewardFeedback();
   familyVfx.sync([]);
   resetMonsterFx();
 }
@@ -1387,13 +1424,14 @@ const fishing = createFishingController({
   onPhase(ph) {
     if (ph === 'qte') {
       ui.qte.classList.remove('hidden');
+      if (ui.qteHits) ui.qteHits.textContent = '';
       ui.btnFishCn.textContent = '收竿';
       sfx.fishBite();
     } else if (ph === 'wait' || ph === 'cast') {
       ui.qte.classList.add('hidden');
       ui.btnFishCn.textContent = '等待';
     } else {
-      ui.qte.classList.add('hidden');
+      if (!ui.qte.classList.contains('reward-success')) ui.qte.classList.add('hidden');
       ui.btnFishCn.textContent = '抛竿';
     }
   },
@@ -1401,6 +1439,11 @@ const fishing = createFishingController({
     ui.qteGreen.style.left = `${(c - w / 2) * 100}%`;
     ui.qteGreen.style.width = `${w * 100}%`;
     ui.qtePointer.style.left = `${p * 100}%`;
+  },
+  onHit(done, needed) {
+    if (ui.qteHits) ui.qteHits.textContent = `${done}/${needed}`;
+    pulseRewardHud(ui.qteGreen);
+    if (done >= needed) pulseQteSuccess();
   },
   onRod(on) {
     if (!on) hideFishingFx();
@@ -1443,38 +1486,46 @@ const fishing = createFishingController({
         if (getFishDef(t.defId)?.slot) { fish = t; break; }
       }
     }
-    state.fishHold.push(fish);
-    sfx.fishCatch();
-    state.selectedFish = state.fishHold.length - 1;
-    syncDeckFish(boat, state.fishHold, gradientMap);
-    showCatchLift(fish);
-    if (tut.active) {
-      showToast(`钓到 ${fish.name}（教学关，不会入库）`);
-    } else {
-      const disc = discoverFish(meta, [fish.defId]);
-      meta = disc.meta;
-      if (disc.newIds.length) {
-        runNewFish += disc.newIds.length;
-        showToast(`新鱼种！${fish.name} 已记入图鉴`);
+    const from = {
+      x: fishing.bobber.x,
+      y: Math.max(0.3, bobberMesh.position.y || 0.3),
+      z: fishing.bobber.z,
+    };
+    const caught = fish;
+    const finishCatch = () => {
+      if (!state.started || hull.sunk) return;
+      state.fishHold.push(caught);
+      state.selectedFish = state.fishHold.length - 1;
+      if (tut.active) {
+        showToast(`钓到 ${caught.name}（教学关，不会入库）`);
       } else {
-        showToast(`钓到 ${fish.name}（${rarityStars(fish.rarity)}）· Tab 查看`);
+        const disc = discoverFish(meta, [caught.defId]);
+        meta = disc.meta;
+        if (disc.newIds.length) {
+          runNewFish += disc.newIds.length;
+          showToast(`新鱼种！${caught.name} 已记入图鉴`);
+        } else {
+          showToast(`钓到 ${caught.name}（${rarityStars(caught.rarity)}）· Tab 查看`);
+        }
       }
-    }
-    renderFishList();
+      renderFishList();
+      pulseRewardHud();
+    };
+    const shown = showCatchLift(caught, from, finishCatch);
+    if (!shown) finishCatch();
   },
 });
 
-function showCatchLift(fish) {
+function showCatchLift(fish, from, onLand) {
   const m = createFishMesh(fish.defId, gradientMap, 1.1, fish.defId === 'food' ? fish.color : null);
-  m.position.set(paddle.state.x + 1, 1.5, paddle.state.z);
-  scene.add(m);
-  let t = 0;
-  const id = setInterval(() => {
-    t += 0.05;
-    m.position.y = 1.5 + t * 1.2;
-    m.rotation.y += 0.1;
-    if (t > 1.2) { scene.remove(m); clearInterval(id); }
-  }, 40);
+  const rarity = Math.max(1, Math.min(6, fish.rarity | 0));
+  sfx.rewardPickup();
+  return rewardFlight.spawn({
+    object: m,
+    from,
+    rarity,
+    onLand,
+  });
 }
 
 function takeBaitFromInventory() {
@@ -1538,14 +1589,38 @@ function tryAnchor() {
 }
 
 function trySalvage() {
-  if (hull.sunk || state.pendingEvent) return;
+  if (hull.sunk || state.pendingEvent || salvageBusy) return;
   const hit = findNearestFlotsam(flotsam, boatPos(), 7);
   if (!hit) { showToast('附近没有漂浮物'); return; }
   const obj = hit.item;
+  const display = obj.clone(true);
+  display.visible = true;
+  display.position.set(0, 0, 0);
+  const from = obj.position.clone();
   obj.visible = false;
   obj.userData.collected = true;
   const r = rollSalvage(obj.userData.type, startZone | 0);
 
+  salvageBusy = true;
+  sfx.rewardPickup();
+  const shown = rewardFlight.spawn({
+    object: display,
+    from,
+    rarity: r.type === 'relic' ? 3 : 1,
+    danger: r.type === 'trap',
+    onLand() {
+      salvageBusy = false;
+      resolveSalvage(obj, r);
+    },
+  });
+  if (!shown) {
+    salvageBusy = false;
+    resolveSalvage(obj, r);
+  }
+}
+
+function resolveSalvage(obj, r) {
+  if (!state.started || hull.sunk) return;
   if (tut.active) {
     grantBait(1, 'crude');
     showToast('打捞到鱼饵（教学）');
@@ -1553,6 +1628,7 @@ function trySalvage() {
     tut.salvaged = true;
   } else if (r.type === 'trap') {
     applyDamage(r.damage || 20, r.flavor || '箱型海性');
+    pulseRewardHud(ui.hpText);
   } else if (r.type === 'bottleEvent') {
     applyBottleEffect(r.event);
   } else if (r.type === 'relic') {
@@ -1560,7 +1636,6 @@ function trySalvage() {
     state.inventory.relics.push(r.relic);
     const { list, dropped } = trimRelicCarry(state.inventory.relics, RELIC_CARRY_CAP);
     state.inventory.relics = list;
-    sfx.collect();
     if (dropped > 0) {
       showToast(`捞到黑色包裹 · 舱满丢弃最早的（${list.length}/${RELIC_CARRY_CAP}）`);
     } else {
@@ -1576,10 +1651,10 @@ function trySalvage() {
     } else {
       state.inventory[r.supply] = (state.inventory[r.supply] || 0) + amt;
     }
-    sfx.collect();
     showToast(`打捞 ${r.name}×${amt}`);
     updateInv();
   }
+  if (r.type !== 'trap') pulseRewardHud();
 
   if (!tut.active) {
     setTimeout(() => {
@@ -1600,11 +1675,9 @@ function applyBottleEffect(ev) {
   if (fx.kind === 'supply') {
     const amt = Math.max(1, Math.round((fx.amount || 1) * salvageMul));
     state.inventory[fx.supply] = (state.inventory[fx.supply] || 0) + amt;
-    sfx.collect();
   } else if (fx.kind === 'bait') {
     const amt = Math.max(1, Math.round((fx.amount || 1) * salvageMul));
     grantBait(amt, fx.baitKind || state.inventory.baitKind || 'fresh');
-    sfx.collect();
   } else if (fx.kind === 'heal') {
     repairHull(hull, fx.amount || 10);
     updateHp();
@@ -2682,6 +2755,7 @@ function startRun(fromCheckpoint = false) {
   camInit = false;
   fishing.reset();
   hideFishingFx();
+  clearRewardFeedback();
   resetMonsterFx();
   selectedBoat = clampBoatId(meta.unlocks, meta.loadout?.boatId || selectedBoat);
   setBoatVariant(boat, selectedBoat);
@@ -3538,6 +3612,7 @@ function tick() {
   if (state.seaMapOpen) drawSeaMapOverlay();
   if (phase === 'play' || state.started) {
     skillVfx.update(dt);
+    rewardFlight.update(dt);
     hitSparks.update(dt);
     hitBursts.update(dt);
     familyVfx.update(dt, paddle.state?.speed || 0);

@@ -29,6 +29,7 @@ const SFX_FILES = {
   fishCatch: 'audio/sfx_fish_catch.ogg',
   fishMiss: 'audio/sfx_fish_miss.ogg',
   collect: 'audio/sfx_collect.ogg',
+  rewardPickup: 'audio/sfx_reward_pickup.mp3',
   repair: 'audio/sfx_repair.ogg',
   skill: 'audio/sfx_skill.mp3',
   ramHit: 'audio/sfx_ram_hit.mp3',
@@ -202,6 +203,7 @@ export function fishBite() { playSfx('fishBite', { gapMs: 100 }); }
 export function fishCatch() { playSfx('fishCatch', { gapMs: 100 }); }
 export function fishMiss() { playSfx('fishMiss', { gapMs: 80 }); }
 export function collect() { playSfx('collect', { gapMs: 80 }); }
+export function rewardPickup() { playSfx('rewardPickup', { gapMs: 180 }); }
 export function repair() { playSfx('repair', { gapMs: 80 }); }
 export function skill() { playSfx('skill', { gapMs: 80 }); }
 export function ramHit() { playSfx('ramHit', { gapMs: 90 }); }
