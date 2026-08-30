@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { createToonGradient } from './stylekit.js';
-import { createBoat, setBoatVariant, hullUpscale } from './boat.js?v=43k';
+import { createBoat, setBoatVariant, hullUpscale } from './boat.js?v=44b';
 import { equipFish, SLOT_ORDER, SLOT_LABELS } from './slots.js?v=39b';
 import { getFishDef } from './fishCatalog.js?v=34b';
 import { getFishPortrait } from './fishPortrait.js?v=31d';

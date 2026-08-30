@@ -20,6 +20,7 @@ import {
   buySupply,
   buySupplyQty,
   buyWarehouseFish,
+  buyAndEquipFish,
   upgradeSkill,
   upgradeTalent,
   skillLevel,
@@ -51,11 +52,11 @@ import {
   packSupply,
   packSupplyQty,
   bagRoomForSupply,
-  unpackSupply,
+  unpackSupplyQty,
   LOADOUT_BAG_SIZE,
   zoneTicketCost,
   canDepartZone,
-} from './meta.js?v=43v';
+} from './meta.js?v=44h';
 import { previewCraftOdds } from './fishCraft.js?v=41c';
 import { HUB_SPOTS } from './hubIsland.js?v=43l';
 import { renderManualHtml } from './hubManual.js?v=43v';
@@ -177,8 +178,8 @@ export function createHub(deps) {
   let hubCraftSlots = [null, null, null, null];
   let hubCraftPreview = null;
   let hubCraftPreviewTimer = 0;
-  /** Prep callout bind picker: target slot id, or null when closed */
-  let bindPickSlot = null;
+  /** Card picker: { kind:'slot'|'supply'|'cargo', key, side, anchor, origin } or null */
+  let pickState = null;
   /** Warehouse qty dialog: { mode:'buy'|'pack', id } or null */
   let whQtyDlg = null;
   let shopDetail = null;
@@ -382,21 +383,21 @@ export function createHub(deps) {
   }
 
   function ensureWhQtyPop() {
-    if (!els.warehouseStage) return null;
-    let pop = els.warehouseStage.querySelector('#hub-wh-buy-pop');
+    if (!root) return null;
+    let pop = root.querySelector('#hub-wh-buy-pop');
     if (!pop) {
       pop = document.createElement('div');
       pop.id = 'hub-wh-buy-pop';
       pop.className = 'hub-wh-buy-pop hidden';
       pop.setAttribute('role', 'dialog');
-      els.warehouseStage.appendChild(pop);
+      root.appendChild(pop);
     }
     return pop;
   }
 
   function closeWhBuyPop() {
     whQtyDlg = null;
-    const pop = els.warehouseStage?.querySelector('#hub-wh-buy-pop');
+    const pop = root?.querySelector('#hub-wh-buy-pop');
     if (pop) {
       pop.classList.add('hidden');
       pop.innerHTML = '';
@@ -410,11 +411,18 @@ export function createHub(deps) {
     return Math.max(lo, Math.min(hi, Math.round(n)));
   }
 
-  function wireWhQtyControls(pop, max, onChange) {
+  function wireWhQtyControls(pop, max, onChange, step = 1) {
+    const stepN = Math.max(1, step | 0);
+    const snap = (raw) => {
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return stepN;
+      const rounded = Math.round(n / stepN) * stepN;
+      return Math.max(stepN, Math.min(max, rounded));
+    };
     const range = pop.querySelector('[data-wh-qty-range]');
     const num = pop.querySelector('[data-wh-qty-num]');
     const sync = (raw, from) => {
-      const v = clampInt(raw, 1, max);
+      const v = snap(raw);
       if (range) range.value = String(v);
       if (num && from !== 'num') num.value = String(v);
       if (num && from === 'num') num.value = String(v);
@@ -424,7 +432,7 @@ export function createHub(deps) {
     range?.addEventListener('input', () => sync(range.value, 'range'));
     num?.addEventListener('input', () => sync(num.value, 'num'));
     num?.addEventListener('change', () => sync(num.value, 'num'));
-    sync(1, 'init');
+    sync(stepN, 'init');
   }
 
   function openWhBuyPop(supplyId) {
@@ -433,28 +441,31 @@ export function createHub(deps) {
     if (!item || !pop) return;
     const meta = deps.getMeta();
     const frags = meta.fragments | 0;
+    const unitStep = Math.max(1, item.amount | 0);
     const maxPacks = Math.max(0, Math.min(99, Math.floor(frags / item.cost)));
+    const maxUnits = maxPacks * unitStep;
     if (maxPacks <= 0) {
       deps.toast('海图碎片不足');
       sfx.uiDeny();
       return;
     }
-    whQtyDlg = { mode: 'buy', id: supplyId };
+    whQtyDlg = { mode: 'buy', id: supplyId, step: unitStep, maxUnits };
     pop.setAttribute('aria-label', `购买${item.name}`);
     pop.classList.remove('hidden');
-    const paint = (packs) => {
+    const paint = (units) => {
+      const packs = Math.max(1, Math.round(units / unitStep));
       const totalCost = item.cost * packs;
-      const units = item.amount * packs;
+      const got = unitStep * packs;
       const priceEl = pop.querySelector('[data-wh-qty-price]');
       const bodyEl = pop.querySelector('[data-wh-qty-body]');
       const go = pop.querySelector('[data-wh-buy-confirm]');
-      if (priceEl) priceEl.textContent = `${totalCost} 海图碎片 · 入手 ×${units} · 余额 ${frags}`;
+      if (priceEl) priceEl.textContent = `${totalCost} 海图碎片 · 入手 ${got} 个 · 余额 ${frags}`;
       if (bodyEl) {
-        bodyEl.textContent = `每份 ${item.cost} 碎片 → ×${item.amount}。购入后尽量装入携带背包。`;
+        bodyEl.textContent = `每 ${item.cost} 碎片入手 ${unitStep} 个。购入后尽量装入携带背包。`;
       }
       if (go) {
         go.disabled = packs < 1 || totalCost > frags;
-        go.textContent = go.disabled ? '碎片不足' : `购买 ${packs} 份并装入`;
+        go.textContent = go.disabled ? '碎片不足' : `购买 ${got} 个并装入`;
       }
     };
     pop.innerHTML = `
@@ -464,9 +475,9 @@ export function createHub(deps) {
       </div>
       <p class="hub-wh-buy-body" data-wh-qty-body></p>
       <div class="hub-wh-qty">
-        <label class="hub-wh-qty-label">份数</label>
-        <input type="range" class="hub-wh-qty-range" data-wh-qty-range min="1" max="${maxPacks}" value="1" />
-        <input type="number" class="hub-wh-qty-num" data-wh-qty-num min="1" max="${maxPacks}" value="1" inputmode="numeric" />
+        <label class="hub-wh-qty-label">数量（个）</label>
+        <input type="range" class="hub-wh-qty-range" data-wh-qty-range min="${unitStep}" max="${maxUnits}" step="${unitStep}" value="${unitStep}" />
+        <input type="number" class="hub-wh-qty-num" data-wh-qty-num min="${unitStep}" max="${maxUnits}" step="${unitStep}" value="${unitStep}" inputmode="numeric" />
       </div>
       <p class="hub-wh-buy-price" data-wh-qty-price></p>
       <div class="hub-wh-buy-acts">
@@ -474,7 +485,7 @@ export function createHub(deps) {
         <button type="button" class="bp-btn bright" data-wh-buy-confirm>购买并装入</button>
       </div>
     `;
-    wireWhQtyControls(pop, maxPacks, paint);
+    wireWhQtyControls(pop, maxUnits, paint, unitStep);
     pop.querySelectorAll('[data-wh-buy-close]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -486,8 +497,10 @@ export function createHub(deps) {
       e.stopPropagation();
       if (!whQtyDlg || whQtyDlg.mode !== 'buy') return;
       const id = whQtyDlg.id;
-      const packs = clampInt(pop.querySelector('[data-wh-qty-num]')?.value, 1, maxPacks);
       const shopItem = SHOP_SUPPLIES.find((s) => s.id === id);
+      const step = Math.max(1, (whQtyDlg.step | 0) || (shopItem?.amount | 0) || 1);
+      const units = clampInt(pop.querySelector('[data-wh-qty-num]')?.value, step, maxUnits);
+      const packs = Math.max(1, Math.round(units / step));
       const bought = buySupplyQty(deps.getMeta(), id, packs);
       if (!bought.ok) {
         deps.toast(bought.msg);
@@ -507,6 +520,7 @@ export function createHub(deps) {
         deps.toast(`${bought.msg}（背包已满，留在仓库）`);
       }
       closeWhBuyPop();
+      closeSlotBindPicker();
       render();
     });
   }
@@ -576,59 +590,61 @@ export function createHub(deps) {
       sfx.uiEquip();
       deps.setMeta(packed.meta);
       closeWhBuyPop();
+      closeSlotBindPicker();
       render();
     });
   }
 
   function ensureSlotBindPop() {
-    if (!els.boatStage) return null;
-    let pop = els.boatStage.querySelector('#hub-slot-bind-pop');
+    if (!root) return null;
+    let pop = root.querySelector('#hub-slot-bind-pop');
     if (!pop) {
       pop = document.createElement('div');
       pop.id = 'hub-slot-bind-pop';
       pop.className = 'hub-slot-bind-pop hidden';
       pop.setAttribute('role', 'dialog');
-      pop.setAttribute('aria-label', '选择绑定鱼');
-      els.boatStage.appendChild(pop);
+      pop.setAttribute('aria-label', '选择装备');
+      root.appendChild(pop);
     }
     return pop;
   }
 
   function closeSlotBindPicker() {
-    bindPickSlot = null;
-    const pop = els.boatStage?.querySelector('#hub-slot-bind-pop');
+    pickState = null;
+    const pop = root?.querySelector('#hub-slot-bind-pop');
     if (pop) {
       pop.classList.add('hidden');
       pop.innerHTML = '';
     }
-    els.callouts?.querySelectorAll('.hub-callout.selected').forEach((el) => {
+    document.querySelectorAll('.hub-callout.selected, .hub-bp-card.selected').forEach((el) => {
       el.classList.remove('selected');
     });
   }
 
-  function positionSlotBindPop(pop, anchorBtn) {
-    if (!els.boatStage || !pop || !anchorBtn) return;
-    const stage = els.boatStage.getBoundingClientRect();
+  /** @param {'L'|'R'} side popup sits right of the anchor for 'L', left for 'R' */
+  function positionSlotBindPop(pop, anchorBtn, side = 'L') {
+    if (!pop || !anchorBtn) return;
     const btn = anchorBtn.getBoundingClientRect();
-    const side = CALLOUT_LAYOUT[bindPickSlot]?.side || 'L';
-    const popW = Math.min(220, Math.max(160, stage.width * 0.38));
+    const vw = window.innerWidth || document.documentElement.clientWidth;
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const popW = Math.min(220, Math.max(160, vw * 0.18));
     pop.style.width = `${popW}px`;
 
-    let left = side === 'L'
-      ? btn.right - stage.left + 8
-      : btn.left - stage.left - popW - 8;
-    let top = btn.top - stage.top - 4;
-    left = Math.max(8, Math.min(left, stage.width - popW - 8));
-    top = Math.max(8, Math.min(top, stage.height - 120));
+    let left = side === 'L' ? btn.right + 8 : btn.left - popW - 8;
+    let top = btn.top - 4;
+    const popH = Math.min(pop.offsetHeight || 120, vh - 16);
+    left = Math.max(8, Math.min(left, vw - popW - 8));
+    top = Math.max(8, Math.min(top, vh - popH - 8));
     pop.style.left = `${left}px`;
     pop.style.top = `${top}px`;
   }
 
   function renderSlotBindPicker(meta, anchorBtn) {
     const pop = ensureSlotBindPop();
-    if (!pop || !bindPickSlot) return;
-    const slot = bindPickSlot;
+    if (!pop || pickState?.kind !== 'slot') return;
+    const slot = pickState.key;
     const label = SLOT_LABELS[slot] || slot;
+    const current = meta.loadout?.slots?.[slot] || null;
     const fish = meta.warehouse?.fish || [];
     const matches = [];
     fish.forEach((f, i) => {
@@ -657,16 +673,64 @@ export function createHub(deps) {
       </button>`;
     }).join('');
 
-    const body = matches.length
+    const warehouseBody = matches.length
       ? `<div class="hub-slot-bind-grid">${cells}</div>`
       : `<p class="hub-slot-bind-empty">仓库暂无适合${label}的鱼</p>`;
 
+    const buyCells = listShopBuyFishIds()
+      .map((id) => getFishDef(id))
+      .filter((def) => def?.slot === slot)
+      .map((def) => {
+        const cost = shopBuyCost(def);
+        const affordable = (meta.fragments | 0) >= cost;
+        let thumb = '';
+        try {
+          thumb = `<img class="bp-thumb-fish" src="${getFishPortrait(def.id)}" alt="" draggable="false" />`;
+        } catch (_) {
+          thumb = '<div class="bp-thumb-blob" style="background:#4a90a4"></div>';
+        }
+        const fam = familyOf(def.id);
+        const famChip = fam
+          ? `<span class="bp-family-chip fam-${fam.id}" style="--fam:${fam.color}">${fam.name}</span>`
+          : '';
+        return `<button type="button" class="hub-slot-bind-cell hub-slot-buy-cell${affordable ? '' : ' unaffordable'}"
+          data-bind-buy="${def.id}" ${affordable ? '' : 'disabled'} aria-label="购买并绑定${def.name}">
+          ${famChip}
+          <div class="bp-polaroid hub-slot-bind-polaroid">
+            <div class="bp-thumb">${thumb}</div>
+            <div class="bp-cell-name">${def.name}</div>
+            <div class="hub-slot-buy-price">${cost} 碎片</div>
+            <div class="bp-rarity-bar r${def.rarity || 1}"></div>
+          </div>
+        </button>`;
+      }).join('');
+
+    const currentRow = current
+      ? `<div class="hub-slot-bind-current">
+          <span>当前：${current.name}</span>
+          <button type="button" data-bind-unequip>卸下到仓库</button>
+        </div>`
+      : '';
     pop.innerHTML = `<div class="hub-slot-bind-head">
-        <strong>绑到 · ${label}</strong>
+        <strong>${current ? '替换' : '绑到'} · ${label}</strong>
         <button type="button" class="hub-slot-bind-close" aria-label="关闭">×</button>
-      </div>${body}`;
+      </div>
+      <div class="hub-slot-bind-scroll">
+        ${currentRow}
+        <div class="hub-slot-bind-section">
+          <div class="hub-slot-bind-section-title">仓库可绑</div>
+          ${warehouseBody}
+        </div>
+        <div class="hub-slot-bind-section">
+          <div class="hub-slot-bind-section-title">
+            <span>市集可购</span>
+            <small>余额 ${meta.fragments | 0}</small>
+          </div>
+          <div class="hub-slot-bind-grid">${buyCells}</div>
+        </div>
+      </div>`;
     pop.classList.remove('hidden');
-    positionSlotBindPop(pop, anchorBtn);
+    positionSlotBindPop(pop, anchorBtn, pickState.side);
 
     pop.querySelector('.hub-slot-bind-close')?.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -689,20 +753,361 @@ export function createHub(deps) {
         }
       });
     });
+    pop.querySelectorAll('[data-bind-buy]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const r = buyAndEquipFish(deps.getMeta(), btn.dataset.bindBuy, slot);
+        deps.toast(r.msg || (r.ok ? '已购入并绑定' : '购买失败'));
+        if (r.ok) {
+          sfx.uiBuy();
+          deps.setMeta(r.meta);
+          closeSlotBindPicker();
+          render();
+          refreshCenter();
+        } else {
+          sfx.uiDeny();
+        }
+      });
+    });
+    pop.querySelector('[data-bind-unequip]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const r = unequipToWarehouse(deps.getMeta(), slot);
+      deps.toast(r.msg || (r.ok ? '已卸下到仓库' : '卸下失败'));
+      if (r.ok) {
+        sfx.uiEquip();
+        deps.setMeta(r.meta);
+        closeSlotBindPicker();
+        render();
+        refreshCenter();
+      } else {
+        sfx.uiDeny();
+      }
+    });
   }
 
-  function openSlotBindPicker(slot, anchorBtn) {
-    if (bindPickSlot === slot) {
-      closeSlotBindPicker();
-      return;
-    }
-    bindPickSlot = slot;
-    els.callouts?.querySelectorAll('.hub-callout.selected').forEach((el) => {
-      el.classList.remove('selected');
-    });
+  function openSlotBindPicker(slot, anchorBtn, opts = {}) {
+    const same = pickState?.kind === 'slot' && pickState.key === slot && pickState.anchor === anchorBtn;
+    closeSlotBindPicker();
+    if (same) return;
+    pickState = {
+      kind: 'slot',
+      key: slot,
+      side: opts.side || CALLOUT_LAYOUT[slot]?.side || 'L',
+      anchor: anchorBtn,
+      origin: opts.origin || 'callout',
+      originRootId: opts.originRootId || '',
+    };
     anchorBtn?.classList.add('selected');
     sfx.uiClick();
     renderSlotBindPicker(deps.getMeta(), anchorBtn);
+  }
+
+  function itemFaceHtml(id) {
+    try {
+      return `<img class="bp-thumb-fish" src="${getItemPortrait(id)}" alt="" draggable="false" />`;
+    } catch (_) {
+      return '<div class="bp-thumb-blob" style="background:#8aa090"></div>';
+    }
+  }
+
+  function restoreBackpackPicker(meta, listEl) {
+    if (!pickState || pickState.origin === 'callout') return;
+    if (!listEl || (pickState.originRootId && listEl.id && pickState.originRootId !== listEl.id)) return;
+    let sel = null;
+    if (pickState.kind === 'slot') sel = listEl.querySelector(`[data-pick-slot="${pickState.key}"]`);
+    else if (pickState.kind === 'supply') sel = listEl.querySelector(`[data-pick-supply="${pickState.key}"]`);
+    else if (pickState.kind === 'cargo') sel = listEl.querySelector(`[data-pick-cargo="${pickState.key}"]`);
+    if (!sel) return;
+    pickState.anchor = sel;
+    sel.classList.add('selected');
+    if (pickState.kind === 'slot') renderSlotBindPicker(meta, sel);
+    else if (pickState.kind === 'supply') renderSupplyPicker(meta, sel);
+    else if (pickState.kind === 'cargo') renderCargoPicker(meta, sel);
+  }
+
+  function openSupplyPicker(index, anchorBtn, originRootId) {
+    const same = pickState?.kind === 'supply' && pickState.key === index && pickState.anchor === anchorBtn;
+    closeSlotBindPicker();
+    if (same) return;
+    pickState = {
+      kind: 'supply',
+      key: index,
+      side: 'R',
+      anchor: anchorBtn,
+      origin: 'backpack',
+      originRootId: originRootId || '',
+    };
+    anchorBtn?.classList.add('selected');
+    sfx.uiClick();
+    renderSupplyPicker(deps.getMeta(), anchorBtn);
+  }
+
+  function renderSupplyPicker(meta, anchorBtn) {
+    const pop = ensureSlotBindPop();
+    if (!pop || pickState?.kind !== 'supply') return;
+    const idx = pickState.key | 0;
+    const bag = Array.isArray(meta.loadout?.supplies?.bag) ? meta.loadout.supplies.bag : [];
+    const slot = bag[idx];
+    const curKey = slot && (typeof slot === 'string' ? slot : slot.key);
+    const curN = slot ? (typeof slot === 'string' ? 1 : Math.max(1, slot.n | 0)) : 0;
+    const curName = SHOP_SUPPLIES.find((s) => s.id === curKey)?.name || curKey;
+    const wh = meta.warehouse?.supplies || {};
+    const anyRoom = SHOP_SUPPLIES.some((s) => bagRoomForSupply(meta, s.id) > 0);
+
+    const packCells = SHOP_SUPPLIES.filter((s) => (wh[s.id] | 0) > 0).map((s) => {
+      const room = bagRoomForSupply(meta, s.id);
+      return `<button type="button" class="hub-slot-bind-cell" data-sup-pack="${s.id}" ${room > 0 ? '' : 'disabled'}>
+        <div class="bp-polaroid hub-slot-bind-polaroid">
+          <div class="bp-thumb">${itemFaceHtml(s.id)}</div>
+          <div class="bp-cell-name">${s.name}</div>
+          <div class="hub-slot-buy-price">仓库 ×${wh[s.id] | 0}</div>
+        </div>
+      </button>`;
+    }).join('');
+    const warehouseBody = packCells
+      ? `<div class="hub-slot-bind-grid">${packCells}</div>`
+      : '<p class="hub-slot-bind-empty">仓库暂无物资</p>';
+
+    const buyCells = SHOP_SUPPLIES.map((s) => {
+      const affordable = (meta.fragments | 0) >= s.cost;
+      return `<button type="button" class="hub-slot-bind-cell hub-slot-buy-cell${affordable ? '' : ' unaffordable'}"
+        data-sup-buy="${s.id}" ${affordable ? '' : 'disabled'} aria-label="购买并装入${s.name}">
+        <div class="bp-polaroid hub-slot-bind-polaroid">
+          <div class="bp-thumb">${itemFaceHtml(s.id)}</div>
+          <div class="bp-cell-name">${s.name}</div>
+          <div class="hub-slot-buy-price">${s.cost} 碎片</div>
+        </div>
+      </button>`;
+    }).join('');
+
+    const currentRow = curKey
+      ? `<div class="hub-slot-bind-current">
+          <span>当前：${curName} ×${curN}</span>
+          <button type="button" data-sup-unpack>全部卸下到仓库</button>
+        </div>`
+      : '';
+    const fullHint = anyRoom ? '' : '<p class="hub-slot-bind-empty">背包已满（8格）</p>';
+
+    pop.innerHTML = `<div class="hub-slot-bind-head">
+        <strong>${curKey ? '替换' : '装入'} · 物资</strong>
+        <button type="button" class="hub-slot-bind-close" aria-label="关闭">×</button>
+      </div>
+      <div class="hub-slot-bind-scroll">
+        ${currentRow}
+        ${fullHint}
+        <div class="hub-slot-bind-section">
+          <div class="hub-slot-bind-section-title">仓库可装</div>
+          ${warehouseBody}
+        </div>
+        <div class="hub-slot-bind-section">
+          <div class="hub-slot-bind-section-title">
+            <span>市集可购</span>
+            <small>余额 ${meta.fragments | 0}</small>
+          </div>
+          <div class="hub-slot-bind-grid">${buyCells}</div>
+        </div>
+      </div>`;
+    pop.classList.remove('hidden');
+    positionSlotBindPop(pop, anchorBtn, pickState.side);
+
+    pop.querySelector('.hub-slot-bind-close')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeSlotBindPicker();
+    });
+    pop.querySelectorAll('[data-sup-pack]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openWhPackPop(btn.dataset.supPack);
+      });
+    });
+    pop.querySelectorAll('[data-sup-buy]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openWhBuyPop(btn.dataset.supBuy);
+      });
+    });
+    pop.querySelector('[data-sup-unpack]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const r = unpackSupplyQty(deps.getMeta(), idx, 0);
+      deps.toast(r.msg || (r.ok ? '已卸下到仓库' : '失败'));
+      if (r.ok) {
+        sfx.uiEquip();
+        deps.setMeta(r.meta);
+        closeSlotBindPicker();
+        render();
+      } else {
+        sfx.uiDeny();
+      }
+    });
+  }
+
+  function openCargoPicker(index, anchorBtn, originRootId) {
+    const same = pickState?.kind === 'cargo' && pickState.key === index && pickState.anchor === anchorBtn;
+    closeSlotBindPicker();
+    if (same) return;
+    pickState = {
+      kind: 'cargo',
+      key: index,
+      side: 'R',
+      anchor: anchorBtn,
+      origin: 'backpack',
+      originRootId: originRootId || '',
+    };
+    anchorBtn?.classList.add('selected');
+    sfx.uiClick();
+    renderCargoPicker(deps.getMeta(), anchorBtn);
+  }
+
+  function renderCargoPicker(meta, anchorBtn) {
+    const pop = ensureSlotBindPop();
+    if (!pop || pickState?.kind !== 'cargo') return;
+    const idx = pickState.key | 0;
+    const cargo = meta.loadout?.cargo || [];
+    const current = cargo[idx] || null;
+    const full = cargo.length >= 8;
+    const fish = meta.warehouse?.fish || [];
+
+    const cells = fish.map((f, i) => {
+      const def = getFishDef(f.defId);
+      let thumb = '';
+      try {
+        thumb = `<img class="bp-thumb-fish" src="${getFishPortrait(f.defId, f)}" alt="" draggable="false" />`;
+      } catch (_) {
+        thumb = '<div class="bp-thumb-blob" style="background:#4a90a4"></div>';
+      }
+      const fam = familyOf(f.defId);
+      const famChip = fam
+        ? `<span class="bp-family-chip fam-${fam.id}" style="--fam:${fam.color}">${fam.name}</span>`
+        : '';
+      return `<button type="button" class="hub-slot-bind-cell" data-cargo-eq="${i}" ${full ? 'disabled' : ''}>
+        ${famChip}
+        <div class="bp-polaroid hub-slot-bind-polaroid">
+          <div class="bp-thumb">${thumb}</div>
+          <div class="bp-cell-name">${f.name}</div>
+          <div class="bp-rarity-bar r${def?.rarity || 1}"></div>
+        </div>
+      </button>`;
+    }).join('');
+    const warehouseBody = fish.length
+      ? `<div class="hub-slot-bind-grid">${cells}</div>`
+      : '<p class="hub-slot-bind-empty">仓库暂无可带的鱼</p>';
+
+    const buyCells = listShopBuyFishIds()
+      .map((id) => getFishDef(id))
+      .filter(Boolean)
+      .map((def) => {
+        const cost = shopBuyCost(def);
+        const affordable = (meta.fragments | 0) >= cost && !full;
+        let thumb = '';
+        try {
+          thumb = `<img class="bp-thumb-fish" src="${getFishPortrait(def.id)}" alt="" draggable="false" />`;
+        } catch (_) {
+          thumb = '<div class="bp-thumb-blob" style="background:#4a90a4"></div>';
+        }
+        const fam = familyOf(def.id);
+        const famChip = fam
+          ? `<span class="bp-family-chip fam-${fam.id}" style="--fam:${fam.color}">${fam.name}</span>`
+          : '';
+        return `<button type="button" class="hub-slot-bind-cell hub-slot-buy-cell${affordable ? '' : ' unaffordable'}"
+          data-cargo-buy="${def.id}" ${affordable ? '' : 'disabled'} aria-label="购买并带上${def.name}">
+          ${famChip}
+          <div class="bp-polaroid hub-slot-bind-polaroid">
+            <div class="bp-thumb">${thumb}</div>
+            <div class="bp-cell-name">${def.name}</div>
+            <div class="hub-slot-buy-price">${cost} 碎片</div>
+            <div class="bp-rarity-bar r${def.rarity || 1}"></div>
+          </div>
+        </button>`;
+      }).join('');
+
+    const currentRow = current
+      ? `<div class="hub-slot-bind-current">
+          <span>当前：${current.name}</span>
+          <button type="button" data-cargo-unequip>卸下到仓库</button>
+        </div>`
+      : '';
+    const fullHint = full ? '<p class="hub-slot-bind-empty">携带已满（8条）</p>' : '';
+
+    pop.innerHTML = `<div class="hub-slot-bind-head">
+        <strong>${current ? '替换' : '带上'} · 携带</strong>
+        <button type="button" class="hub-slot-bind-close" aria-label="关闭">×</button>
+      </div>
+      <div class="hub-slot-bind-scroll">
+        ${currentRow}
+        ${fullHint}
+        <div class="hub-slot-bind-section">
+          <div class="hub-slot-bind-section-title">仓库可带</div>
+          ${warehouseBody}
+        </div>
+        <div class="hub-slot-bind-section">
+          <div class="hub-slot-bind-section-title">
+            <span>市集可购</span>
+            <small>余额 ${meta.fragments | 0}</small>
+          </div>
+          <div class="hub-slot-bind-grid">${buyCells}</div>
+        </div>
+      </div>`;
+    pop.classList.remove('hidden');
+    positionSlotBindPop(pop, anchorBtn, pickState.side);
+
+    pop.querySelector('.hub-slot-bind-close')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeSlotBindPicker();
+    });
+    pop.querySelectorAll('[data-cargo-eq]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const r = moveWarehouseToLoadoutCargo(deps.getMeta(), Number(btn.dataset.cargoEq));
+        deps.toast(r.ok ? '已带上' : (r.msg || '失败'));
+        if (r.ok) {
+          sfx.uiEquip();
+          deps.setMeta(r.meta);
+          closeSlotBindPicker();
+          render();
+        } else {
+          sfx.uiDeny();
+        }
+      });
+    });
+    pop.querySelectorAll('[data-cargo-buy]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const bought = buyWarehouseFish(deps.getMeta(), btn.dataset.cargoBuy);
+        if (!bought.ok) {
+          deps.toast(bought.msg || '购买失败');
+          sfx.uiDeny();
+          return;
+        }
+        const last = (bought.meta.warehouse?.fish?.length || 0) - 1;
+        const moved = last >= 0 ? moveWarehouseToLoadoutCargo(bought.meta, last) : { ok: false, meta: bought.meta, msg: '购入失败' };
+        if (!moved.ok) {
+          deps.setMeta(bought.meta);
+          deps.toast(moved.msg || '已购入，留在仓库');
+          sfx.uiBuy();
+          closeSlotBindPicker();
+          render();
+          return;
+        }
+        sfx.uiBuy();
+        deps.setMeta(moved.meta);
+        deps.toast('购入并带上');
+        closeSlotBindPicker();
+        render();
+      });
+    });
+    pop.querySelector('[data-cargo-unequip]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const r = returnCargoToWarehouse(deps.getMeta(), idx);
+      deps.toast(r.ok ? '已卸下到仓库' : (r.msg || '失败'));
+      if (r.ok) {
+        sfx.uiEquip();
+        deps.setMeta(r.meta);
+        closeSlotBindPicker();
+        render();
+      } else {
+        sfx.uiDeny();
+      }
+    });
   }
 
   function renderCallouts(meta) {
@@ -713,7 +1118,7 @@ export function createHub(deps) {
       const f = slots[slot];
       const empty = !f?.defId;
       const status = empty ? '可绑' : '已绑';
-      const sel = bindPickSlot === slot ? ' selected' : '';
+      const sel = pickState?.kind === 'slot' && pickState.origin === 'callout' && pickState.key === slot ? ' selected' : '';
       return `<button type="button" class="hub-callout${empty ? ' empty' : ' filled'}${sel}" data-slot="${slot}"
         style="left:${lay.x}%;top:${lay.y}%">
         <span class="hub-callout-cap">${status} · ${SLOT_LABELS[slot]}</span>
@@ -740,30 +1145,16 @@ export function createHub(deps) {
     els.callouts.querySelectorAll('[data-slot]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const slot = btn.dataset.slot;
-        const f = (deps.getMeta().loadout?.slots || {})[slot];
-        if (!f) {
-          openSlotBindPicker(slot, btn);
-          return;
-        }
-        closeSlotBindPicker();
-        const r = unequipToWarehouse(deps.getMeta(), slot);
-        deps.toast(r.msg || (r.ok ? '已卸下' : '失败'));
-        if (r.ok) {
-          sfx.uiEquip();
-          deps.setMeta(r.meta);
-          render();
-          refreshCenter();
-        } else {
-          sfx.uiDeny();
-        }
+        openSlotBindPicker(slot, btn);
       });
     });
 
-    if (bindPickSlot) {
-      const anchor = els.callouts.querySelector(`[data-slot="${bindPickSlot}"]`);
-      if (anchor && !(slots[bindPickSlot]?.defId)) {
+    if (pickState?.kind === 'slot' && pickState.origin === 'callout') {
+      const anchor = els.callouts.querySelector(`[data-slot="${pickState.key}"]`);
+      if (anchor) {
+        pickState.anchor = anchor;
         renderSlotBindPicker(meta, anchor);
-      } else if (slots[bindPickSlot]?.defId) {
+      } else {
         closeSlotBindPicker();
       }
     }
@@ -843,37 +1234,37 @@ export function createHub(deps) {
       paste: '龙骨膏',
     };
 
+    const pickSel = (kind, key) => (
+      pickState?.kind === kind && String(pickState.key) === String(key) && pickState.origin !== 'callout'
+        ? ' selected'
+        : ''
+    );
+
     const supplyCards = [];
     for (let i = 0; i < LOADOUT_BAG_SIZE; i++) {
       const slot = bag[i];
       const key = slot && (typeof slot === 'string' ? slot : slot.key);
       const n = slot ? (typeof slot === 'string' ? 1 : Math.max(1, slot.n | 0)) : 0;
+      let face = '<span class="hub-bp-q">?</span>';
       if (key) {
-        let face = '<span class="hub-bp-q">?</span>';
         try {
           face = `<img src="${getItemPortrait(key)}" alt="" draggable="false" />`;
         } catch (_) { /* keep ? */ }
-        supplyCards.push(`
-          <button type="button" class="hub-bp-card" data-kind="supply" data-unpack="${i}">
-            <div class="hub-bp-card-face">${face}</div>
-            <div class="hub-bp-card-cap">${labels[key] || key}<span>×${n} · 卸</span></div>
-          </button>`);
-      } else {
-        supplyCards.push(`
-          <div class="hub-bp-card empty" data-kind="supply">
-            <div class="hub-bp-card-face"><span class="hub-bp-q">?</span></div>
-            <div class="hub-bp-card-cap">物资<span>空</span></div>
-          </div>`);
       }
+      supplyCards.push(`
+        <button type="button" class="hub-bp-card${key ? '' : ' empty'}${pickSel('supply', i)}" data-kind="supply" data-pick-supply="${i}">
+          <div class="hub-bp-card-face">${face}</div>
+          <div class="hub-bp-card-cap">${key ? (labels[key] || key) : '物资'}<span>${key ? `×${n}` : '点选'}</span></div>
+        </button>`);
     }
 
     const modCards = SLOT_ORDER.map((slot, idx) => {
       const f = slots[slot];
       return `
-        <div class="hub-bp-card${f ? '' : ' empty'}" data-kind="slot">
+        <button type="button" class="hub-bp-card${f ? '' : ' empty'}${pickSel('slot', slot)}" data-kind="slot" data-pick-slot="${slot}">
           <div class="hub-bp-card-face">${fishFaceHtml(f, '鱼')}</div>
-          <div class="hub-bp-card-cap">${idx + 1}. ${SLOT_LABELS[slot]}<span>${f ? f.name : '空'}</span></div>
-        </div>`;
+          <div class="hub-bp-card-cap">${idx + 1}. ${SLOT_LABELS[slot]}<span>${f ? f.name : '可绑'}</span></div>
+        </button>`;
     }).join('');
 
     const equipped = equippedSkills(meta);
@@ -916,31 +1307,26 @@ export function createHub(deps) {
     const cargoCards = [];
     for (let i = 0; i < 8; i++) {
       const f = cargo[i];
-      if (f) {
-        cargoCards.push(`
-          <button type="button" class="hub-bp-card" data-kind="cargo" data-uncargo="${i}">
-            <div class="hub-bp-card-face">${fishFaceHtml(f, '鱼')}</div>
-            <div class="hub-bp-card-cap">${f.name}<span>卸</span></div>
-          </button>`);
-      } else {
-        cargoCards.push(`
-          <div class="hub-bp-card empty" data-kind="cargo">
-            <div class="hub-bp-card-face"><span class="hub-bp-q">?</span></div>
-            <div class="hub-bp-card-cap">携带<span>空</span></div>
-          </div>`);
-      }
+      cargoCards.push(`
+        <button type="button" class="hub-bp-card${f ? '' : ' empty'}${pickSel('cargo', i)}" data-kind="cargo" data-pick-cargo="${i}">
+          <div class="hub-bp-card-face">${f ? fishFaceHtml(f, '鱼') : '<span class="hub-bp-q">?</span>'}</div>
+          <div class="hub-bp-card-cap">${f ? f.name : '携带'}<span>${f ? '已带' : '点选'}</span></div>
+        </button>`);
     }
 
     const boats = [
-      { id: 'raft', name: HULL_NAMES.raft, need: true },
-      { id: 'heavyRaft', name: HULL_NAMES.heavyRaft, need: !!meta.unlocks.heavyRaft },
-      { id: 'chargeBoat', name: HULL_NAMES.chargeBoat, need: !!meta.unlocks.chargeBoat },
+      { id: 'raft', name: HULL_NAMES.raft, owned: true },
+      { id: 'heavyRaft', name: HULL_NAMES.heavyRaft, owned: !!meta.unlocks.heavyRaft },
+      { id: 'chargeBoat', name: HULL_NAMES.chargeBoat, owned: !!meta.unlocks.chargeBoat },
     ];
     const curBoat = deps.getBoat() === 'lightBoat' ? 'raft' : deps.getBoat();
-    const boatBtns = boats.map((b) => `
-      <button type="button" class="hub-chip ${curBoat === b.id ? 'selected' : ''}"
-        data-boat="${b.id}" ${b.need ? '' : 'disabled'}>${b.name}${b.need ? '' : ' ·需买'}</button>
-    `).join('');
+    const boatBtns = boats.map((b) => {
+      const hull = SHOP_HULLS.find((h) => h.id === b.id);
+      const buyCls = b.owned ? '' : ' hub-chip-buy';
+      const sel = curBoat === b.id ? ' selected' : '';
+      const label = b.owned ? b.name : `${b.name} ·${hull?.cost || 0}`;
+      return `<button type="button" class="hub-chip${sel}${buyCls}" data-boat="${b.id}">${label}</button>`;
+    }).join('');
 
     root.innerHTML = `
       <h3 class="hub-clip-h">船型</h3>
@@ -956,16 +1342,55 @@ export function createHub(deps) {
       <p class="hub-bp-sec">携带</p>
       <div class="hub-bp-grid">${cargoCards.join('')}</div>`;
 
+    const applyPrepBoat = (id) => {
+      deps.setBoat(id);
+      const m = saveLoadout(deps.getMeta(), { ...deps.getMeta().loadout, boatId: id });
+      deps.setMeta(m);
+      deps.boatPreview?.syncLoadout?.(m);
+      render();
+      refreshCenter();
+    };
     root.querySelectorAll('[data-boat]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = btn.dataset.boat;
+        const hull = SHOP_HULLS.find((h) => h.id === id);
+        const owned = id === 'raft' || !!deps.getMeta().unlocks?.[id];
+        if (owned) {
+          sfx.uiClick();
+          applyPrepBoat(id);
+          return;
+        }
+        if (!hull) {
+          sfx.uiDeny();
+          deps.toast('无法购买');
+          return;
+        }
+        const frags = deps.getMeta().fragments | 0;
+        if (frags < hull.cost) {
+          sfx.uiDeny();
+          deps.toast('海图碎片不足');
+          return;
+        }
         sfx.uiClick();
-        deps.setBoat(id);
-        const m = saveLoadout(deps.getMeta(), { ...deps.getMeta().loadout, boatId: id });
-        deps.setMeta(m);
-        deps.boatPreview?.syncLoadout?.(m);
-        render();
-        refreshCenter();
+        openHubConfirm({
+          title: `购入 ${hull.name}`,
+          lines: [
+            `${hull.cost} 海图碎片 · 余额 ${frags}`,
+            hull.desc || '沉船后需重买。',
+          ],
+          confirmLabel: `确认 · ${hull.cost} 碎片`,
+          onConfirm: () => {
+            const r = tryUnlock(deps.getMeta(), id);
+            deps.toast(r.msg);
+            if (!r.ok) {
+              sfx.uiDeny();
+              return;
+            }
+            sfx.uiBuy();
+            deps.setMeta(r.meta);
+            applyPrepBoat(id);
+          },
+        });
       });
     });
     root.querySelectorAll('[data-skill-slot]').forEach((btn) => {
@@ -991,32 +1416,27 @@ export function createHub(deps) {
         render();
       });
     });
-    root.querySelectorAll('[data-unpack]').forEach((btn) => {
+    const originRootId = root.id || '';
+    root.querySelectorAll('[data-pick-slot]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const r = unpackSupply(deps.getMeta(), btn.dataset.unpack);
-        deps.toast(r.msg);
-        if (r.ok) {
-          sfx.uiEquip();
-          deps.setMeta(r.meta);
-          render();
-        } else {
-          sfx.uiDeny();
-        }
+        openSlotBindPicker(btn.dataset.pickSlot, btn, {
+          side: 'R',
+          origin: 'backpack',
+          originRootId,
+        });
       });
     });
-    root.querySelectorAll('[data-uncargo]').forEach((btn) => {
+    root.querySelectorAll('[data-pick-supply]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const r = returnCargoToWarehouse(deps.getMeta(), Number(btn.dataset.uncargo));
-        deps.toast(r.ok ? '已放回仓库' : (r.msg || '失败'));
-        if (r.ok) {
-          sfx.uiEquip();
-          deps.setMeta(r.meta);
-          render();
-        } else {
-          sfx.uiDeny();
-        }
+        openSupplyPicker(Number(btn.dataset.pickSupply), btn, originRootId);
       });
     });
+    root.querySelectorAll('[data-pick-cargo]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        openCargoPicker(Number(btn.dataset.pickCargo), btn, originRootId);
+      });
+    });
+    restoreBackpackPicker(meta, root);
   }
 
   function renderPrepSlots(meta) {
@@ -1566,13 +1986,15 @@ export function createHub(deps) {
           ? Math.max(0, Math.min(99, Math.floor(frags / supplyItem.cost)))
           : 0;
         const dis = maxPacks < 1 ? 'disabled' : '';
+        const unitStep = Math.max(1, supplyItem?.amount | 0);
+        const maxUnits = maxPacks * unitStep;
         qtyBlock = `
           <div class="hub-shop-qty">
-            <label class="hub-shop-qty-label">份数</label>
+            <label class="hub-shop-qty-label">数量（个）</label>
             <input type="range" class="hub-shop-qty-range" data-wh-qty-range
-                   min="1" max="${Math.max(1, maxPacks)}" value="1" ${dis}/>
+                   min="${unitStep}" max="${Math.max(unitStep, maxUnits)}" step="${unitStep}" value="${unitStep}" ${dis}/>
             <input type="number" class="hub-shop-qty-num" data-wh-qty-num
-                   min="1" max="${Math.max(1, maxPacks)}" value="1"
+                   min="${unitStep}" max="${Math.max(unitStep, maxUnits)}" step="${unitStep}" value="${unitStep}"
                    inputmode="numeric" ${dis}/>
           </div>
           <p class="hub-shop-qty-price" data-shop-qty-price></p>`;
@@ -1597,18 +2019,21 @@ export function createHub(deps) {
       const maxPacks = supplyItem
         ? Math.max(0, Math.min(99, Math.floor(frags / supplyItem.cost)))
         : 0;
-      const paintQty = (qty) => {
-        const cost = (supplyItem?.cost || 0) * qty;
-        const units = (supplyItem?.amount || 0) * qty;
+      const unitStep = Math.max(1, supplyItem?.amount | 0);
+      const maxUnits = maxPacks * unitStep;
+      const paintQty = (units) => {
+        const packs = Math.max(1, Math.round(units / unitStep));
+        const cost = (supplyItem?.cost || 0) * packs;
+        const got = unitStep * packs;
         const priceEl = panel.querySelector('[data-shop-qty-price]');
         const btn = panel.querySelector('[data-shop-act]');
-        if (priceEl) priceEl.textContent = `${cost} 碎片 · 入手 ×${units} · 余额 ${frags}`;
+        if (priceEl) priceEl.textContent = `${cost} 碎片 · 入手 ${got} 个 · 余额 ${frags}`;
         if (btn) {
           btn.disabled = maxPacks < 1 || cost > frags;
-          btn.textContent = maxPacks < 1 ? '碎片不足' : `购入 ${qty} 份`;
+          btn.textContent = maxPacks < 1 ? '碎片不足' : `购入 ${got} 个`;
         }
       };
-      wireWhQtyControls(panel, Math.max(1, maxPacks), paintQty);
+      wireWhQtyControls(panel, Math.max(unitStep, maxUnits), paintQty, unitStep);
     }
     panel.querySelector('[data-shop-act]')?.addEventListener('click', () => {
       const act = shopDetail?.act;
@@ -1687,8 +2112,13 @@ export function createHub(deps) {
       }
       if (act === 'supply') {
         const qtyNum = panel.querySelector('[data-wh-qty-num]');
-        const qty = clampInt(qtyNum?.value || '1', 1, 99);
-        const r = buySupplyQty(deps.getMeta(), actId, qty);
+        const supplyItem = SHOP_SUPPLIES.find((s) => s.id === actId);
+        const unitStep = Math.max(1, supplyItem?.amount | 0);
+        const maxPacksAct = Math.max(0, Math.min(99, Math.floor((deps.getMeta().fragments | 0) / Math.max(1, supplyItem?.cost | 0))));
+        const maxUnits = Math.max(unitStep, maxPacksAct * unitStep);
+        const units = clampInt(qtyNum?.value || String(unitStep), unitStep, maxUnits);
+        const packs = Math.max(1, Math.round(units / unitStep));
+        const r = buySupplyQty(deps.getMeta(), actId, packs);
         deps.toast(r.msg);
         if (r.ok) {
           sfx.uiBuy();
@@ -2652,17 +3082,23 @@ export function createHub(deps) {
   });
 
   document.addEventListener('pointerdown', (e) => {
-    if (!bindPickSlot) return;
-    const pop = els.boatStage?.querySelector('#hub-slot-bind-pop');
+    if (!pickState) return;
+    const pop = root?.querySelector('#hub-slot-bind-pop');
     if (pop && pop.contains(e.target)) return;
+    // The supply picker can stack a qty dialog on top; clicking it must not close the picker.
+    if (e.target.closest?.('.hub-wh-buy-pop')) return;
     if (e.target.closest?.('.hub-callout')) return;
+    if (e.target.closest?.('.hub-bp-card')) return;
     closeSlotBindPicker();
   }, true);
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (bindPickSlot) closeSlotBindPicker();
-    if (whQtyDlg) closeWhBuyPop();
+    if (whQtyDlg) {
+      closeWhBuyPop();
+      return;
+    }
+    if (pickState) closeSlotBindPicker();
   });
 
   return {

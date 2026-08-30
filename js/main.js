@@ -3,8 +3,8 @@ import { createToonGradient, clamp } from './stylekit.js?v=34a';
 import {
   createDuskSky, createClouds, createWater, updateWater,
   createFoamRings,
-} from './world.js';
-import { createBoat, createWakeSystem, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, setRodBitePose, resetRodPose } from './boat.js?v=43k';
+} from './world.js?v=44d';
+import { createBoat, createWakeSystem, createSplashRings, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, setRodBitePose, resetRodPose } from './boat.js?v=44b';
 import { createPaddleController } from './paddle.js?v=43n';
 import { createHull, updateCorrosion, damageHull, repairHull } from './hull.js?v=16c';
 import {
@@ -12,8 +12,8 @@ import {
 } from './flotsam.js?v=35d';
 import {
   createVortexField, updateVortices, findNearestVortex, createFishingController, CAST_AIM_DIST, tintVortexField, VORTEX_COUNT,
-} from './fishing.js?v=43p';
-import { createHazards } from './hazards.js?v=43p';
+} from './fishing.js?v=44c';
+import { createHazards } from './hazards.js?v=44e';
 import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot, ramCdForRarity,
@@ -30,8 +30,8 @@ import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=37a';
 import { getRelicPortrait } from './relicPortrait.js?v=35c';
 import { RELIC_CARRY_CAP, trimRelicCarry } from './salvageTables.js?v=35e';
-import { getSeaMap, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=43p';
-import { getZone } from './zones.js?v=31y';
+import { getSeaMap, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=44d';
+import { getZone } from './zones.js?v=44d';
 import {
   loadMeta, settleRun, hullMaxForBoat, thrustMulForBoat, hasWeaponUnlock,
   discoverFish, discoverMonster, syncLoadoutSuppliesFromWarehouse, consumeLoadoutOnDepart,
@@ -39,21 +39,21 @@ import {
   skillLevel, scaledSkillCard, fishmongerGreenMul, ghostWakeCorrMul, talentLevel,
   equippedTalents, driftSalvageMul, ramBlacksmithMul,
   chargeZoneTicket, canDepartZone, saveMeta,
-} from './meta.js?v=43v';
+} from './meta.js?v=44h';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=35l';
-import { createHub } from './hub.js?v=43x';
+import { createHub } from './hub.js?v=44h';
 import { createCoverScene } from './coverScene.js?v=43l';
 import { createHubIsland } from './hubIsland.js?v=43l';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=39s';
 import { createBpBoatStage } from './bpBoatStage.js?v=31g';
-import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=43u';
+import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=44e';
 import { ensureAllPropGlbsLoading } from './propGlb.js?v=43k';
 import { hullLength } from './hullGlb.js?v=43k';
-import { getSeaBiome } from './seaBiomes.js?v=30h';
+import { getSeaBiome } from './seaBiomes.js?v=44d';
 import { applyHudTheme } from './hudTheme.js?v=42b';
-import { createWeatherFx } from './weatherFx.js?v=30h';
+import { createWeatherFx } from './weatherFx.js?v=44a';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=43x';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=44h';
 import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=43v';
 import * as sfx from './audio.js?v=42e';
 
@@ -611,6 +611,7 @@ scene.add(foam);
 const boat = createBoat(gradientMap, selectedBoat);
 scene.add(boat);
 const wake = createWakeSystem(scene);
+const splashFx = createSplashRings(scene);
 const familyVfx = createFamilyVfx(boat);
 let lastFamilyKey = '';
 
@@ -639,7 +640,8 @@ bobberMesh.visible = false;
 bobberMesh.userData.skipOutline = true;
 scene.add(bobberMesh);
 
-const fishLinePositions = new Float32Array(6);
+const FISH_LINE_POINTS = 9;
+const fishLinePositions = new Float32Array(FISH_LINE_POINTS * 3);
 const fishLineGeo = new THREE.BufferGeometry();
 fishLineGeo.setAttribute('position', new THREE.BufferAttribute(fishLinePositions, 3));
 const fishLine = new THREE.Line(
@@ -661,9 +663,19 @@ function aimPointFromBoat() {
   };
 }
 
-function setFishLine(ax, ay, az, bx, by, bz) {
-  fishLinePositions[0] = ax; fishLinePositions[1] = ay; fishLinePositions[2] = az;
-  fishLinePositions[3] = bx; fishLinePositions[4] = by; fishLinePositions[5] = bz;
+function setFishLine(ax, ay, az, bx, by, bz, taut = 0) {
+  const sag = 0.55 * (1 - Math.max(0, Math.min(1, taut)));
+  const cx = (ax + bx) * 0.5;
+  const cy = (ay + by) * 0.5 - sag;
+  const cz = (az + bz) * 0.5;
+  for (let i = 0; i < FISH_LINE_POINTS; i++) {
+    const u = i / (FISH_LINE_POINTS - 1);
+    const inv = 1 - u;
+    const j = i * 3;
+    fishLinePositions[j] = inv * inv * ax + 2 * inv * u * cx + u * u * bx;
+    fishLinePositions[j + 1] = inv * inv * ay + 2 * inv * u * cy + u * u * by;
+    fishLinePositions[j + 2] = inv * inv * az + 2 * inv * u * cz + u * u * bz;
+  }
   fishLineGeo.attributes.position.needsUpdate = true;
   fishLine.visible = true;
 }
@@ -859,6 +871,11 @@ function mouseOnWater() {
 ensureAllPropGlbsLoading();
 const seaWorld = createSeaWorld();
 scene.add(seaWorld.root);
+// Monsters are placed before the zone GLBs land, so re-check them once the
+// rock discs exist — otherwise a share of them sit inside a stone all run.
+seaWorld.setOnPropsReloaded(() => {
+  hazards.relocateFromDiscs(seaWorld.getPropDiscs(), seaWorld.getMap());
+});
 
 function createTutMarker() {
   const g = new THREE.Group();
@@ -1466,9 +1483,13 @@ const fishing = createFishingController({
       if (ui.qteHits) ui.qteHits.textContent = '';
       ui.btnFishCn.textContent = '收竿';
       sfx.fishBite();
-      rodBiteUntil = now() + 0.18;
-      bobberBiteUntil = now() + 0.16;
+      rodBiteUntil = now() + 0.85;
+      bobberBiteUntil = now() + 0.55;
       addCamShake(0.05, 90);
+      vel.set(0, 0.6, 0);
+      tmp.set(fishing.bobber.x, 0.12, fishing.bobber.z);
+      wake.spawn(tmp, vel, 1.8);
+      splashFx.spawn(fishing.bobber.x, fishing.bobber.z, 0.7);
     } else if (ph === 'wait' || ph === 'cast') {
       ui.qte.classList.add('hidden');
       ui.btnFishCn.textContent = '等待';
@@ -1505,7 +1526,7 @@ const fishing = createFishingController({
     const bz = tipWorld.z + (aim.z - tipWorld.z) * u;
     const by = tipWorld.y + (0.25 - tipWorld.y) * u + Math.sin(u * Math.PI) * 2.4;
     bobberWorld.set(bx, by, bz);
-    setFishLine(tipWorld.x, tipWorld.y, tipWorld.z, bx, by, bz);
+    setFishLine(tipWorld.x, tipWorld.y, tipWorld.z, bx, by, bz, 0.78);
   },
   onCastLand(bob) {
     setRodWaitPose(boat);
@@ -1513,7 +1534,8 @@ const fishing = createFishingController({
     bobberMesh.position.set(bob.x, 0.22, bob.z);
     vel.set(0, 0.4, 0);
     tmp.set(bob.x, 0.12, bob.z);
-    wake.spawn(tmp, vel, 0.55);
+    wake.spawn(tmp, vel, 2.4);
+    splashFx.spawn(bob.x, bob.z, 1);
   },
   onWaitTick(bob, near) {
     setRodWaitPose(boat);
@@ -3059,7 +3081,7 @@ function applyZoneVisual(z) {
   ambLight.color.setHex(biome.ambient);
   duskSky.userData.setBiome?.(biome);
   worldClouds.userData.setBiome?.(biome);
-  weatherFx.setPreset(biome);
+  weatherFx.setPreset(biome, duskSky);
   ui.zoneName.textContent = z.name;
   applyHudTheme(z.id, ui.hud);
 }
@@ -3585,14 +3607,17 @@ function tick() {
     fishing.update(dt, bobHit);
     updateAimPreview();
     if (fishing.phase === 'qte') {
-      const biteK = rodBiteUntil > now() ? 1 - (rodBiteUntil - now()) / 0.18 : 1;
-      setRodBitePose(boat, biteK);
+      const tNow = now();
+      const biteK = rodBiteUntil > tNow ? 1 - (rodBiteUntil - tNow) / 0.85 : 1;
+      setRodBitePose(boat, biteK, performance.now() * 0.001);
       bobberMesh.visible = true;
       const bob = fishing.bobber;
-      const dip = bobberBiteUntil > now() ? -0.12 * (bobberBiteUntil - now()) / 0.16 : 0;
-      bobberMesh.position.set(bob.x, 0.18 + dip + Math.sin(performance.now() * 0.012) * 0.1, bob.z);
+      const dip = bobberBiteUntil > tNow
+        ? -0.45 * (bobberBiteUntil - tNow) / 0.55
+        : -0.08 + Math.sin(performance.now() * 0.012) * 0.1;
+      bobberMesh.position.set(bob.x, 0.18 + dip, bob.z);
       if (boat.userData.rodTip) boat.userData.rodTip.getWorldPosition(tipWorld);
-      setFishLine(tipWorld.x, tipWorld.y, tipWorld.z, bob.x, bobberMesh.position.y, bob.z);
+      setFishLine(tipWorld.x, tipWorld.y, tipWorld.z, bob.x, bobberMesh.position.y, bob.z, 0.94);
     }
     const dropped = updateSlotsVitality(state.slots, boat, dt, gradientMap);
     if (dropped.length) showToast(`${dropped.join('、')} 力竭脱落`);
@@ -3799,8 +3824,12 @@ function tick() {
     dmgFloats.update(dt);
     familyVfx.update(dt, paddle.state?.speed || 0);
     updateFlotsam(flotsam, t);
-    updateVortices(vortices, t);
+    const swarmV = (fishing.phase === 'wait' || fishing.phase === 'qte')
+      ? findNearestVortex(vortices, fishing.bobber, 2)?.vortex
+      : null;
+    updateVortices(vortices, t, swarmV);
     wake.update(dt);
+    splashFx.update(dt);
   }
   updateWeaponCds();
   bpBoatStage?.tick(t);

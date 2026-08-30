@@ -42,11 +42,25 @@ export function createDuskSky() {
   sky.name = 'duskSky';
   sky.renderOrder = -100;
   sky.frustumCulled = false;
+  const baseHorizon = new THREE.Color(0xff9e47);
+  const baseZenith = new THREE.Color(0x293385);
+  const baseGlow = new THREE.Color(0xffd173);
+  const flashCol = new THREE.Color(0xe8f0ff);
   sky.userData.setBiome = (biome) => {
     mat.uniforms.uHorizon.value.setHex(biome.horizon);
     mat.uniforms.uZenith.value.setHex(biome.zenith);
     mat.uniforms.uGlow.value.setHex(biome.sun);
     mat.uniforms.uExp.value = biome.id === 2 ? 1.15 : biome.id >= 3 ? 1.35 : 1.55;
+    baseHorizon.copy(mat.uniforms.uHorizon.value);
+    baseZenith.copy(mat.uniforms.uZenith.value);
+    baseGlow.copy(mat.uniforms.uGlow.value);
+  };
+  /** k 0..1 — lightning wash on the sky dome. */
+  sky.userData.applyFlash = (k) => {
+    const t = Math.max(0, Math.min(1, k));
+    mat.uniforms.uGlow.value.copy(baseGlow).lerp(flashCol, t);
+    mat.uniforms.uHorizon.value.copy(baseHorizon).lerp(flashCol, t * 0.5);
+    mat.uniforms.uZenith.value.copy(baseZenith).lerp(flashCol, t * 0.22);
   };
   sky.userData.follow = (pos) => {
     sky.position.x = pos.x;
@@ -197,6 +211,9 @@ export function createWater() {
     color: 0xffffff,
     vertexColors: true,
     flatShading: true,
+    transparent: true,
+    opacity: 0.78,
+    depthWrite: true,
   });
 
   const mesh = new THREE.Mesh(geo, mat);
@@ -212,9 +229,9 @@ export function createWater() {
     base[i * 3 + 1] = pos.getY(i);
     base[i * 3 + 2] = pos.getZ(i);
     // bright teal base
-    colors[i * 3] = 0.18;
-    colors[i * 3 + 1] = 0.88;
-    colors[i * 3 + 2] = 0.80;
+    colors[i * 3] = 0.14;
+    colors[i * 3 + 1] = 0.72;
+    colors[i * 3 + 2] = 0.68;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   mesh.userData.basePositions = base;
@@ -249,9 +266,9 @@ export function updateWater(water, time, boatPos) {
     const dusk = 0.5 + 0.5 * Math.sin(time * 0.3 + wx * 0.02);
     col.setXYZ(
       i,
-      0.16 + crest * 0.22 + dusk * 0.08,
-      0.86 + crest * 0.08,
-      0.78 + crest * 0.05 - dusk * 0.04
+      0.12 + crest * 0.18 + dusk * 0.06,
+      0.70 + crest * 0.08,
+      0.66 + crest * 0.05 - dusk * 0.04
     );
   }
   pos.needsUpdate = true;

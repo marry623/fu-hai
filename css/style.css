@@ -2934,8 +2934,8 @@ html, body {
 
 /* Prep slot bind picker — same-screen fish list beside callout */
 .hub-slot-bind-pop {
-  position: absolute;
-  z-index: 8;
+  position: fixed;
+  z-index: 60;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2982,9 +2982,79 @@ html, body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
-  overflow-y: auto;
   padding-right: 2px;
   min-height: 0;
+}
+.hub-slot-bind-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: scroll;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--wood) rgba(26, 18, 12, 0.1);
+}
+.hub-slot-bind-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.hub-slot-bind-scroll::-webkit-scrollbar-track {
+  border: 1px solid rgba(26, 18, 12, 0.3);
+  border-radius: 4px;
+  background: rgba(26, 18, 12, 0.08);
+}
+.hub-slot-bind-scroll::-webkit-scrollbar-thumb {
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--wood);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.hub-slot-bind-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--wood-deep);
+}
+.hub-slot-bind-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.hub-slot-bind-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 3px;
+  border-bottom: 1px dashed rgba(45, 36, 28, 0.4);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+}
+.hub-slot-bind-section-title small {
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.72;
+}
+.hub-slot-bind-current {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 6px;
+  border: 1px solid rgba(45, 36, 28, 0.35);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.4);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+.hub-slot-bind-current button {
+  padding: 3px 6px;
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  background: #efe6d4;
+  color: var(--ink);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
 }
 .hub-slot-bind-cell {
   position: relative;
@@ -3000,6 +3070,21 @@ html, body {
 .hub-slot-bind-cell:hover .hub-slot-bind-polaroid {
   outline: 2px solid var(--teal);
   outline-offset: 1px;
+}
+.hub-slot-buy-cell.unaffordable {
+  cursor: not-allowed;
+  filter: grayscale(0.7);
+  opacity: 0.52;
+}
+.hub-slot-buy-cell.unaffordable:hover .hub-slot-bind-polaroid {
+  outline: none;
+}
+.hub-slot-buy-price {
+  margin-top: 2px;
+  color: #8a4e24;
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
 }
 .hub-slot-bind-polaroid {
   padding: 4px 4px 6px;
@@ -3635,8 +3720,8 @@ html, body {
 }
 
 .hub-wh-buy-pop {
-  position: absolute;
-  z-index: 12;
+  position: fixed;
+  z-index: 70;
   left: 50%;
   top: 42%;
   transform: translate(-50%, -50%);
@@ -4137,6 +4222,10 @@ button.hub-bp-card {
   text-align: center;
   cursor: pointer;
   appearance: none;
+}
+.hub-bp-card.selected {
+  outline: 3px solid var(--teal);
+  outline-offset: 1px;
 }
 .hub-bp-card.empty {
   opacity: 0.92;
@@ -4665,6 +4754,11 @@ button.hub-bp-card {
 }
 .hub-chip.selected { box-shadow: 0 0 0 2px var(--teal); background: #fff; }
 .hub-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+.hub-chip-buy {
+  opacity: 0.92;
+  border-style: dashed;
+  background: #efe4d2;
+}
 .hub-warehouse { display: grid; gap: 4px; }
 .hub-wh-row {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;

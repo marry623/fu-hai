@@ -24,6 +24,9 @@ const C = {
   splashWhite: 0xe8f8ff,
 };
 
+/** Clearance kept between a monster anchor and a rock disc (waveWhale hits at 4.2). */
+const MOB_PAD = 6;
+
 /**
  * Hazards: ram / wrap / ranged + planks + external lighthouses
  * Territory AI: patrol anchors, limited chasers, no full swarm.
@@ -212,6 +215,9 @@ export function createHazards(gradientMap, scene, hitFx = null) {
     const poly = map?.navigable;
     const b = map?.bounds;
     const islands = map?.islands || [];
+    const reefs = map?.reefs || [];
+    // Empty until the zone GLBs land; relocateFromDiscs fixes anchors afterwards.
+    const discs = map?._propDiscs || [];
     const spawnPt = map?.spawn || spawn;
     const zid = map?.id != null ? map.id : zoneId;
     const poolAll = monstersForZone(zid);
@@ -248,6 +254,19 @@ export function createHazards(gradientMap, scene, hitFx = null) {
           if (Math.hypot(x - isl.x, z - isl.z) < isl.r + 4) { nearIsland = true; break; }
         }
         if (nearIsland) continue;
+
+        // Rocks sit on reef / island anchors, so both the anchor and the baked
+        // disc have to be avoided or monsters end up buried inside a stone.
+        let inRock = false;
+        for (const r of reefs) {
+          if (Math.hypot(x - r.x, z - r.z) < r.r + MOB_PAD) { inRock = true; break; }
+        }
+        if (!inRock) {
+          for (const d of discs) {
+            if (Math.hypot(x - d.x, z - d.z) < d.r + MOB_PAD) { inRock = true; break; }
+          }
+        }
+        if (inRock) continue;
 
         let tooClose = false;
         let nearCount = 0;
@@ -369,6 +388,60 @@ export function createHazards(gradientMap, scene, hitFx = null) {
       p.position.z += (Math.random() - 0.5) * 10;
       p.userData.dead = false;
     });
+  }
+
+  /**
+   * Push anchors off rock discs once the zone GLBs finish loading. Anchors are
+   * picked while _propDiscs is still empty, so without this pass a share of the
+   * monsters spend the run buried inside a stone.
+   */
+  function relocateFromDiscs(discs, map) {
+    const list = discs || [];
+    if (!list.length) return;
+    const poly = map?.navigable || null;
+
+    const blockingDisc = (x, z) => {
+      for (const d of list) {
+        if (Math.hypot(x - d.x, z - d.z) < d.r + MOB_PAD) return d;
+      }
+      return null;
+    };
+
+    const freeSpot = (x, z) => {
+      const d = blockingDisc(x, z);
+      if (!d) return null;
+      const target = d.r + MOB_PAD + 0.5;
+      const base = Math.atan2(z - d.z, x - d.x);
+      // Straight out of the stone first, then fan both ways around it.
+      for (let i = 0; i < 12; i++) {
+        const ang = base + (i === 0 ? 0 : (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.5);
+        const nx = d.x + Math.cos(ang) * target;
+        const nz = d.z + Math.sin(ang) * target;
+        if (poly && !pointInPoly(nx, nz, poly)) continue;
+        if (blockingDisc(nx, nz)) continue;
+        return { x: nx, z: nz };
+      }
+      return null;
+    };
+
+    const move = (obj) => {
+      const spot = freeSpot(obj.position.x, obj.position.z);
+      if (!spot) return;
+      obj.position.x = spot.x;
+      obj.position.z = spot.z;
+      const a = obj.userData.anchor;
+      // Copy: map spawn points are shared module data and must not be rewritten.
+      if (a) obj.userData.anchor = { ...a, x: spot.x, z: spot.z };
+    };
+
+    for (const e of enemies) {
+      if (e.userData.dead || !e.userData.anchor) continue;
+      move(e);
+    }
+    for (const p of planks) {
+      if (p.userData.dead || !p.userData.anchor) continue;
+      move(p);
+    }
   }
 
   /** @deprecated use spawnScattered */
@@ -1146,6 +1219,7 @@ export function createHazards(gradientMap, scene, hitFx = null) {
     root, enemies, wraps, planks,
     get lighthouses() { return lighthouses; },
     update, shootInk, nearestEnemy, ramKill, cutNearestWrap, setSpawnLayout, spawnScattered, spawnAroundVortices,
+    relocateFromDiscs,
     setTutorialReveal, setHitOpts,
     stunEnemy, rootNearest, pierceLine, blastRadius, shoveWraps, disperseNearPoints,
     stunAlongLine, cutWrapsAlongLine, cutWrapsInRadius, stunInRadius,

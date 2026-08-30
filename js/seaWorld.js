@@ -2,8 +2,8 @@
 
 import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
-import { getSeaMap, constrainToPoly, pointInPoly, EVAC_RADIUS, TUTORIAL_BEATS, TUTORIAL_EVAC_RADIUS } from './seaMaps.js?v=32y';
-import { getSeaBiome } from './seaBiomes.js?v=30h';
+import { getSeaMap, constrainToPoly, pointInPoly, EVAC_RADIUS, TUTORIAL_BEATS, TUTORIAL_EVAC_RADIUS } from './seaMaps.js?v=44d';
+import { getSeaBiome } from './seaBiomes.js?v=44d';
 import { scatterBiomeDecor, updateBiomeDecor } from './biomeDecor.js?v=30j';
 import {
   clonePropGlb, ensureAllPropGlbsLoading, ensureZonePropGlbsLoading,
@@ -383,7 +383,9 @@ function scatterZone0Rocks(root, map, propDiscs = null) {
     rock.scale.set(sx * 0.7, sy * 0.7, sz * 0.7);
     root.add(rock);
     if (propDiscs) {
-      const r = propCollR('zone0Rock', tpl, Math.max(sx, sz) * 0.7, sy * 0.7, 2);
+      const scaleXZ = Math.max(sx, sz) * 0.7;
+      const scaleY = sy * 0.7;
+      const r = propCollR('zone0Rock', tpl, scaleXZ, scaleY, 2);
       propDiscs.push({ x: pt.x, z: pt.z, r });
     }
   }
@@ -494,7 +496,9 @@ function scatterZone0ExtraRocks(root, map, propDiscs = null) {
     rock.scale.set(sx * 0.7, sy * 0.7, sz * 0.7);
     root.add(rock);
     if (propDiscs) {
-      const r = propCollR('zone0RockB', tpl, Math.max(sx, sz) * 0.7, sy * 0.7, 2);
+      const scaleXZ = Math.max(sx, sz) * 0.7;
+      const scaleY = sy * 0.7;
+      const r = propCollR('zone0RockB', tpl, scaleXZ, scaleY, 2);
       propDiscs.push({ x: pt.x, z: pt.z, r });
     }
   }
@@ -639,7 +643,9 @@ function scatterZone0MoreRocks(root, map, propDiscs = null) {
     rock.scale.set(sx * 0.7, sy * 0.7, sz * 0.7);
     root.add(rock);
     if (propDiscs) {
-      const r = propCollR('zone0RockC', tpl, Math.max(sx, sz) * 0.7, sy * 0.7, 2);
+      const scaleXZ = Math.max(sx, sz) * 0.7;
+      const scaleY = sy * 0.7;
+      const r = propCollR('zone0RockC', tpl, scaleXZ, scaleY, 2);
       propDiscs.push({ x: pt.x, z: pt.z, r });
     }
   }
@@ -679,7 +685,8 @@ function scatterZone0NewRocks(root, map, propDiscs = null) {
     rock.scale.setScalar(s);
     root.add(rock);
     if (propDiscs) {
-      propDiscs.push({ x: pt.x, z: pt.z, r: propCollR(rockId, tpl, s, s, 3) });
+      const r = propCollR(rockId, tpl, s, s, 3);
+      propDiscs.push({ x: pt.x, z: pt.z, r });
     }
   }
 }
@@ -1004,7 +1011,8 @@ function scatterZone1GlbProps(root, map, biome, gradientMap) {
     const appliedScale = (2.5 * sizeMul) / baseSize * 0.7;
     tpl.scale.setScalar(appliedScale);
     root.add(tpl);
-    propDiscs.push({ x: pt.x, z: pt.z, r: propCollR(id, tpl, appliedScale, appliedScale, 3) });
+    const r = propCollR(id, tpl, appliedScale, appliedScale, 3);
+    propDiscs.push({ x: pt.x, z: pt.z, r });
   }
 
   // Decor kept modest — old 3200×clone froze zone entry for seconds.
@@ -1137,7 +1145,8 @@ function scatterZone2GlbProps(root, map, biome, gradientMap) {
     const appliedScale = (2.5 * sizeMul) / baseSize * 0.9;
     tpl.scale.setScalar(appliedScale);
     root.add(tpl);
-    propDiscs.push({ x: pt.x, z: pt.z, r: propCollR(id, tpl, appliedScale, appliedScale, 3) });
+    const r = propCollR(id, tpl, appliedScale, appliedScale, 3);
+    propDiscs.push({ x: pt.x, z: pt.z, r });
   }
 
   // Decor: 1–3× varied sizes, brownish-yellow tones dominate via fallbackColor in propGlb config
@@ -1232,7 +1241,8 @@ function scatterZone3GlbProps(root, map, biome, gradientMap) {
     const appliedScale = (5.0 * sizeMul) / baseSize * 0.9;
     tpl.scale.setScalar(appliedScale);
     root.add(tpl);
-    propDiscs.push({ x: pt.x, z: pt.z, r: propCollR(id, tpl, appliedScale, appliedScale, 3) });
+    const r = propCollR(id, tpl, appliedScale, appliedScale, 3);
+    propDiscs.push({ x: pt.x, z: pt.z, r });
   }
 
   const decorCount = 200;
@@ -1323,7 +1333,8 @@ function scatterZone4GlbProps(root, map, biome, gradientMap) {
     const appliedScale = (2.5 * sizeMul) / baseSize * 0.7;
     tpl.scale.setScalar(appliedScale);
     root.add(tpl);
-    propDiscs.push({ x: pt.x, z: pt.z, r: propCollR(id, tpl, appliedScale, appliedScale, 3) });
+    const r = propCollR(id, tpl, appliedScale, appliedScale, 3);
+    propDiscs.push({ x: pt.x, z: pt.z, r });
   }
 
   const decorCount = 200;
@@ -1596,6 +1607,8 @@ export function createSeaWorld() {
   ensureAllPropGlbsLoading();
   let propsReloadTimer = 0;
   let propsReloadKey = '';
+  /** @type {(() => void)|null} */
+  let onPropsReloaded = null;
   onPropGlbReady((readyId) => {
     if (!lastLoadArgs) return;
     const zid = lastLoadArgs.zoneId | 0;
@@ -1617,6 +1630,7 @@ export function createSeaWorld() {
       propsReloadKey = nextKey;
       ensureZonePropGlbsLoading(z);
       load(lastLoadArgs.zoneId, lastLoadArgs.scene, lastLoadArgs.gradientMap, lastLoadArgs.water);
+      onPropsReloaded?.();
     }, 40);
   });
 
@@ -1866,8 +1880,12 @@ export function createSeaWorld() {
     setTutorialReveal,
     updateBeacons,
     setEvacRingActive,
-    updateDecor: (time) => updateBiomeDecor(decorRoot, time),
+    updateDecor: (time) => {
+      updateBiomeDecor(decorRoot, time);
+    },
     getMap: () => current,
+    getPropDiscs: () => current?._propDiscs || [],
+    setOnPropsReloaded: (cb) => { onPropsReloaded = typeof cb === 'function' ? cb : null; },
     getLighthouses: () => lighthouses,
   };
 }
@@ -1905,12 +1923,12 @@ export function updateWaterFollow(water, time, boatPos) {
     y = Math.round(y * 2.2) / 2.2;
     pos.setY(i, y);
 
-    const crest = Math.max(0, y) * 0.15;
+    const crest = Math.max(0, y) * 0.12;
     col.setXYZ(
       i,
-      Math.min(1, tint.r * 0.85 + crest + 0.05),
-      Math.min(1, tint.g * 0.9 + crest),
-      Math.min(1, tint.b * 0.9 + crest * 0.5)
+      Math.min(1, tint.r * 0.72 + crest + 0.04),
+      Math.min(1, tint.g * 0.78 + crest),
+      Math.min(1, tint.b * 0.78 + crest * 0.45)
     );
   }
   pos.needsUpdate = true;

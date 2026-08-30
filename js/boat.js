@@ -63,19 +63,34 @@ export function createBoat(gradientMap, boatId = 'raft') {
   layoutOars(root);
 
   const rodArm = new THREE.Group();
-  const pole = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.028, 0.04, 2.0, 5),
-    toonMat(0x8b5a2b, gradientMap)
-  );
-  pole.position.y = 1.0;
-  rodArm.add(pole);
-  addOutline(pole, 1.2);
+  const rodMat = toonMat(0x8b5a2b, gradientMap);
+  const rodSegments = [];
+  const lengths = [0.72, 0.7, 0.64];
+  const radii = [[0.042, 0.052], [0.03, 0.042], [0.018, 0.03]];
+  let rodParent = rodArm;
+  for (let i = 0; i < lengths.length; i++) {
+    const pivot = new THREE.Group();
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(radii[i][0], radii[i][1], lengths[i], 5),
+      rodMat
+    );
+    pole.position.y = lengths[i] * 0.5;
+    pivot.add(pole);
+    addOutline(pole, 1.2);
+    rodParent.add(pivot);
+    rodSegments.push(pivot);
+    const next = new THREE.Group();
+    next.position.y = lengths[i];
+    pivot.add(next);
+    rodParent = next;
+  }
   const rodTip = new THREE.Object3D();
-  rodTip.position.set(0, 2.05, 0);
-  rodArm.add(rodTip);
+  rodTip.position.set(0, 0.03, 0);
+  rodParent.add(rodTip);
   rodArm.position.set(0.9, 0.5, -0.9);
   rodArm.rotation.z = -0.4;
   rodArm.userData.restRot = { x: 0, y: 0, z: -0.4 };
+  rodArm.userData.segments = rodSegments;
   rodArm.visible = false;
   root.add(rodArm);
   root.userData.rodArm = rodArm;
@@ -294,6 +309,7 @@ export function setRodCastPose(boat, t) {
   const rod = boat.userData.rodArm;
   if (!rod) return;
   rod.visible = true;
+  for (const seg of rod.userData.segments || []) seg.rotation.set(0, 0, 0);
   const u = Math.max(0, Math.min(1, t));
   rod.rotation.x = -0.55 + u * 1.15;
   rod.rotation.z = -0.55 + u * 0.25;
@@ -304,18 +320,28 @@ export function setRodWaitPose(boat) {
   const rod = boat.userData.rodArm;
   if (!rod) return;
   rod.visible = true;
+  for (const seg of rod.userData.segments || []) seg.rotation.set(0, 0, 0);
   rod.rotation.x = 0.35;
   rod.rotation.y = 0.15;
   rod.rotation.z = -0.35;
 }
 
-/** k: 0 = just bit, 1 = settled back to wait pose */
-export function setRodBitePose(boat, k) {
+/** k: 0 = just bit, 1 = initial strike settled; bend persists through QTE. */
+export function setRodBitePose(boat, k, time = 0) {
   setRodWaitPose(boat);
   const rod = boat.userData.rodArm;
   if (!rod) return;
-  const u = Math.max(0, Math.min(1, k));
-  rod.rotation.x += 0.42 * (1 - u) * (1 - u);
+  const punch = (1 - Math.max(0, Math.min(1, k))) ** 2;
+  rod.rotation.x += 1.18 * punch + Math.sin(time * 15) * 0.08;
+  rod.rotation.y += Math.sin(time * 11) * 0.045;
+  rod.rotation.z -= 0.28 * punch + Math.cos(time * 13) * 0.06;
+  const segs = rod.userData.segments || [];
+  for (let i = 0; i < segs.length; i++) {
+    const tipWeight = (i + 1) / segs.length;
+    segs[i].rotation.x = (0.14 + punch * 0.2) * tipWeight
+      + Math.sin(time * (17 + i * 2) + i) * 0.045 * tipWeight;
+    segs[i].rotation.z = Math.cos(time * (12 + i) + i) * 0.035 * tipWeight;
+  }
 }
 
 export function resetRodPose(boat) {
@@ -333,22 +359,24 @@ export function createWakeSystem(scene) {
   const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
   function spawn(pos, vel, intensity = 1) {
-    const n = Math.floor(1 + intensity * 3);
+    const burst = intensity >= 1.5;
+    const n = burst ? Math.floor(10 + intensity * 6) : Math.floor(1 + intensity * 3);
+    const scatter = burst ? 2.6 : 1.2;
     for (let i = 0; i < n; i++) {
       const m = new THREE.Mesh(geo, mat.clone());
       m.position.copy(pos);
-      m.position.x += (Math.random() - 0.5) * 1.2;
-      m.position.y = 0.1 + Math.random() * 0.3;
-      m.position.z += (Math.random() - 0.5) * 1.2;
-      m.scale.setScalar(0.35 + Math.random() * 0.6 * intensity);
+      m.position.x += (Math.random() - 0.5) * scatter;
+      m.position.y = 0.1 + Math.random() * (burst ? 0.55 : 0.3);
+      m.position.z += (Math.random() - 0.5) * scatter;
+      m.scale.setScalar(0.35 + Math.random() * 0.6 * Math.min(2.4, intensity));
       scene.add(m);
       shards.push({
         mesh: m,
-        life: 0.5 + Math.random() * 0.4,
-        max: 0.9,
-        vx: -vel.x * 0.2 + (Math.random() - 0.5),
-        vz: -vel.z * 0.2 + (Math.random() - 0.5),
-        vy: 0.6 + Math.random(),
+        life: 0.5 + Math.random() * (burst ? 0.55 : 0.4),
+        max: burst ? 1.15 : 0.9,
+        vx: -vel.x * 0.2 + (Math.random() - 0.5) * (burst ? 2.8 : 1),
+        vz: -vel.z * 0.2 + (Math.random() - 0.5) * (burst ? 2.8 : 1),
+        vy: burst ? 1.6 + Math.random() * 2.4 : 0.6 + Math.random(),
       });
     }
   }
@@ -367,6 +395,56 @@ export function createWakeSystem(scene) {
         scene.remove(s.mesh);
         s.mesh.material.dispose();
         shards.splice(i, 1);
+      }
+    }
+  }
+
+  return { spawn, update };
+}
+
+/** Expanding white rings at a splash point (cast land / bite). */
+export function createSplashRings(scene) {
+  const rings = [];
+  const geo = new THREE.RingGeometry(0.18, 0.38, 16);
+
+  function spawn(x, z, strength = 1) {
+    const n = 3;
+    for (let i = 0; i < n; i++) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.72 * strength,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.set(x, 0.06, z);
+      mesh.scale.setScalar(0.35 + i * 0.12);
+      mesh.userData.skipOutline = true;
+      scene.add(mesh);
+      rings.push({
+        mesh,
+        age: -i * 0.05,
+        life: 0.48 + i * 0.12,
+        grow: 5.5 + i * 1.4,
+        startOp: 0.72 * strength,
+      });
+    }
+  }
+
+  function update(dt) {
+    for (let i = rings.length - 1; i >= 0; i--) {
+      const r = rings[i];
+      r.age += dt;
+      if (r.age < 0) continue;
+      const u = Math.min(1, r.age / r.life);
+      r.mesh.scale.setScalar(0.4 + u * r.grow);
+      r.mesh.material.opacity = r.startOp * (1 - u);
+      if (u >= 1) {
+        scene.remove(r.mesh);
+        r.mesh.material.dispose();
+        rings.splice(i, 1);
       }
     }
   }

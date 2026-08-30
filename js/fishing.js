@@ -73,21 +73,7 @@ function createVortex(gradientMap, id) {
   g.add(disc);
   g.userData.tintables.push({ mesh: disc, role: 'disc' });
 
-  g.userData.fishBits = [];
-  for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * Math.PI * 2;
-    const fish = new THREE.Mesh(
-      new THREE.ConeGeometry(0.22, 0.7, 4),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 })
-    );
-    fish.rotation.z = Math.PI / 2;
-    fish.position.set(Math.cos(a) * 3.4, 0.35, Math.sin(a) * 3.4);
-    fish.userData.skipOutline = true;
-    fish.userData.orbit = a;
-    g.add(fish);
-    g.userData.fishBits.push(fish);
-    g.userData.tintables.push({ mesh: fish, role: 'fish' });
-  }
+  g.userData.swarm = 0;
 
   return g;
 }
@@ -107,24 +93,15 @@ export function tintVortexField(list, waterHex) {
       else if (t.role === 'mid') mat.color.copy(mid);
       else if (t.role === 'disc') mat.color.copy(dark);
       else if (t.role === 'foam') mat.color.copy(foam);
-      else if (t.role === 'fish') mat.color.copy(bright);
     }
   }
 }
 
-export function updateVortices(list, time) {
+export function updateVortices(list, time, swarmVortex = null) {
   for (const v of list) {
-    if (v.userData.spin) v.userData.spin.rotation.z = time * 1.2;
-    const bits = v.userData.fishBits;
-    if (!bits) continue;
-    for (let i = 0; i < bits.length; i++) {
-      const f = bits[i];
-      const a = f.userData.orbit + time * 1.6;
-      f.position.x = Math.cos(a) * 3.4;
-      f.position.z = Math.sin(a) * 3.4;
-      f.position.y = 0.28 + Math.sin(time * 3 + i) * 0.12;
-      f.rotation.y = -a;
-    }
+    const want = swarmVortex && v === swarmVortex ? 1 : 0;
+    v.userData.swarm = THREE.MathUtils.lerp(v.userData.swarm || 0, want, want ? 0.065 : 0.025);
+    if (v.userData.spin) v.userData.spin.rotation.z = time * (1.2 + v.userData.swarm * 1.4);
   }
 }
 

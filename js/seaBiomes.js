@@ -63,7 +63,7 @@ export const SEA_BIOMES = {
   1: pack({
     id: 1, name: 'kelp',
     sky: 0xd8e2c6, fog: 0xb6c9a3, water: 0x3aa878,
-    fogNear: 180, fogFar: 720,
+    fogNear: 180, fogFar: 600,
     horizon: 0xcfe0bd, zenith: 0x88a878,
     sun: 0xfff8e0, hemiSky: 0xe8f0d4, hemiGround: 0x3a5a40, ambient: 0xeef2d8, accent: 0xf4a261,
     sunIntensity: 0.95, hemiIntensity: 0.95,
@@ -97,7 +97,7 @@ export const SEA_BIOMES = {
     sunIntensity: 0.75, hemiIntensity: 0.80,
     cloudTint: 0x2a2458, cloudShade: 0x0e0c18, cloudCount: 18, cloudY: 32, cloudScale: 1.4,
     islandSkin: 'basalt', reefSkin: 'spire',
-    particle: 'rain', particleColor: 0xb8c8ff, particleCount: 480,
+    particle: 'rain', particleColor: 0xb8c8ff, particleCount: 520,
     lighthouseStone: 0x1a1628, lighthouseLamp: 0xe0eaff, lighthouseStripe: 0x4a4e69,
     beach: 0x1a1628,
     ground: [0x0e0c14, 0x1d1820, 0x2b2d42],

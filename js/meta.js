@@ -784,6 +784,46 @@ export function buyWarehouseFish(meta, defId) {
   return { ok: true, meta: m, msg: `购入 ${def.name} −${cost}` };
 }
 
+export function buyAndEquipFish(meta, defId, slot) {
+  const def = getFishDef(defId);
+  const cost = shopBuyCost(def);
+  if (!cost || def.rarity > 3) return { ok: false, meta, msg: '此鱼不可购' };
+  if (!Object.prototype.hasOwnProperty.call(EMPTY_SLOTS(), slot) || def.slot !== slot) {
+    return { ok: false, meta, msg: '槽位不符' };
+  }
+  if (meta.fragments < cost) return { ok: false, meta, msg: '海图碎片不足' };
+
+  const item = {
+    defId: def.id,
+    name: def.name,
+    rarity: def.rarity,
+    category: def.category,
+    color: def.color,
+    vitality: 100,
+    slot: def.slot,
+    eat: def.eat || null,
+  };
+  const slots = { ...meta.loadout.slots };
+  const prev = slots[slot];
+  slots[slot] = item;
+  const fish = [...(meta.warehouse?.fish || [])];
+  if (prev) fish.push(prev);
+  const m = {
+    ...meta,
+    fragments: meta.fragments - cost,
+    warehouse: { ...meta.warehouse, fish },
+    loadout: { ...meta.loadout, slots },
+  };
+  saveMeta(m);
+  return {
+    ok: true,
+    meta: m,
+    msg: prev
+      ? `购入并替换 ${def.name} −${cost}`
+      : `购入并绑定 ${def.name} −${cost}`,
+  };
+}
+
 export function skillLevel(meta, shopId) {
   if (!ownsSkill(meta?.unlocks, shopId)) return 0;
   const n = meta?.skillLevels?.[shopId] | 0;
@@ -970,6 +1010,11 @@ function supplyKindFromKey(key) {
 }
 
 export function unpackSupply(meta, keyOrIndex) {
+  return unpackSupplyQty(meta, keyOrIndex, 1);
+}
+
+/** Move `qty` units from a bag slot back to warehouse. `qty <= 0` dumps the whole stack. */
+export function unpackSupplyQty(meta, keyOrIndex, qty = 0) {
   const w = normalizeSupplies(meta.warehouse?.supplies);
   const lo = normalizeLoadoutSupplies(meta.loadout?.supplies);
   let idx = -1;
@@ -988,9 +1033,11 @@ export function unpackSupply(meta, keyOrIndex) {
   const slot = lo.bag[idx];
   const key = bagSlotKey(slot);
   if (!isSupplyKey(key)) return { ok: false, meta, msg: '\u65e0\u6548\u7269\u8d44' };
-  w[key] = (w[key] | 0) + 1;
-  if (bagSlotCount(slot) <= 1) lo.bag[idx] = null;
-  else lo.bag[idx] = { key, n: bagSlotCount(slot) - 1 };
+  const have = bagSlotCount(slot);
+  const take = qty <= 0 ? have : Math.min(have, Math.max(1, qty | 0));
+  w[key] = (w[key] | 0) + take;
+  if (have <= take) lo.bag[idx] = null;
+  else lo.bag[idx] = { key, n: have - take };
   const next = normalizeLoadoutSupplies({ bag: lo.bag, baitKind: lo.baitKind });
   const m = {
     ...meta,
@@ -998,7 +1045,7 @@ export function unpackSupply(meta, keyOrIndex) {
     loadout: { ...meta.loadout, supplies: next },
   };
   saveMeta(m);
-  return { ok: true, meta: m, msg: '\u5df2\u653e\u56de\u4ed3\u5e93' };
+  return { ok: true, meta: m, moved: take, msg: `\u5df2\u653e\u56de\u4ed3\u5e93 \u00d7${take}` };
 }
 
 export function sellWarehouseFish(meta, warehouseIndex) {
