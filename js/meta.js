@@ -430,13 +430,13 @@ export function fishSellPrice(fish) {
 }
 
 export const SHOP_HULLS = [
-  { id: 'heavyRaft', name: '重筏', cost: 180, tone: '#3a6aaa', desc: '中阶。更耐，更钝。沉船丢失，需重买。耐久 120 · 推力 ×0.85。' },
-  { id: 'chargeBoat', name: '冲锋船', cost: 280, tone: '#6a2a8a', desc: '高阶。更快更脆。沉船丢失，需重买。耐久 95 · 推力 ×1.40。' },
+  { id: 'heavyRaft', name: '重筏', cost: 180, tone: '#3a6aaa', desc: '中阶。沉船丢失，需重买。耐久 120 · 推力 ×0.85。' },
+  { id: 'chargeBoat', name: '冲锋船', cost: 280, tone: '#6a2a8a', desc: '高阶。沉船丢失，需重买。耐久 95 · 推力 ×1.40。' },
 ];
 
 export const SHOP_SUPPLIES = [
   { id: 'baitCrude', zone: 'bait', name: '粗饵', cost: 12, amount: 4, tone: '#8aa090', desc: '星级权重不变。抛竿耗 1。×4 入仓。' },
-  { id: 'baitFresh', zone: 'bait', name: '鲜饵', cost: 20, amount: 3, tone: '#4ecdc4', desc: '抛竿耗 1。×3 入仓。权重 ★−8 / ★★+5 / ★★★+3。本图没有的星仍为 0。' },
+  { id: 'baitFresh', zone: 'bait', name: '鲜饵', cost: 20, amount: 3, tone: '#4ecdc4', desc: '抛竿耗 1。×3 入仓。权重 ★−8 / ★★+5 / ★★★+3。' },
   { id: 'baitScale', zone: 'bait', name: '亮鳞饵', cost: 50, amount: 3, tone: '#d4c060', desc: '抛竿耗 1。×3 入仓。权重 ★−16 / ★★−4 / ★★★+2 / ★★★★+8 / 五星+6 / 隐藏+4。未解锁星的加分拨到本图最高的 2–4 星。' },
   { id: 'baitAbyss', zone: 'bait', name: '深渊饵', cost: 90, amount: 2, tone: '#6a40a0', desc: '抛竿耗 1。×2 入仓。权重 ★−18 / ★★−10 / ★★★0 / ★★★★+10 / 五星+14 / 隐藏+4。未解锁星的加分拨到本图最高的 2–4 星。' },
   { id: 'plank', zone: 'repair', name: '木板', cost: 40, amount: 1, tone: '#c4a06a', desc: '占背包 1 格。×1 入仓。R +15 耐久。' },
@@ -583,7 +583,7 @@ export function cycleTalentSlot(meta, slotIndex) {
 
 export const SHOP_TALENTS = [
   { id: 'fishmongerEye', name: '鱼贩子的眼睛', cost: 160, tone: '#c45c1a', desc: '整备配装携带。钓鱼绿区 +20% / +32% / +45%。' },
-  { id: 'cursedBoat', name: '怪谈低语', cost: 180, tone: '#6a2a8a', desc: '整备配装携带。每航次随机一条怪鱼。升级不另写数字。' },
+  { id: 'cursedBoat', name: '怪谈低语', cost: 180, tone: '#6a2a8a', desc: '整备配装携带。每航次随机一条怪鱼。' },
   { id: 'ghostWake', name: '鬼影航迹', cost: 140, tone: '#3a5a7a', desc: '整备配装携带。腐蚀 ×0.82 / ×0.70 / ×0.58。' },
   { id: 'driftNose', name: '漂流嗅觉', cost: 145, tone: '#5a9aaa', desc: '整备配装携带。木桶/瓶物资与饵获得量 ×1.2 / ×1.35 / ×1.5。陷阱不变。' },
   { id: 'deepLedger', name: '深饵账本', cost: 150, tone: '#8a7040', desc: '整备配装携带。出航粗饵额外 +4 / +7 / +10。' },

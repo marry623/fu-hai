@@ -1229,7 +1229,7 @@ function scatterZone3GlbProps(root, map, biome, gradientMap) {
     tpl.rotation.y = hash2(pt.x, pt.z) * Math.PI * 2;
     const stoneScaleBoost = stoneScaleMap[id] ?? 36;
     const sizeMul = (0.6 + hash2(pt.x * 1.7, pt.z) * 0.8) * stoneScaleBoost;
-    const appliedScale = (2.5 * sizeMul) / baseSize * 0.9;
+    const appliedScale = (5.0 * sizeMul) / baseSize * 0.9;
     tpl.scale.setScalar(appliedScale);
     root.add(tpl);
     propDiscs.push({ x: pt.x, z: pt.z, r: propCollR(id, tpl, appliedScale, appliedScale, 3) });
@@ -1248,7 +1248,7 @@ function scatterZone3GlbProps(root, map, biome, gradientMap) {
     tpl.rotation.y = hash2(pt.x * 0.7, pt.z * 1.3) * Math.PI * 2;
     const sizeVariant = 1.0 + hash2(pt.x * 3.1, pt.z * 2.3) * 2.0;
     const sizeMul = (0.6 + hash2(pt.z * 1.4, pt.x * 0.8) * 1.4) * sizeVariant;
-    tpl.scale.setScalar((5.33 * sizeMul) / baseSize * 0.9);
+    tpl.scale.setScalar((10.66 * sizeMul) / baseSize * 0.9);
     root.add(tpl);
   }
 

@@ -2,7 +2,7 @@
 
 import { ZONES } from './zones.js?v=31y';
 import { SLOT_ORDER, SLOT_LABELS, ramCdForRarity } from './slots.js?v=39b';
-import { getFishDef, FISH_CATALOG, RARITY, listShopBuyFishIds, shopBuyCost, BAIT_KINDS, rarityStars, familyOf, familyLabel } from './fishCatalog.js?v=34b';
+import { getFishDef, FISH_CATALOG, RARITY, listShopBuyFishIds, shopBuyCost, BAIT_KINDS, rarityStars, familyOf, familyLabel } from './fishCatalog.js?v=43v';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
 import { getItemPortrait } from './itemPortrait.js?v=37a';
 import { getRelicPortrait, relicFaceHtml } from './relicPortrait.js?v=35c';
@@ -55,10 +55,10 @@ import {
   LOADOUT_BAG_SIZE,
   zoneTicketCost,
   canDepartZone,
-} from './meta.js?v=43m';
-import { previewCraftOdds, fmtCraftPct } from './fishCraft.js?v=41c';
+} from './meta.js?v=43v';
+import { previewCraftOdds } from './fishCraft.js?v=41c';
 import { HUB_SPOTS } from './hubIsland.js?v=43l';
-import { renderManualHtml } from './hubManual.js?v=41f';
+import { renderManualHtml } from './hubManual.js?v=43v';
 import * as sfx from './audio.js?v=33f';
 import {
   APPRAISE_COST,
@@ -344,7 +344,7 @@ export function createHub(deps) {
     const hint = root?.querySelector('.hub-island-hint');
     if (hint) {
       hint.textContent = meta.tutorialDone
-        ? '点击建筑进入功能 · 港口出港 · 轮轴整备 · 市集商店 · 黑市鉴宝 · 属性图鉴 · 图书馆教程'
+        ? '点击建筑进入功能 · 港口出港 · 轮轴整备 · 市集商店 · 仓库存储 · 黑市鉴宝 · 属性图鉴 · 图书馆教程'
         : '先完成练习湾归航才能出浅滩。可先看市集、仓库、整备与图书馆。';
     }
     renderDepartSummary(meta);
@@ -1255,7 +1255,7 @@ export function createHub(deps) {
     const info = document.createElement('p');
     info.className = 'bp-craft-odds';
     info.textContent = odds
-      ? `${n} / 4 · 最高 ${rarityStars(odds.R)} · 降 1 阶 ${fmtCraftPct(odds.down)} · 同阶 ${fmtCraftPct(odds.same)} · 升 1 阶 ${fmtCraftPct(odds.up)} · 隐藏六星 ${fmtCraftPct(odds.hidden)}`
+      ? `${n} / 4`
       : `${n} / 4 · 从右侧背包放入 2–4 条鱼获，产物从全图鉴抽取`;
     els.warehouse.appendChild(info);
 
@@ -1547,10 +1547,10 @@ export function createHub(deps) {
     if (!panel) return;
     const tabMeta = SHOP_TABS.find((t) => t.id === shopTab);
     const blurb = {
-      sell: '卖掉仓库鱼或宝物换碎片。未鉴定包裹也可先卖。',
-      hull: '帆船免费。重筏 / 冲锋船买的是一艘在港船，沉了要重买。',
-      supply: '饵和修理剂入仓库，出港再装进 8 格背包。1–3 星鱼可直购。',
-      weapon: '学会永久。出航带 3 张。可升到 3 级。',
+      sell: '卖掉鱼、包裹或宝物换碎片。',
+      hull: '帆船免费。重筏 / 冲锋船沉船后要重买。',
+      supply: '饵和修理剂入仓库，出港再装进背包。1–3 星鱼可直购。',
+      weapon: '学会后永久可用。出航带 3 张。可升到 3 级。',
       talent: '永久。可升到 3 级。',
     }[shopTab] || '';
     let detail = `<h3 class="hub-clip-h">${tabMeta?.name || '商店'}</h3>
@@ -2032,7 +2032,7 @@ export function createHub(deps) {
           const cost = shopBuyCost(def);
           shopDetail = {
             title: def.name,
-            desc: `${rarityStars(def.rarity)} · 进仓库，可绑槽或再卖掉（会亏差价）。4 星以上只能钓。`,
+            desc: `${rarityStars(def.rarity)} · 进仓库，可绑槽或再卖掉。4 星以上只能钓。`,
             priceLine: `${cost} 海图碎片（卖价 ${fishSellPrice({ defId: def.id, rarity: def.rarity, category: def.category })}）`,
             act: meta.fragments >= cost ? 'buyFish' : null,
             actId: id,
@@ -2529,7 +2529,7 @@ export function createHub(deps) {
     if (els.codexDesc) {
       els.codexDesc.textContent = unlocked
         ? def.desc
-        : '击沉或斩断后记载。';
+        : '击沉或击杀后记载。';
     }
     if (els.codexPortrait) {
       els.codexPortrait.classList.toggle('locked', !unlocked);

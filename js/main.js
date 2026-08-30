@@ -18,8 +18,8 @@ import {
   equipFish, updateSlotsVitality, computeBonuses, syncDeckFish,
   SLOT_ORDER, SLOT_LABELS, feedSlot, ramCdForRarity,
 } from './slots.js?v=41h';
-import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS, familyOf, familyLabel } from './fishCatalog.js?v=41c';
-import { previewCraftOdds, rollCraft, fmtCraftPct } from './fishCraft.js?v=41c';
+import { getFishDef, pickFishForZone, RARITY, rarityStars, BAIT_KINDS, familyOf, familyLabel } from './fishCatalog.js?v=43v';
+import { previewCraftOdds, rollCraft } from './fishCraft.js?v=41c';
 import { createFamilyVfx } from './familyVfx.js?v=32p';
 import { createFishMesh } from './fishMeshes.js?v=31c';
 import { beginHitFlash, beginDeathAnim, createDamageFloats } from './monsterMeshes.js?v=42e';
@@ -39,22 +39,22 @@ import {
   skillLevel, scaledSkillCard, fishmongerGreenMul, ghostWakeCorrMul, talentLevel,
   equippedTalents, driftSalvageMul, ramBlacksmithMul,
   chargeZoneTicket, canDepartZone, saveMeta,
-} from './meta.js?v=43m';
+} from './meta.js?v=43v';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=35l';
-import { createHub } from './hub.js?v=43q';
+import { createHub } from './hub.js?v=43x';
 import { createCoverScene } from './coverScene.js?v=43l';
 import { createHubIsland } from './hubIsland.js?v=43l';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=39s';
 import { createBpBoatStage } from './bpBoatStage.js?v=31g';
-import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=43m';
+import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=43u';
 import { ensureAllPropGlbsLoading } from './propGlb.js?v=43k';
 import { hullLength } from './hullGlb.js?v=43k';
 import { getSeaBiome } from './seaBiomes.js?v=30h';
 import { applyHudTheme } from './hudTheme.js?v=42b';
 import { createWeatherFx } from './weatherFx.js?v=30h';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=43t';
-import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=43n';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=43x';
+import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=43v';
 import * as sfx from './audio.js?v=42e';
 
 const canvas = document.getElementById('c');
@@ -1096,7 +1096,7 @@ const TUT_STEPS = [
   },
   {
     title: '\u6539\u88c5',
-    body: 'Tab \u5f00\u80cc\u5305 \u2192 \u9009\u4e2d\u9c7c \u2192 \u70b9\u300c\u6539\u88c5\u300d\u7ed1\u69fd\u3002',
+    body: 'Tab \u5f00\u80cc\u5305 \u2192 \u9009\u4e2d\u9c7c \u2192 \u70b9\u300c\u6539\u88c5\u300d\u628a\u9c7c\u7ed1\u5230\u8239\u4e0a\u3002',
     btn: '\u4e0b\u4e00\u6b65',
     gate: 'equip',
   },
@@ -1142,9 +1142,9 @@ function tutStepBody(step) {
   const dist = Math.round(tutDistToTarget(step));
   switch (step | 0) {
     case 0:
-      return `\u5411\u5317\u5212\u5230\u5149\u6807\u5904\uff08\u7ea6 ${dist} \u7c73\uff09\u00b7 A / D \u4ea4\u66ff\u5212 \u00b7 A / D \u540c\u65f6\u6309\u76f4\u884c`;
+      return `\u5411\u5317\u5212\u5230\u5149\u6807\u5904\uff08\u7ea6 ${dist} \u7c73\uff09\u00b7 A / D \u63a7\u5236\u5de6/\u53f3\u6868 \u00b7 A / D \u540c\u65f6\u6309\u76f4\u884c`;
     case 1:
-      return '\u6309S\u629b\u951a/\u8d77\u951a \u00b7 \u811a\u4e0b\u6c34\u5708 \u00b7 \u7a7a\u683c\u629b\u7aff\uff0c\u7eff\u533a\u518d\u7a7a\u683c';
+      return '\u6309S\u629b\u951a/\u8d77\u951a \u00b7 \u6c34\u5708\u5904\u9493\u9c7c \u00b7 \u7a7a\u683c\u629b\u7aff\uff0c\u6307\u9488\u5728\u7eff\u533a\u518d\u7a7a\u683c';
     case 2:
       return `\u7ee7\u7eed\u5411\u5317 \u00b7 \u9760\u8fd1\u6f02\u6d6e\u7269\u6309 E\uff08\u7ea6 ${dist} \u7c73\uff09`;
     case 3:
@@ -1746,7 +1746,7 @@ function resolveEvent(which) {
   if (key === 'hook_reclaim' && choice.fish) {
     state.fishHold.push(choice.fish);
     renderFishList();
-    showToast('QTE 成功：鱼装抢回！');
+    showToast('鱼装抢回！');
     monsterFx.hookPending = false;
     return;
   }
@@ -2093,10 +2093,10 @@ function renderBackpack() {
     const baitKey = BAIT_KINDS[state.inventory.baitKind]?.key || 'baitFresh';
     const baitName = BAIT_KINDS[state.inventory.baitKind]?.name || '鱼饵';
     const supplies = [
-      { id: 'bait', portraitId: baitKey, name: baitName, count: state.inventory.bait, color: 0x7dffc0,         desc: tut.active ? '练习湾饵无限，不消耗。' : (BAIT_KINDS[state.inventory.baitKind]?.desc || '抛竿耗 1。') },
-      { id: 'plank', name: '木板', count: state.inventory.plank, color: 0xc48a4a, desc: 'R +15 耐久。占背包 1 格。' },
-      { id: 'repair', name: '修补剂', count: state.inventory.repair, color: 0xffd24a, desc: '+25 耐久。可与龙骨膏同带。' },
-      { id: 'paste', name: '龙骨膏', count: state.inventory.paste || 0, color: 0xc45c1a, desc: '+45 耐久。大修。' },
+      { id: 'bait', portraitId: baitKey, name: baitName, count: state.inventory.bait, color: 0x7dffc0,         desc: tut.active ? '练习湾饵无限。' : (BAIT_KINDS[state.inventory.baitKind]?.desc || '抛竿耗 1。') },
+      { id: 'plank', name: '木板', count: state.inventory.plank, color: 0xc48a4a, desc: 'R +15 耐久。' },
+      { id: 'repair', name: '修补剂', count: state.inventory.repair, color: 0xffd24a, desc: '+25 耐久。' },
+      { id: 'paste', name: '龙骨膏', count: state.inventory.paste || 0, color: 0xc45c1a, desc: '+45 耐久。' },
     ];
     ui.fishCount.textContent = String(supplies.reduce((a, s) => a + s.count, 0));
     supplies.forEach((s, i) => {
@@ -2321,21 +2321,14 @@ function renderBackpackDetail() {
     const mats = craftMaterialsFromSlots();
     const odds = previewCraftOdds(mats);
     const n = mats.length;
-    const lines = odds
-      ? [
-        `\u964d 1 \u9636 ${fmtCraftPct(odds.down)}\uff08${rarityStars(odds.rarityDown)}\uff09`,
-        `\u540c\u9636 ${fmtCraftPct(odds.same)}\uff08${rarityStars(odds.raritySame)}\uff09`,
-        `\u5347 1 \u9636 ${fmtCraftPct(odds.up)}\uff08${rarityStars(odds.rarityUp)}\uff09`,
-        `\u9690\u85cf\u516d\u661f ${fmtCraftPct(odds.hidden)}`,
-      ]
-      : ['\u653e\u5165 2\u20134 \u6761\u9c7c\u83b7'];
+    const lines = odds ? [] : ['\u653e\u5165 2\u20134 \u6761\u9c7c\u83b7'];
     fillDetail({
       name: '\u5408\u6210\u53f0',
       serial: `${n} / 4`,
       color: 0xd07050,
       rarity: odds ? Math.min(5, odds.R) : 1,
       ribbon: '\u5408\u6210',
-      tagline: n < 2 ? '\u81f3\u5c11\u653e\u5165 2 \u6761' : `\u6700\u9ad8 ${rarityStars(odds.R)} \u00b7 ${n} \u6761`,
+      tagline: n < 2 ? '\u81f3\u5c11\u653e\u5165 2 \u6761' : `${n} \u6761`,
       desc: '\u4ea7\u7269\u4ece\u5168\u56fe\u9274\u62bd\u53d6\uff0c\u542b\u88c2\u53e3\u4f20\u8bf4\u4e0e\u6d77\u6c9f\u9690\u85cf\u3002',
       meta: lines.join('<br>'),
       showSlots: false,
@@ -2355,12 +2348,12 @@ function renderBackpackDetail() {
       bait: {
         name: BAIT_KINDS[state.inventory.baitKind]?.name || '鱼饵',
         color: 0x7dffc0,
-        desc: tut.active ? '练习湾饵无限，不消耗。' : (BAIT_KINDS[state.inventory.baitKind]?.desc || '抛竿耗 1。'),
+        desc: tut.active ? '练习湾饵无限。' : (BAIT_KINDS[state.inventory.baitKind]?.desc || '抛竿耗 1。'),
         count: tut.active ? '∞' : state.inventory.bait,
       },
-      plank: { name: '木板', color: 0xc48a4a, desc: 'R +15 耐久。占背包 1 格。', count: state.inventory.plank },
-      repair: { name: '修补剂', color: 0xffd24a, desc: '+25 耐久。可与龙骨膏同带。', count: state.inventory.repair },
-      paste: { name: '龙骨膏', color: 0xc45c1a, desc: '+45 耐久。大修。', count: state.inventory.paste || 0 },
+      plank: { name: '木板', color: 0xc48a4a, desc: 'R +15 耐久。', count: state.inventory.plank },
+      repair: { name: '修补剂', color: 0xffd24a, desc: '+25 耐久。', count: state.inventory.repair },
+      paste: { name: '龙骨膏', color: 0xc45c1a, desc: '+45 耐久。', count: state.inventory.paste || 0 },
     };
     const s = map[state.selectedSupply];
     const canUse = state.selectedSupply === 'plank' || state.selectedSupply === 'repair' || state.selectedSupply === 'paste';
@@ -2810,7 +2803,7 @@ function finishRun(outcome) {
     ? (wasTutorial ? '教学完成' : '成功归航')
     : (wasTutorial ? '教学失败' : '沉船失败');
   const storeNote = wasTutorial
-    ? (success ? '教学关物资不入库 · 仅标记教程完成' : '教学关沉船 · 不写入仓库')
+    ? (success ? '教程完成' : '教学关沉船')
     : success
       ? `鱼获入库 ${fishToStore.length} · 新鱼种 ${runNewFish}`
       : '沉船：海图碎片 0 · 活鱼不入库';
@@ -3285,7 +3278,7 @@ function updatePrompts() {
     return setPrompt(ui.prompt, `灯塔归航 · 再停 ${ev.remain.toFixed(1)} 秒`);
   }
   if (tut.active) return; // tickTutorialGuide owns the prompt after cards
-  if (fishing.phase === 'qte') return setPrompt(ui.prompt, '空格 — 停在绿区');
+  if (fishing.phase === 'qte') return setPrompt(ui.prompt, '空格钓鱼 — 指针停在绿区再按空格');
   if (fishing.phase === 'cast') return setPrompt(ui.prompt, '甩竿…');
   if (fishing.phase === 'wait') {
     return setPrompt(ui.prompt, '把浮漂靠近水圈');

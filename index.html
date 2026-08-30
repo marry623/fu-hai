@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>浮骸 · 海上肉鸽</title>
-  <link rel="stylesheet" href="css/style.css?v=43t" />
+  <title>浮骸</title>
+  <link rel="stylesheet" href="css/style.css?v=43x" />
 </head>
 <body>
   <div id="game-root">
@@ -46,7 +46,7 @@
           <button type="button" id="tut-guide-skip" class="tut-guide-btn tut-guide-skip">跳过教学</button>
         </div>
         <div id="qte" class="qte hidden">
-          <div class="qte-label">咬钩 · 停在绿区 <span id="qte-hits"></span></div>
+          <div class="qte-label">咬钩 · 指针停在绿区按空格 <span id="qte-hits"></span></div>
           <div class="qte-track"><div id="qte-green" class="qte-green"></div><div id="qte-pointer" class="qte-pointer"></div></div>
         </div>
       </div>
@@ -247,7 +247,7 @@
         <div class="hub-bm-scratch-face" id="hub-bm-scratch-face"></div>
         <canvas id="hub-bm-scratch-canvas" class="hub-bm-scratch-canvas" width="280" height="280"></canvas>
       </div>
-      <p class="hub-bm-scratch-hint" id="hub-bm-scratch-hint">擦开涂层揭晓宝物</p>
+      <p class="hub-bm-scratch-hint" id="hub-bm-scratch-hint">按住左键移动鼠标，擦开涂层揭晓宝物</p>
       <div class="hub-bm-scratch-acts">
         <button type="button" class="bp-btn bright" id="hub-bm-scratch-skip">直接揭开</button>
         <button type="button" class="bp-btn ghost hidden" id="hub-bm-scratch-close">完成</button>
@@ -300,7 +300,7 @@
           <span>最远 <strong id="hub-best">0m</strong></span>
         </div>
       </header>
-      <p class="hub-island-hint">点击建筑进入功能 · 港口出港 · 船坞整备 · 市集商店 · 展馆图鉴 · 图书馆教程</p>
+      <p class="hub-island-hint">点击建筑进入功能 · 港口出港 · 船坞整备 · 市集商店 · 展馆图鉴 · 图书馆教程 · 仓库存储 · 黑市鉴宝</p>
       <div id="hub-markers" class="hub-markers"></div>
       <div id="hub-drawer" class="hub-drawer hidden">
         <div class="hub-drawer-card hub-bp-shell">
@@ -404,11 +404,11 @@
                   <button type="button" id="btn-depart" class="bp-btn bright hub-depart-btn">出港航行</button>
                 </div>
                 <div id="hub-fs-left-shop" class="hub-clip-panel hidden">
-                  <p class="bp-clip-empty">归航和卖鱼获得海图碎片。买船出航，沉船后需重买。帆船免费。</p>
+                  <p class="bp-clip-empty">归航和出售物品获得海图碎片。买船出航，沉船后需重买。帆船免费。</p>
                 </div>
                 <div id="hub-fs-left-blackmarket" class="hub-clip-panel hidden">
                   <h3 class="hub-clip-h">黑市鉴宝</h3>
-                  <p class="hub-fs-blurb">未鉴定黑色包裹每件 20 碎片。单开可刮擦揭晓；也可一键鉴定（按余额能付几件开几件）。物品仍留仓库。</p>
+                  <p class="hub-fs-blurb">未鉴定黑色包裹每件 20 碎片。单开可刮擦揭晓；也可一键鉴定（按余额能付几件开几件）。鉴宝后物品进入仓库。</p>
                   <div id="hub-bm-detail" class="hub-shop-detail"></div>
                 </div>
                 <div id="hub-fs-left-codex" class="hub-clip-panel hidden">
@@ -447,8 +447,8 @@
     window.addEventListener('unhandledrejection', (e) => show(e.reason && e.reason.stack || e.reason));
     const fileHint = '请勿直接双击 index.html。运行项目里的 play.bat，或打开 http://127.0.0.1:8787/\nChrome 在 file:// 下无法加载 ES 模块。';
     const urls = location.protocol === 'file:'
-      ? ['./js/main.js', './js/main.js?v=43t']
-      : ['./js/main.js?v=43t'];
+      ? ['./js/main.js', './js/main.js?v=43x']
+      : ['./js/main.js?v=43x'];
     if (location.protocol === 'file:') show(fileHint);
     let last = null;
     let ok = false;
