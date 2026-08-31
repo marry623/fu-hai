@@ -491,7 +491,57 @@ function meshSkillGlacier(gm) {
   return g;
 }
 
+function meshCraftBench(gm) {
+  const g = new THREE.Group();
+  const wood = mat(0xb88850, gm);
+  const dark = mat(0x7a5530, gm);
+  const steel = mat(0xc8d4dc, gm);
+  const fish = mat(0x5ab0c4, gm);
+  const accent = mat(0xd07050, gm);
+
+  const board = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.12, 0.72), wood);
+  add(g, board, 1.06);
+  const rim = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.05, 0.16), dark);
+  rim.position.set(0, 0.02, -0.34);
+  add(g, rim, 1.08);
+  for (const x of [-0.42, 0.42]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.26, 0.1), dark);
+    leg.position.set(x, -0.18, 0.24);
+    add(g, leg, 1.1);
+  }
+
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.34, 3, 6), fish);
+  body.rotation.set(Math.PI / 2, 0, 0.12);
+  body.position.set(-0.1, 0.14, 0.06);
+  add(g, body, 1.1);
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.22, 4), fish);
+  tail.rotation.set(0, 0, Math.PI / 2);
+  tail.position.set(-0.44, 0.14, 0.04);
+  tail.scale.set(1, 1, 0.55);
+  add(g, tail, 1.14);
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 5, 4), dark);
+  eye.position.set(0.12, 0.22, 0.02);
+  add(g, eye, 1.2);
+
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.34, 0.04), steel);
+  blade.position.set(0.3, 0.42, -0.14);
+  blade.rotation.z = -0.28;
+  add(g, blade, 1.12);
+  const edge = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.06, 0.05), mat(0xf0f6fa, gm));
+  edge.position.set(0.28, 0.27, -0.14);
+  edge.rotation.z = -0.28;
+  add(g, edge, 1.16);
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.34, 6), accent);
+  grip.position.set(0.66, 0.62, -0.14);
+  grip.rotation.z = -0.9;
+  add(g, grip, 1.14);
+
+  g.rotation.set(0.32, 0.45, 0);
+  return g;
+}
+
 const BUILDERS = {
+  craftBench: meshCraftBench,
   bait: (gm) => meshBait(gm, { worm: 0x4a9a5a, hook: 0x9aa4b2 }),
   baitCrude: (gm) => meshBait(gm, { worm: 0x8aa090, hook: 0x7a6a58 }),
   baitFresh: (gm) => meshBait(gm, { worm: 0x3aa89a, hook: 0x9aa4b2 }),

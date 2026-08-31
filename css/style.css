@@ -4059,16 +4059,16 @@ html, body {
 .hub-drawer #hub-fs-left-depart .hub-clip-h {
   flex-shrink: 0;
 }
-/* Zone pick must stay visible; cargo scrolls when bag is full */
+/* Zone pick must stay visible; cargo fills leftover notepad space */
 .hub-drawer #hub-fs-left-depart .hub-zones {
   flex: 1 1 auto;
   min-height: 132px;
   max-height: min(280px, 42vh);
 }
 .hub-drawer #hub-cargo {
-  flex: 0 1 auto;
-  min-height: 0;
-  max-height: min(148px, 26vh);
+  flex: 1 1 auto;
+  min-height: 160px;
+  max-height: min(320px, 48vh);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -4766,7 +4766,7 @@ button.hub-bp-card {
   background: #fff8ee; font-size: 12px; font-weight: 800;
 }
 .hub-empty { color: #6a5a48; font-size: 12px; font-weight: 700; }
-.hub-cargo { display: grid; gap: 6px; margin-bottom: 4px; max-height: 88px; overflow-y: auto; }
+.hub-cargo { display: grid; gap: 6px; margin-bottom: 4px; max-height: 280px; overflow-y: auto; }
 .hub-depart-btn { width: 100%; margin-top: auto; flex-shrink: 0; position: sticky; bottom: 0; }
 .hub-codex-tabs {
   display: flex;

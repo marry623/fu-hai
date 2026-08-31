@@ -27,7 +27,7 @@ import { createGpuSparks } from './vfx/gpuSparks.js?v=32s';
 import { createBurstSystem, BurstMode } from './vfx/burstSphere.js?v=32s';
 import { createRewardFlight } from './rewardFlight.js?v=42d';
 import { getFishPortrait } from './fishPortrait.js?v=31c';
-import { getItemPortrait } from './itemPortrait.js?v=37a';
+import { getItemPortrait } from './itemPortrait.js?v=44i';
 import { getRelicPortrait } from './relicPortrait.js?v=35c';
 import { RELIC_CARRY_CAP, trimRelicCarry } from './salvageTables.js?v=35e';
 import { getSeaMap, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=44d';
@@ -53,7 +53,7 @@ import { getSeaBiome } from './seaBiomes.js?v=44d';
 import { applyHudTheme } from './hudTheme.js?v=42b';
 import { createWeatherFx } from './weatherFx.js?v=44a';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=44h';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=44j';
 import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=43v';
 import * as sfx from './audio.js?v=42e';
 
@@ -2348,6 +2348,7 @@ function renderBackpackDetail() {
       name: '\u5408\u6210\u53f0',
       serial: `${n} / 4`,
       color: 0xd07050,
+      itemId: 'craftBench',
       rarity: odds ? Math.min(5, odds.R) : 1,
       ribbon: '\u5408\u6210',
       tagline: n < 2 ? '\u81f3\u5c11\u653e\u5165 2 \u6761' : `${n} \u6761`,
