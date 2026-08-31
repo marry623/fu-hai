@@ -39,9 +39,9 @@ import {
   skillLevel, scaledSkillCard, fishmongerGreenMul, ghostWakeCorrMul, talentLevel,
   equippedTalents, driftSalvageMul, ramBlacksmithMul,
   chargeZoneTicket, canDepartZone, saveMeta,
-} from './meta.js?v=44h';
+} from './meta.js?v=44k';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=35l';
-import { createHub } from './hub.js?v=44h';
+import { createHub } from './hub.js?v=44k';
 import { createCoverScene } from './coverScene.js?v=43l';
 import { createHubIsland } from './hubIsland.js?v=43l';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=39s';
@@ -53,8 +53,8 @@ import { getSeaBiome } from './seaBiomes.js?v=44d';
 import { applyHudTheme } from './hudTheme.js?v=42b';
 import { createWeatherFx } from './weatherFx.js?v=44a';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=44j';
-import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=43v';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=44k';
+import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=44k';
 import * as sfx from './audio.js?v=42e';
 
 const canvas = document.getElementById('c');
@@ -2866,7 +2866,7 @@ function onSink() {
 }
 
 function maybeHubIntro() {
-  if (!meta.tutorialDone || meta.hubIntroDone) return;
+  if (meta.hubIntroDone) return;
   meta = { ...meta, hubIntroDone: true };
   saveMeta(meta);
   const lines = [
@@ -2887,7 +2887,6 @@ function openHub() {
   ui.sinkModal.classList.add('hidden');
   ui.settleModal?.classList.add('hidden');
   ui.lighthouseModal?.classList.add('hidden');
-  if (!meta.tutorialDone) startZone = -1;
   setWorldMode('hub');
   hub?.show();
   maybeHubIntro();
@@ -2908,7 +2907,7 @@ function startRun(fromCheckpoint = false) {
     const gate = canDepartZone(meta, startZone);
     if (!gate.ok) {
       showToast(gate.msg);
-      startZone = -1;
+      startZone = 0;
       return;
     }
     const ticket = chargeZoneTicket(meta, startZone);
@@ -4138,11 +4137,6 @@ ui.btnCoverStart?.addEventListener('click', () => {
   sfx.unlockAudio();
   sfx.uiConfirm();
   sfx.setBgmTheme('cover');
-  if (!meta.tutorialDone) {
-    startZone = -1;
-    startRun(false);
-    return;
-  }
   if ((startZone | 0) === -1) startZone = 0;
   openHub();
 });

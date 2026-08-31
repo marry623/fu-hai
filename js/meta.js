@@ -610,9 +610,6 @@ export const ZONE_UNLOCK_COST = ZONE_TICKET_COST;
 export function canDepartZone(meta, zoneId) {
   const id = zoneId | 0;
   if (id === -1) return { ok: true };
-  if (!meta?.tutorialDone) {
-    return { ok: false, msg: '\u9700\u5148\u5b8c\u6210\u7ec3\u4e60\u6e7e\u5f52\u822a' };
-  }
   if (!(meta.unlockedZones || [0]).includes(id)) {
     return { ok: false, msg: '\u9700\u5148\u901a\u5173\u4e0a\u4e00\u4e2a\u6d77\u57df' };
   }

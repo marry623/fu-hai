@@ -56,10 +56,10 @@ import {
   LOADOUT_BAG_SIZE,
   zoneTicketCost,
   canDepartZone,
-} from './meta.js?v=44h';
+} from './meta.js?v=44k';
 import { previewCraftOdds } from './fishCraft.js?v=41c';
 import { HUB_SPOTS } from './hubIsland.js?v=43l';
-import { renderManualHtml } from './hubManual.js?v=43v';
+import { renderManualHtml } from './hubManual.js?v=44k';
 import * as sfx from './audio.js?v=33f';
 import {
   APPRAISE_COST,
@@ -207,8 +207,6 @@ export function createHub(deps) {
 
   function show() {
     root?.classList.remove('hidden');
-    const meta = deps.getMeta();
-    if (!meta?.tutorialDone) deps.setStartZone?.(-1);
     closeDrawer();
     render();
     deps.onHubShow?.();
@@ -344,9 +342,7 @@ export function createHub(deps) {
 
     const hint = root?.querySelector('.hub-island-hint');
     if (hint) {
-      hint.textContent = meta.tutorialDone
-        ? '点击建筑进入功能 · 港口出港 · 轮轴整备 · 市集商店 · 仓库存储 · 黑市鉴宝 · 属性图鉴 · 图书馆教程'
-        : '先完成练习湾归航才能出浅滩。可先看市集、仓库、整备与图书馆。';
+      hint.textContent = '点击建筑进入功能 · 港口出港 · 轮轴整备 · 市集商店 · 仓库存储 · 黑市鉴宝 · 属性图鉴 · 图书馆教程';
     }
     renderDepartSummary(meta);
     ensureWarehouseChrome();
@@ -1460,7 +1456,6 @@ export function createHub(deps) {
           <span>${(() => {
             if (!unlocked) {
               if (z.id === -1) return z.unlockHint || '';
-              if (!meta.tutorialDone) return '\u5148\u5b8c\u6210\u7ec3\u4e60\u6e7e\u5f52\u822a';
               return '\u901a\u5173\u4e0a\u5173\u89e3\u9501';
             }
             const feat = FEATURE_LABELS[z.feature] || z.unlockHint || '';
