@@ -1966,6 +1966,62 @@ export function createHub(deps) {
     </button>`;
   }
 
+  function shopBuyCardDetail(meta, id) {
+    const item = [...SHOP_HULLS, ...SHOP_SUPPLIES, ...SHOP_WEAPONS, ...SHOP_TALENTS].find((s) => s.id === id);
+    if (!item) return null;
+    const weapon = SHOP_WEAPONS.find((w) => w.id === id);
+    const talent = SHOP_TALENTS.find((t) => t.id === id);
+    const isFreeSkill = !!weapon && weapon.cost <= 0;
+    const owned = !!meta.unlocks[id] || isFreeSkill;
+    let priceLine;
+    let act = null;
+    let actLabel = '学习';
+    if (SHOP_HULLS.some((h) => h.id === id)) {
+      priceLine = owned ? '已在港' : `${item.cost} 海图碎片`;
+      act = (!owned && meta.fragments >= item.cost) ? 'buy' : null;
+      actLabel = '购入船体';
+    } else if (weapon) {
+      const lv = owned ? skillLevel(meta, id) : 0;
+      if (!owned) {
+        priceLine = `${item.cost} 海图碎片学会`;
+        act = meta.fragments >= item.cost ? 'buy' : null;
+        actLabel = '学习';
+      } else if (lv >= 3) {
+        priceLine = 'Lv.3 满级';
+      } else {
+        const cost = skillUpgradeCost(id, lv);
+        priceLine = `Lv.${lv} → ${lv + 1} · ${cost} 海图碎片`;
+        act = meta.fragments >= cost ? 'upgradeSkill' : null;
+        actLabel = `升到 ${lv + 1} 级`;
+      }
+    } else if (talent) {
+      const lv = owned ? talentLevel(meta, id) : 0;
+      if (!owned) {
+        priceLine = `${item.cost} 海图碎片学会`;
+        act = meta.fragments >= item.cost ? 'buy' : null;
+        actLabel = '学习';
+      } else if (lv >= 3) {
+        priceLine = 'Lv.3 满级';
+      } else {
+        const cost = talentUpgradeCost(lv);
+        priceLine = `Lv.${lv} → ${lv + 1} · ${cost} 海图碎片`;
+        act = meta.fragments >= cost ? 'upgradeTalent' : null;
+        actLabel = `升到 ${lv + 1} 级`;
+      }
+    } else {
+      priceLine = owned ? '已入手' : `${item.cost} 海图碎片`;
+      act = (!owned && meta.fragments >= item.cost) ? 'buy' : null;
+    }
+    return {
+      title: item.name,
+      desc: item.desc,
+      priceLine: isFreeSkill && !owned ? '出航自带' : priceLine,
+      act,
+      actId: id,
+      actLabel,
+    };
+  }
+
   function renderShopDetail(meta) {
     const panel = els.clipPanels.shop;
     if (!panel) return;
@@ -2393,7 +2449,6 @@ export function createHub(deps) {
       });
     });
 
-    const catalog = [...SHOP_HULLS, ...SHOP_SUPPLIES, ...SHOP_WEAPONS, ...SHOP_TALENTS];
     els.shop.querySelectorAll('[data-shop-key]').forEach((btn) => {
       btn.addEventListener('click', () => {
         sfx.uiClick();
@@ -2466,62 +2521,8 @@ export function createHub(deps) {
           return;
         }
         if (key.startsWith('buy:')) {
-          const id = key.slice(4);
-          const item = catalog.find((s) => s.id === id);
-          const weapon = SHOP_WEAPONS.find((w) => w.id === id);
-          const talent = SHOP_TALENTS.find((t) => t.id === id);
-          const isFreeSkill = !!weapon && weapon.cost <= 0;
-          const owned = !!meta.unlocks[id] || isFreeSkill;
-          let priceLine;
-          let act = null;
-          let actLabel = '学习';
-          if (SHOP_HULLS.some((h) => h.id === id)) {
-            priceLine = owned ? '已在港' : `${item.cost} 海图碎片`;
-            act = (!owned && meta.fragments >= item.cost) ? 'buy' : null;
-            actLabel = '购入船体';
-          } else if (weapon) {
-            const lv = owned ? skillLevel(meta, id) : 0;
-            if (!owned) {
-              priceLine = `${item.cost} 海图碎片学会`;
-              act = meta.fragments >= item.cost ? 'buy' : null;
-              actLabel = '学习';
-            } else if (lv >= 3) {
-              priceLine = 'Lv.3 满级';
-            } else {
-              const cost = skillUpgradeCost(id, lv);
-              priceLine = `Lv.${lv} → ${lv + 1} · ${cost} 海图碎片`;
-              act = meta.fragments >= cost ? 'upgradeSkill' : null;
-              actLabel = `升到 ${lv + 1} 级`;
-            }
-          } else if (talent) {
-            const lv = owned ? talentLevel(meta, id) : 0;
-            if (!owned) {
-              priceLine = `${item.cost} 海图碎片学会`;
-              act = meta.fragments >= item.cost ? 'buy' : null;
-              actLabel = '学习';
-            } else if (lv >= 3) {
-              priceLine = 'Lv.3 满级';
-            } else {
-              const cost = talentUpgradeCost(lv);
-              priceLine = `Lv.${lv} → ${lv + 1} · ${cost} 海图碎片`;
-              act = meta.fragments >= cost ? 'upgradeTalent' : null;
-              actLabel = `升到 ${lv + 1} 级`;
-            }
-          } else {
-            priceLine = owned ? '已入手' : `${item.cost} 海图碎片`;
-            act = (!owned && meta.fragments >= item.cost) ? 'buy' : null;
-          }
-          shopDetail = item
-            ? {
-              title: item.name,
-              desc: item.desc,
-              priceLine: isFreeSkill && !owned ? '出航自带' : priceLine,
-              act,
-              actId: id,
-              actLabel,
-            }
-            : null;
-          renderShopDetail(meta);
+          shopDetail = shopBuyCardDetail(deps.getMeta(), key.slice(4));
+          renderShopDetail(deps.getMeta());
         }
       });
     });
@@ -2554,6 +2555,10 @@ export function createHub(deps) {
       });
     }
 
+    if (shopDetail && shopDetail.actId && (shopTab === 'weapon' || shopTab === 'talent' || shopTab === 'hull')) {
+      const next = shopBuyCardDetail(meta, shopDetail.actId);
+      if (next) shopDetail = next;
+    }
     renderShopDetail(meta);
   }
 
