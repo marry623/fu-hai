@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { createToonGradient, clamp } from './stylekit.js?v=34a';
+import { createToonGradient, clamp } from './stylekit.js?v=45a';
 import {
   createDuskSky, createClouds, createWater, updateWater,
   createFoamRings,
-} from './world.js?v=44d';
+} from './world.js?v=45a';
 import { createBoat, createWakeSystem, createSplashRings, setOarStroke, setBoatVariant, BOAT_WATERLINE_Y, setRodCastPose, setRodWaitPose, setRodBitePose, resetRodPose } from './boat.js?v=44b';
 import { createPaddleController } from './paddle.js?v=43n';
 import { createHull, updateCorrosion, damageHull, repairHull } from './hull.js?v=16c';
@@ -41,19 +41,19 @@ import {
   chargeZoneTicket, canDepartZone, saveMeta,
 } from './meta.js?v=44l';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=35l';
-import { createHub } from './hub.js?v=44q';
-import { createCoverScene } from './coverScene.js?v=43l';
+import { createHub } from './hub.js?v=45a';
+import { createCoverScene } from './coverScene.js?v=45a';
 import { createHubIsland } from './hubIsland.js?v=43l';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=39s';
 import { createBpBoatStage } from './bpBoatStage.js?v=31g';
-import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=44p';
+import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=45a';
 import { ensureAllPropGlbsLoading } from './propGlb.js?v=43k';
 import { hullLength } from './hullGlb.js?v=43k';
 import { getSeaBiome } from './seaBiomes.js?v=44d';
 import { applyHudTheme } from './hudTheme.js?v=42b';
 import { createWeatherFx } from './weatherFx.js?v=44a';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=44q';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=45a';
 import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=44k';
 import * as sfx from './audio.js?v=42e';
 
