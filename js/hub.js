@@ -59,7 +59,7 @@ import {
 } from './meta.js?v=44l';
 import { previewCraftOdds } from './fishCraft.js?v=41c';
 import { HUB_SPOTS } from './hubIsland.js?v=43l';
-import { renderManualHtml } from './hubManual.js?v=44k';
+import { renderManualHtml } from './hubManual.js?v=45b';
 import * as sfx from './audio.js?v=33f';
 import {
   APPRAISE_COST,

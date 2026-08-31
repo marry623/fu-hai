@@ -1,0 +1,9 @@
+.netlify
+__pycache__
+_vid_frames
+*.mp4
+*.bak
+node_modules
+ref
+.cursor
+.agent

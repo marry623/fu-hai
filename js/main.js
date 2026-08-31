@@ -41,7 +41,7 @@ import {
   chargeZoneTicket, canDepartZone, saveMeta,
 } from './meta.js?v=44l';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=35l';
-import { createHub } from './hub.js?v=45a';
+import { createHub } from './hub.js?v=45b';
 import { createCoverScene } from './coverScene.js?v=45a';
 import { createHubIsland } from './hubIsland.js?v=43l';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=39s';
@@ -53,7 +53,7 @@ import { getSeaBiome } from './seaBiomes.js?v=44d';
 import { applyHudTheme } from './hudTheme.js?v=42b';
 import { createWeatherFx } from './weatherFx.js?v=44a';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=45a';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=45f';
 import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=44k';
 import * as sfx from './audio.js?v=42e';
 
@@ -301,6 +301,7 @@ function refreshWeaponChips() {
     const w = Number(el.dataset.w);
     const card = equippedRunCard(w);
     el.querySelector('.weapon-chip-label').textContent = `${w + 1} ${card.name}`;
+    el.classList.toggle('active', w === (state.weapon | 0));
   });
   updateWeaponCds();
 }
@@ -1459,9 +1460,39 @@ function updateHp() {
 function updateInv() {
   const i = state.inventory;
   if (ui.invText) {
-    ui.invText.textContent = tut.active
-      ? `饵∞ · 板${i.plank} · 剂${i.repair}`
-      : `饵${i.bait} · 板${i.plank} · ${i.paste ? '膏' : '剂'}${i.paste || i.repair}`;
+    if (tut.active) {
+      ui.invText.classList.remove('inv-bait-switch');
+      ui.invText.textContent = '饵∞';
+    } else {
+      const kind = i.baitKind;
+      const def = BAIT_KINDS[kind];
+      const nKind = baitBagCounts()[kind] || 0;
+      const name = def ? def.name : '饵';
+      ui.invText.classList.add('inv-bait-switch');
+      ui.invText.replaceChildren();
+      const line = document.createElement('span');
+      line.className = 'inv-bait-line';
+      const main = document.createElement('span');
+      main.className = 'inv-bait-main';
+      main.textContent = name;
+      const count = document.createElement('span');
+      count.className = 'inv-bait-count';
+      count.textContent = `×${nKind}`;
+      line.append(main, count);
+      const hint = document.createElement('span');
+      hint.className = 'inv-bait-hint';
+      hint.textContent = '点击切换';
+      ui.invText.append(line, hint);
+    }
+    if (!ui.invText.dataset.baitCycle) {
+      ui.invText.dataset.baitCycle = '1';
+      ui.invText.title = '点击切换饵种';
+      ui.invText.addEventListener('click', () => {
+        if (tut.active) return;
+        if (!cycleRunBaitKind()) return;
+        updateInv();
+      });
+    }
   }
   if (state.fishPanelOpen && state.backpackTab === 'supplies') renderBackpack();
 }
@@ -1598,13 +1629,66 @@ function showCatchLift(fish, from, onLand) {
   });
 }
 
-function takeBaitFromInventory() {
+function baitBagCounts() {
+  const counts = { crude: 0, fresh: 0, scale: 0, abyss: 0 };
+  const bag = state.inventory.baitBag;
+  if (Array.isArray(bag)) {
+    for (const k of bag) if (counts[k] != null) counts[k] += 1;
+  }
+  return counts;
+}
+
+function ownedBaitKinds() {
+  const counts = baitBagCounts();
+  return Object.keys(BAIT_KINDS).filter((k) => counts[k] > 0);
+}
+
+function selectedBaitKind() {
+  const id = state.selectedSupply;
+  if (typeof id === 'string' && id.startsWith('bait:')) return id.slice(5);
+  if (id === 'bait') return state.inventory.baitKind || 'fresh';
+  return null;
+}
+
+function setRunBaitKind(kind) {
+  if (!BAIT_KINDS[kind]) return false;
+  const bag = state.inventory.baitBag;
+  if (!Array.isArray(bag) || !bag.includes(kind)) return false;
+  state.inventory.baitKind = kind;
+  return true;
+}
+
+function cycleRunBaitKind() {
+  const kinds = ownedBaitKinds();
+  if (!kinds.length) return null;
+  const cur = kinds.includes(state.inventory.baitKind) ? state.inventory.baitKind : kinds[0];
+  const next = kinds[(kinds.indexOf(cur) + 1) % kinds.length];
+  setRunBaitKind(next);
+  if (state.selectedSupply && String(state.selectedSupply).startsWith('bait:')) {
+    state.selectedSupply = `bait:${next}`;
+  }
+  return next;
+}
+
+function takeBaitFromInventory(preferKind) {
   const bag = state.inventory.baitBag;
   if (Array.isArray(bag) && bag.length) {
-    const used = bag.shift();
-    state.inventory.baitKind = bag[0] || used;
+    let kind = preferKind || state.inventory.baitKind;
+    let idx = bag.indexOf(kind);
+    if (idx < 0) {
+      kind = bag[0];
+      idx = 0;
+    }
+    bag.splice(idx, 1);
     state.inventory.bait = bag.length;
-    return used;
+    state.inventory.baitKind = bag.includes(kind) ? kind : (bag[0] || kind);
+    if (state.selectedSupply && String(state.selectedSupply).startsWith('bait:')) {
+      const sel = state.selectedSupply.slice(5);
+      if (!bag.includes(sel)) {
+        state.selectedSupply = state.inventory.baitKind ? `bait:${state.inventory.baitKind}` : null;
+      }
+    }
+    return kind;
   }
   if ((state.inventory.bait | 0) > 0) {
     state.inventory.bait -= 1;
@@ -1613,12 +1697,15 @@ function takeBaitFromInventory() {
   return null;
 }
 
+const BAIT_SUPPLY_COLOR = { crude: 0x8aa090, fresh: 0x4ecdc4, scale: 0xd4c060, abyss: 0x6a40a0 };
+
 function grantBait(n, kind) {
   const k = kind || state.inventory.baitKind || 'fresh';
   if (!Array.isArray(state.inventory.baitBag)) state.inventory.baitBag = [];
   for (let i = 0; i < n; i++) state.inventory.baitBag.push(k);
-  state.inventory.baitKind = state.inventory.baitBag[0] || k;
-  state.inventory.bait = state.inventory.baitBag.length;
+  const bag = state.inventory.baitBag;
+  if (!bag.includes(state.inventory.baitKind)) state.inventory.baitKind = bag[0] || k;
+  state.inventory.bait = bag.length;
 }
 
 function onSpace() {
@@ -2114,15 +2201,31 @@ function renderBackpack() {
       }));
     }
   } else {
-    const baitKey = BAIT_KINDS[state.inventory.baitKind]?.key || 'baitFresh';
-    const baitName = BAIT_KINDS[state.inventory.baitKind]?.name || '鱼饵';
+    const counts = baitBagCounts();
+    const baitSupplies = tut.active
+      ? [{
+          id: 'bait:crude',
+          portraitId: BAIT_KINDS.crude.key,
+          name: BAIT_KINDS.crude.name,
+          count: 1,
+          color: BAIT_SUPPLY_COLOR.crude,
+          desc: '练习湾饵无限。',
+        }]
+      : Object.keys(BAIT_KINDS).filter((k) => counts[k] > 0).map((k) => ({
+          id: `bait:${k}`,
+          portraitId: BAIT_KINDS[k].key,
+          name: BAIT_KINDS[k].name,
+          count: counts[k],
+          color: BAIT_SUPPLY_COLOR[k] || 0x7dffc0,
+          desc: BAIT_KINDS[k].desc,
+        }));
     const supplies = [
-      { id: 'bait', portraitId: baitKey, name: baitName, count: state.inventory.bait, color: 0x7dffc0,         desc: tut.active ? '练习湾饵无限。' : (BAIT_KINDS[state.inventory.baitKind]?.desc || '抛竿耗 1。') },
+      ...baitSupplies,
       { id: 'plank', name: '木板', count: state.inventory.plank, color: 0xc48a4a, desc: 'R +15 耐久。' },
       { id: 'repair', name: '修补剂', count: state.inventory.repair, color: 0xffd24a, desc: '+25 耐久。' },
       { id: 'paste', name: '龙骨膏', count: state.inventory.paste || 0, color: 0xc45c1a, desc: '+45 耐久。' },
     ];
-    ui.fishCount.textContent = String(supplies.reduce((a, s) => a + s.count, 0));
+    ui.fishCount.textContent = String(supplies.reduce((a, s) => a + (Number(s.count) || 0), 0));
     supplies.forEach((s, i) => {
       ui.bpGrid.appendChild(makePolaroidCell({
         kind: 'supply',
@@ -2132,6 +2235,8 @@ function renderBackpack() {
         onClick: () => {
           state.selectedSupply = s.id;
           state.selectedFish = -1;
+          if (s.id.startsWith('bait:')) setRunBaitKind(s.id.slice(5));
+          updateInv();
           renderBackpack();
         },
       }));
@@ -2370,41 +2475,47 @@ function renderBackpackDetail() {
   } else if (tab === 'supplies' && state.selectedSupply) {
     show = true;
     const map = {
-      bait: {
-        name: BAIT_KINDS[state.inventory.baitKind]?.name || '鱼饵',
-        color: 0x7dffc0,
-        desc: tut.active ? '练习湾饵无限。' : (BAIT_KINDS[state.inventory.baitKind]?.desc || '抛竿耗 1。'),
-        count: tut.active ? '∞' : state.inventory.bait,
-      },
       plank: { name: '木板', color: 0xc48a4a, desc: 'R +15 耐久。', count: state.inventory.plank },
       repair: { name: '修补剂', color: 0xffd24a, desc: '+25 耐久。', count: state.inventory.repair },
       paste: { name: '龙骨膏', color: 0xc45c1a, desc: '+45 耐久。', count: state.inventory.paste || 0 },
     };
-    const s = map[state.selectedSupply];
-    const canUse = state.selectedSupply === 'plank' || state.selectedSupply === 'repair' || state.selectedSupply === 'paste';
-    fillDetail({
-      name: s.name,
-      serial: `库存 ×${s.count}`,
-      color: s.color,
-      itemId: state.selectedSupply === 'bait'
-        ? (BAIT_KINDS[state.inventory.baitKind]?.key || 'baitFresh')
-        : state.selectedSupply,
-      rarity: 1,
-      ribbon: '物资',
-      tagline: '航行补给',
-      desc: s.desc,
-      meta: state.selectedSupply === 'bait'
-        ? '抛竿时自动消耗，无需手动使用。'
-        : '可在背包直接使用，立即作用于船体。',
-      showSlots: false,
-      actions: {
-        use: !isTutEquipLock() && canUse && s.count > 0,
-        discard: !isTutEquipLock() && s.count > 0,
-        eat: false,
-        equip: false,
-        feed: false,
-      },
-    });
+    const baitKind = selectedBaitKind();
+    const baitDef = baitKind && BAIT_KINDS[baitKind];
+    const s = baitDef
+      ? {
+          name: baitDef.name,
+          color: BAIT_SUPPLY_COLOR[baitKind] || 0x7dffc0,
+          desc: tut.active ? '练习湾饵无限。' : baitDef.desc,
+          count: tut.active ? '∞' : (baitBagCounts()[baitKind] || 0),
+        }
+      : map[state.selectedSupply];
+    if (!s) {
+      show = false;
+    } else {
+      const canUse = state.selectedSupply === 'plank' || state.selectedSupply === 'repair' || state.selectedSupply === 'paste';
+      const isBait = !!baitDef;
+      fillDetail({
+        name: s.name,
+        serial: `库存 ×${s.count}`,
+        color: s.color,
+        itemId: isBait ? baitDef.key : state.selectedSupply,
+        rarity: 1,
+        ribbon: '物资',
+        tagline: '航行补给',
+        desc: s.desc,
+        meta: isBait
+          ? '抛竿时自动消耗。点其他饵格或左上角饵名可切换。'
+          : '可在背包直接使用，立即作用于船体。',
+        showSlots: false,
+        actions: {
+          use: !isTutEquipLock() && canUse && s.count > 0,
+          discard: !isTutEquipLock() && !tut.active && s.count > 0,
+          eat: false,
+          equip: false,
+          feed: false,
+        },
+      });
+    }
   }
 
   ui.bpEmpty.classList.toggle('hidden', show);
@@ -2504,11 +2615,15 @@ function discardFish() {
 
 function discardSupply() {
   const id = state.selectedSupply;
-  if (id === 'bait') {
-    if (!takeBaitFromInventory()) return showToast('没有可丢弃的物资');
+  const baitKind = selectedBaitKind();
+  if (baitKind) {
+    if (tut.active) return showToast('练习湾饵无限');
+    if (!takeBaitFromInventory(baitKind)) return showToast('没有可丢弃的物资');
     updateInv();
-    showToast('丢弃鱼饵');
-    if (state.inventory.bait <= 0) state.selectedSupply = null;
+    showToast(`丢弃${BAIT_KINDS[baitKind]?.name || '鱼饵'}`);
+    if (!(baitBagCounts()[baitKind] > 0)) {
+      state.selectedSupply = state.inventory.baitKind ? `bait:${state.inventory.baitKind}` : null;
+    }
     renderBackpack();
     return;
   }
@@ -2529,7 +2644,9 @@ function useSupply() {
   }
   const id = state.selectedSupply;
   if (!id) return showToast('先选物资');
-  if (id === 'bait') return showToast('鱼饵在抛竿时自动消耗');
+  if (id === 'bait' || (typeof id === 'string' && id.startsWith('bait:'))) {
+    return showToast('鱼饵在抛竿时自动消耗');
+  }
   if (!(state.inventory[id] > 0)) return showToast('库存不足');
   if (id === 'plank') {
     state.inventory.plank--;

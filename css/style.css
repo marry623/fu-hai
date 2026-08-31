@@ -238,6 +238,53 @@ html, body {
   color: var(--ink-muted);
 }
 
+#inv-text {
+  pointer-events: auto;
+}
+
+#inv-text.inv-bait-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  width: fit-content;
+  padding: 4px 8px;
+  background: var(--panel);
+  border: 2px solid #000;
+  border-radius: 4px;
+  color: var(--ink-on-panel);
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+#inv-text .inv-bait-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#inv-text .inv-bait-main,
+#inv-text .inv-bait-count {
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--ink-on-panel);
+}
+
+#inv-text .inv-bait-hint {
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--ink-muted);
+  width: 100%;
+}
+
+#inv-text.inv-bait-switch:hover {
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+#combo-text {
+  display: none;
+}
+
 #combo-text.combo-hot {
   color: var(--gold);
 }
@@ -566,6 +613,11 @@ html, body {
 #hud[data-biome="coral"] .weapon-chip {
   background: var(--panel);
   color: var(--ink-on-panel);
+}
+
+#hud .weapon-chip.active {
+  background: linear-gradient(180deg, var(--pink), var(--pink-hot));
+  color: #fff;
 }
 
 .hidden {
