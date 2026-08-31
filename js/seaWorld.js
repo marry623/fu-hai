@@ -14,6 +14,9 @@ import {
 /** Clearance past reef / prop-disc radius so flotsam sits in open water. */
 const FLOT_PAD = 4;
 
+/** All sea decor + rocks are 1.3x current size. Salvage bottles are not props. */
+const PROP_ENLARGE = 1.3;
+
 function hitsRock(x, z, map, pad = FLOT_PAD) {
   if (!map) return null;
   const reefs = map.reefs || [];
@@ -378,12 +381,12 @@ function scatterZone0Coral(root, map, biome, gradientMap, propDiscs = null) {
     c.rotation.y = hash2(pt.x, pt.z) * Math.PI * 2;
     const rawSizeMul = 1 + hash2(pt.x, pt.z) * 4;
     const sizeMul = isTutCoral ? Math.min(rawSizeMul, 2.0) : rawSizeMul;
-    c.scale.setScalar((3.87 * pt.s * sizeMul) / baseSize);
+    c.scale.setScalar((3.87 * pt.s * sizeMul) / baseSize * PROP_ENLARGE);
     const col = colors[Math.floor(hash2(pt.x + pt.z, pt.z) * colors.length) % colors.length];
     styleCoralProp(c, col, gradientMap);
     root.add(c);
     // decor: keeps other props from spawning on top, but never blocks the boat.
-    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 3.87 * pt.s * sizeMul * 0.28), decor: true });
+    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 3.87 * pt.s * sizeMul * 0.28 * PROP_ENLARGE), decor: true });
   }
 }
 
@@ -429,9 +432,9 @@ function scatterZone0Rocks(root, map, propDiscs = null) {
     const sx = base * (0.7 + hash2(pt.seed, pt.x) * 0.65);
     const sy = base * (0.55 + hash2(pt.seed, pt.z) * 0.85);
     const sz = base * (0.75 + hash2(pt.x + pt.z, pt.seed) * 0.55);
-    rock.scale.set(sx * 0.7, sy * 0.7, sz * 0.7);
-    const scaleXZ = Math.max(sx, sz) * 0.7;
-    const scaleY = sy * 0.7;
+    rock.scale.set(sx * 0.7 * PROP_ENLARGE, sy * 0.7 * PROP_ENLARGE, sz * 0.7 * PROP_ENLARGE);
+    const scaleXZ = Math.max(sx, sz) * 0.7 * PROP_ENLARGE;
+    const scaleY = sy * 0.7 * PROP_ENLARGE;
     const r = propCollR('zone0Rock', tpl, scaleXZ, scaleY, 2);
     if (nearLighthouse(pt.x, pt.z, map, r)) continue;
     root.add(rock);
@@ -515,11 +518,11 @@ function scatterZone0ExtraCoral(root, map, biome, gradientMap, propDiscs = null)
     const rawSizeMul = (1.15 + hash2(pt.x, pt.z) * 4.2) * sizeBoost;
     const sizeMul = isTut ? Math.min(rawSizeMul, 1.5) : rawSizeMul;
     const s = 0.55 + hash2(pt.seed, pt.x + pt.z) * 0.65;
-    c.scale.setScalar((4.13 * s * sizeMul) / baseSize);
+    c.scale.setScalar((4.13 * s * sizeMul) / baseSize * PROP_ENLARGE);
     const col = colors[Math.floor(hash2(pt.x + pt.z, pt.seed) * colors.length) % colors.length];
     styleCoralProp(c, col, gradientMap);
     root.add(c);
-    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 4.13 * s * sizeMul * 0.28), decor: true });
+    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 4.13 * s * sizeMul * 0.28 * PROP_ENLARGE), decor: true });
   }
 }
 
@@ -542,9 +545,9 @@ function scatterZone0ExtraRocks(root, map, propDiscs = null) {
     const sx = base * (0.68 + hash2(pt.seed, pt.x) * 0.72);
     const sy = base * (0.52 + hash2(pt.seed, pt.z) * 0.92);
     const sz = base * (0.72 + hash2(pt.x + pt.z, pt.seed) * 0.58);
-    rock.scale.set(sx * 0.7, sy * 0.7, sz * 0.7);
-    const scaleXZ = Math.max(sx, sz) * 0.7;
-    const scaleY = sy * 0.7;
+    rock.scale.set(sx * 0.7 * PROP_ENLARGE, sy * 0.7 * PROP_ENLARGE, sz * 0.7 * PROP_ENLARGE);
+    const scaleXZ = Math.max(sx, sz) * 0.7 * PROP_ENLARGE;
+    const scaleY = sy * 0.7 * PROP_ENLARGE;
     const r = propCollR('zone0RockB', tpl, scaleXZ, scaleY, 2);
     if (nearLighthouse(pt.x, pt.z, map, r)) continue;
     root.add(rock);
@@ -650,11 +653,11 @@ function scatterZone0MoreCoral(root, map, biome, gradientMap, propId, pickFn, si
     const rawSizeMul = (1.2 + hash2(pt.x, pt.z) * 4.4) * sizeBoost;
     const sizeMul = isTut ? Math.min(rawSizeMul, 1.5) : rawSizeMul;
     const s = 0.58 + hash2(pt.seed, pt.x + pt.z) * 0.68;
-    c.scale.setScalar((4.27 * s * sizeMul) / baseSize);
+    c.scale.setScalar((4.27 * s * sizeMul) / baseSize * PROP_ENLARGE);
     const col = colors[Math.floor(hash2(pt.x + pt.z, pt.seed) * colors.length) % colors.length];
     styleCoralProp(c, col, gradientMap);
     root.add(c);
-    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 4.27 * s * sizeMul * 0.28), decor: true });
+    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 4.27 * s * sizeMul * 0.28 * PROP_ENLARGE), decor: true });
   }
 }
 
@@ -689,9 +692,9 @@ function scatterZone0MoreRocks(root, map, propDiscs = null) {
     const sx = base * (0.65 + hash2(pt.seed, pt.x) * 0.78);
     const sy = base * (0.5 + hash2(pt.seed, pt.z) * 0.95);
     const sz = base * (0.7 + hash2(pt.x + pt.z, pt.seed) * 0.62);
-    rock.scale.set(sx * 0.7, sy * 0.7, sz * 0.7);
-    const scaleXZ = Math.max(sx, sz) * 0.7;
-    const scaleY = sy * 0.7;
+    rock.scale.set(sx * 0.7 * PROP_ENLARGE, sy * 0.7 * PROP_ENLARGE, sz * 0.7 * PROP_ENLARGE);
+    const scaleXZ = Math.max(sx, sz) * 0.7 * PROP_ENLARGE;
+    const scaleY = sy * 0.7 * PROP_ENLARGE;
     const r = propCollR('zone0RockC', tpl, scaleXZ, scaleY, 2);
     if (nearLighthouse(pt.x, pt.z, map, r)) continue;
     root.add(rock);
@@ -730,7 +733,7 @@ function scatterZone0NewRocks(root, map, propDiscs = null) {
     const [rMin, rMax] = ROCK_RANGES[idx];
     const rawSizeMul = rMin + hash2(pt.x, pt.z + 9) * (rMax - rMin);
     const sizeMul = isTut ? Math.min(rawSizeMul, 1.5) : rawSizeMul;
-    const s = (sizeMul * ROCK_TARGETS[idx]) / baseSize * 0.7;
+    const s = (sizeMul * ROCK_TARGETS[idx]) / baseSize * 0.7 * PROP_ENLARGE;
     rock.scale.setScalar(s);
     const r = propCollR(rockId, tpl, s, s, 3);
     if (nearLighthouse(pt.x, pt.z, map, r)) continue;
@@ -756,11 +759,11 @@ function scatterZone0SmallCoral(root, map, biome, gradientMap, propId, pickFn, p
     c.rotation.y = pt.seed * Math.PI * 2;
     const sizeMul = (1.2 + hash2(pt.x, pt.z) * 4.4) * sizeBoost;
     const s = 0.58 + hash2(pt.seed, pt.x + pt.z) * 0.68;
-    c.scale.setScalar((4.27 * s * sizeMul) / baseSize);
+    c.scale.setScalar((4.27 * s * sizeMul) / baseSize * PROP_ENLARGE);
     const col = colors[Math.floor(hash2(pt.x + pt.z, pt.seed) * colors.length) % colors.length];
     styleCoralProp(c, col, gradientMap);
     root.add(c);
-    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 4.27 * s * sizeMul * 0.28), decor: true });
+    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r: Math.max(1.5, 4.27 * s * sizeMul * 0.28 * PROP_ENLARGE), decor: true });
   }
 }
 
@@ -808,11 +811,11 @@ function scatterTutorialRimCoral(root, map, biome, gradientMap, propDiscs = null
     c.position.set(x, 0, z);
     c.rotation.y = hash2(x, z) * Math.PI * 2;
     const sizeMul = 0.52 + hash2(x, z) * 0.78;
-    c.scale.setScalar((3.2 * sizeMul) / baseSize);
+    c.scale.setScalar((3.2 * sizeMul) / baseSize * PROP_ENLARGE);
     const col = colors[Math.floor(hash2(x + z, i) * colors.length) % colors.length];
     styleCoralProp(c, col, gradientMap);
     root.add(c);
-    if (propDiscs) propDiscs.push({ x, z, r: Math.max(1.5, 3.2 * sizeMul * 0.28), decor: true });
+    if (propDiscs) propDiscs.push({ x, z, r: Math.max(1.5, 3.2 * sizeMul * 0.28 * PROP_ENLARGE), decor: true });
   }
 }
 
@@ -848,11 +851,11 @@ function scatterZone0GapCoral(root, map, biome, gradientMap, propDiscs = null) {
       c.rotation.y = hash2(x, z) * Math.PI * 2;
       const sizeMul = 0.75 + hash2(x, z) * 2.6;
       const s = 0.52 + hash2(i, j) * 0.68;
-      c.scale.setScalar((3.67 * s * sizeMul) / baseSize);
+      c.scale.setScalar((3.67 * s * sizeMul) / baseSize * PROP_ENLARGE);
       const col = colors[Math.floor(hash2(x + z, i + j) * colors.length) % colors.length];
       styleCoralProp(c, col, gradientMap);
       root.add(c);
-      if (propDiscs) propDiscs.push({ x, z, r: Math.max(1.5, 3.67 * s * sizeMul * 0.28), decor: true });
+      if (propDiscs) propDiscs.push({ x, z, r: Math.max(1.5, 3.67 * s * sizeMul * 0.28 * PROP_ENLARGE), decor: true });
     }
   }
 }
@@ -884,7 +887,7 @@ function scatterZone0SurfDecor(root, map, biome, gradientMap) {
       const c = tpl.clone(true);
       c.position.set(x, 0.05, z);
       c.rotation.y = hash2(x + pi, z) * Math.PI * 2;
-      c.scale.setScalar((ts + hash2(i + pi, x + z) * ts * 0.6) / baseSize);
+      c.scale.setScalar((ts + hash2(i + pi, x + z) * ts * 0.6) / baseSize * PROP_ENLARGE);
       const col = colors[Math.floor(hash2(x + z + pi, i) * colors.length) % colors.length];
       styleCoralProp(c, col, gradientMap);
       root.add(c);
@@ -919,7 +922,7 @@ function scatterZone0Nc02(root, map, biome, gradientMap) {
     c.position.set(x, 0.05, z);
     c.rotation.y = hash2(x, z) * Math.PI * 2;
     const targetSize = 3 + hash2(i, x + z) * 5;
-    c.scale.setScalar(targetSize / baseSize);
+    c.scale.setScalar(targetSize / baseSize * PROP_ENLARGE);
     const col = starColors[Math.floor(hash2(x + z, i) * starColors.length) % starColors.length];
     styleCoralProp(c, col, gradientMap);
     root.add(c);
@@ -942,7 +945,7 @@ function scatterZone0Noc002(root, map, biome, gradientMap) {
     const c = tpl.clone(true);
     c.position.set(x, 0, z);
     c.rotation.y = hash2(x + 2.3, z) * Math.PI * 2;
-    c.scale.setScalar(1.125 + hash2(i, x + z + 1.7) * 0.75);
+    c.scale.setScalar((1.125 + hash2(i, x + z + 1.7) * 0.75) * PROP_ENLARGE);
     const col = flowerColors[Math.floor(hash2(x + z + 2.1, i) * flowerColors.length) % flowerColors.length];
     styleCoralProp(c, col, gradientMap);
     root.add(c);
@@ -1056,7 +1059,7 @@ function scatterZone1GlbProps(root, map, biome, gradientMap) {
     tpl.rotation.y = hash2(pt.x, pt.z) * Math.PI * 2;
     const stoneScaleBoost = stoneScaleBoostMap[id] ?? 11;
     const sizeMul = (0.6 + hash2(pt.x * 1.7, pt.z) * 0.8) * stoneScaleBoost;
-    const appliedScale = (2.5 * sizeMul) / baseSize * 0.7;
+    const appliedScale = (2.5 * sizeMul) / baseSize * 0.7 * PROP_ENLARGE;
     tpl.scale.setScalar(appliedScale);
     const r = propCollR(id, tpl, appliedScale, appliedScale, 3);
     if (nearLighthouse(pt.x, pt.z, map, r)) continue;
@@ -1083,7 +1086,8 @@ function scatterZone1GlbProps(root, map, biome, gradientMap) {
     tpl.rotation.y = hash2(pt.x * 0.7, pt.z * 1.3) * Math.PI * 2;
     const decorScaleBoost = 0.5 + hash2(pt.x * 1.1, pt.z * 0.9) * 1.5;
     const sizeMul = (0.6 + hash2(pt.z * 1.4, pt.x * 0.8) * 1.4) * decorScaleBoost;
-    tpl.scale.setScalar((4.8 * sizeMul) / baseSize);
+    // Water plants / vines only — salvage bottles stay on flotsam scale.
+    tpl.scale.setScalar((9.6 * sizeMul) / baseSize * PROP_ENLARGE);
     root.add(tpl);
   }
 
@@ -1117,7 +1121,8 @@ function scatterZone1GlbProps(root, map, biome, gradientMap) {
     tpl.rotation.y = hash2(pt.x * 0.7, pt.z * 1.3) * Math.PI * 2;
     const decorScaleBoost = 0.5 + hash2(pt.x * 1.1, pt.z * 0.9) * 1.5;
     const sizeMul = (0.6 + hash2(pt.z * 1.4, pt.x * 0.8) * 1.4) * decorScaleBoost;
-    tpl.scale.setScalar((4.8 * sizeMul) / baseSize);
+    // Water plants / vines only — salvage bottles stay on flotsam scale.
+    tpl.scale.setScalar((9.6 * sizeMul) / baseSize * PROP_ENLARGE);
     root.add(tpl);
   }
 
@@ -1191,7 +1196,7 @@ function scatterZone2GlbProps(root, map, biome, gradientMap) {
     tpl.rotation.y = hash2(pt.x, pt.z) * Math.PI * 2;
     const stoneScaleBoost = stoneScaleMap[id] ?? 36;
     const sizeMul = (0.6 + hash2(pt.x * 1.7, pt.z) * 0.8) * stoneScaleBoost;
-    const appliedScale = (2.5 * sizeMul) / baseSize * 0.9;
+    const appliedScale = (2.5 * sizeMul) / baseSize * 0.9 * PROP_ENLARGE;
     tpl.scale.setScalar(appliedScale);
     const r = propCollR(id, tpl, appliedScale, appliedScale, 3);
     if (nearLighthouse(pt.x, pt.z, map, r)) continue;
@@ -1214,7 +1219,7 @@ function scatterZone2GlbProps(root, map, biome, gradientMap) {
     // sizeVariant: 1.0 – 3.0 per piece so no two look the same
     const sizeVariant = 1.0 + hash2(pt.x * 3.1, pt.z * 2.3) * 2.0;
     const sizeMul = (0.6 + hash2(pt.z * 1.4, pt.x * 0.8) * 1.4) * sizeVariant;
-    tpl.scale.setScalar((8.0 * sizeMul) / baseSize * 0.9);
+    tpl.scale.setScalar((8.0 * sizeMul) / baseSize * 0.9 * PROP_ENLARGE);
     root.add(tpl);
   }
 
@@ -1288,7 +1293,7 @@ function scatterZone3GlbProps(root, map, biome, gradientMap) {
     tpl.rotation.y = hash2(pt.x, pt.z) * Math.PI * 2;
     const stoneScaleBoost = stoneScaleMap[id] ?? 36;
     const sizeMul = (0.6 + hash2(pt.x * 1.7, pt.z) * 0.8) * stoneScaleBoost;
-    const appliedScale = (5.0 * sizeMul) / baseSize * 0.9;
+    const appliedScale = (5.0 * sizeMul) / baseSize * 0.9 * PROP_ENLARGE;
     tpl.scale.setScalar(appliedScale);
     const r = propCollR(id, tpl, appliedScale, appliedScale, 3);
     if (nearLighthouse(pt.x, pt.z, map, r)) continue;
@@ -1309,7 +1314,7 @@ function scatterZone3GlbProps(root, map, biome, gradientMap) {
     tpl.rotation.y = hash2(pt.x * 0.7, pt.z * 1.3) * Math.PI * 2;
     const sizeVariant = 1.0 + hash2(pt.x * 3.1, pt.z * 2.3) * 2.0;
     const sizeMul = (0.6 + hash2(pt.z * 1.4, pt.x * 0.8) * 1.4) * sizeVariant;
-    tpl.scale.setScalar((10.66 * sizeMul) / baseSize * 0.9);
+    tpl.scale.setScalar((10.66 * sizeMul) / baseSize * 0.9 * PROP_ENLARGE);
     root.add(tpl);
   }
 
@@ -1381,7 +1386,7 @@ function scatterZone4GlbProps(root, map, biome, gradientMap) {
     tpl.rotation.y = hash2(pt.x, pt.z) * Math.PI * 2;
     const stoneScaleBoost = stoneScaleMap[id] ?? 36;
     const sizeMul = (0.6 + hash2(pt.x * 1.7, pt.z) * 0.8) * stoneScaleBoost;
-    const appliedScale = (2.5 * sizeMul) / baseSize * 0.7;
+    const appliedScale = (2.5 * sizeMul) / baseSize * 0.7 * PROP_ENLARGE;
     tpl.scale.setScalar(appliedScale);
     const r = propCollR(id, tpl, appliedScale, appliedScale, 3);
     if (nearLighthouse(pt.x, pt.z, map, r)) continue;
@@ -1402,7 +1407,7 @@ function scatterZone4GlbProps(root, map, biome, gradientMap) {
     tpl.rotation.y = hash2(pt.x * 0.7, pt.z * 1.3) * Math.PI * 2;
     const sizeVariant = 1.0 + hash2(pt.x * 3.1, pt.z * 2.3) * 2.0;
     const sizeMul = (0.6 + hash2(pt.z * 1.4, pt.x * 0.8) * 1.4) * sizeVariant;
-    tpl.scale.setScalar((8.0 * sizeMul) / baseSize);
+    tpl.scale.setScalar((8.0 * sizeMul) / baseSize * PROP_ENLARGE);
     root.add(tpl);
   }
 
