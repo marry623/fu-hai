@@ -53,7 +53,7 @@ import { getSeaBiome } from './seaBiomes.js?v=44d';
 import { applyHudTheme } from './hudTheme.js?v=42b';
 import { createWeatherFx } from './weatherFx.js?v=44a';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=45f';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=45g';
 import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=44k';
 import * as sfx from './audio.js?v=42e';
 
@@ -727,8 +727,8 @@ function addCamShake(amp, ms = 220) {
 
 let salvageBusy = false;
 
-function pulseRewardHud(el = ui.invText) {
-  if (!el) return;
+function pulseRewardHud(el) {
+  if (!el || el === ui.invText) return;
   el.classList.remove('reward-pulse');
   void el.offsetWidth;
   el.classList.add('reward-pulse');
@@ -1609,7 +1609,6 @@ const fishing = createFishingController({
         }
       }
       renderFishList();
-      pulseRewardHud();
       sfx.fishCatch();
     };
     const shown = showCatchLift(caught, from, finishCatch);
@@ -1812,7 +1811,6 @@ function resolveSalvage(obj, r) {
     showToast(`打捞 ${r.name}×${amt}`);
     updateInv();
   }
-  if (r.type !== 'trap') pulseRewardHud();
 
   if (!tut.active) {
     setTimeout(() => {
