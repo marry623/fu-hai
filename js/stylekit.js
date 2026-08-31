@@ -1,4 +1,4 @@
-import * as THREE from '../vendor/three/three.module.js';
+import * as THREE from 'three';
 
 /** Cel-shading gradient (hard steps) — keep bright for cartoon punch */
 export function createToonGradient() {

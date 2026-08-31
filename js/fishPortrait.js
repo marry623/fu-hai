@@ -1,4 +1,4 @@
-import * as THREE from '../vendor/three/three.module.js';
+import * as THREE from 'three';
 import { createToonGradient } from './stylekit.js';
 import { createFishMesh } from './fishMeshes.js?v=31c';
 import { foodEatKey, foodEatColor } from './fishCatalog.js?v=34b';

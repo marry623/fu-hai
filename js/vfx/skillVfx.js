@@ -3,7 +3,7 @@
  * Shaders / crystal / bolt / meteor geometry adapted (MIT) from
  * chirovisuals / achrefelouafi LinearAbiltyCastingThreeJS (ThreeJSVFX-Demo).
  */
-import * as THREE from '../../vendor/three/three.module.js';
+import * as THREE from 'three';
 import { createCrystalGeometry, createAsteroidGeometry, createBoltRibbonGeometry, hash11 } from './geometry.js?v=29y';
 import { createDecalSystem, DecalType } from './groundDecals.js?v=29u';
 import { createGpuSparks } from './gpuSparks.js?v=29u';

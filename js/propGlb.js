@@ -1,4 +1,4 @@
-import * as THREE from '../vendor/three/three.module.js';
+import * as THREE from 'three';
 import { GLTFLoader } from '../vendor/three/GLTFLoader.js';
 import { toonMat } from './stylekit.js';
 

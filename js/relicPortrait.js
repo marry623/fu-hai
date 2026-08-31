@@ -1,4 +1,4 @@
-import * as THREE from '../vendor/three/three.module.js';
+import * as THREE from 'three';
 import { createToonGradient } from './stylekit.js';
 import { createRelicMesh } from './relicMeshes.js?v=35c';
 

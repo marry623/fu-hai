@@ -1,4 +1,4 @@
-import * as THREE from '../vendor/three/three.module.js';
+import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
 import { pointInPoly, EVAC_RADIUS, EVAC_HOLD, TUTORIAL_BEATS } from './seaMaps.js?v=43p';
 import { pickMonsterForZone, getMonsterDef, monstersForZone, monsterHp, hullTouchDamage, hullShotDamage, wrapDps, wrapCountForZone } from './monsterCatalog.js?v=39d';

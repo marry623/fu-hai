@@ -1,7 +1,7 @@
 /**
  * Voltaic Snare — bolt-ribbon cage (columns + rim + tendrils).
  */
-import * as THREE from '../../vendor/three/three.module.js';
+import * as THREE from 'three';
 import { createBoltRibbonGeometry } from './geometry.js?v=29y';
 import { DecalType } from './groundDecals.js?v=29u';
 import { BurstMode } from './burstSphere.js?v=29u';

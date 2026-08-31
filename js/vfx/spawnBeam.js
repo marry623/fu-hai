@@ -1,7 +1,7 @@
 /**
  * Nova Beam — layered volume tube + shock discs (ThreeJSVFX-Demo).
  */
-import * as THREE from '../../vendor/three/three.module.js';
+import * as THREE from 'three';
 import { createBeamTubeGeometry } from './geometry.js?v=29y';
 import { DecalType } from './groundDecals.js?v=29u';
 import { BurstMode } from './burstSphere.js?v=29u';

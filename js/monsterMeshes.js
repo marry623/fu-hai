@@ -1,6 +1,6 @@
 /** Low-poly monster meshes for combat + bestiary portraits */
 
-import * as THREE from '../vendor/three/three.module.js';
+import * as THREE from 'three';
 import { addOutline, toonMat, ensureOutlineMaterials } from './stylekit.js?v=34a';
 import { resolveMonsterId, monsterHp } from './monsterCatalog.js?v=31g';
 

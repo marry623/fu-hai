@@ -1,4 +1,4 @@
-import * as THREE from '../vendor/three/three.module.js';
+import * as THREE from 'three';
 import { createToonGradient, clamp } from './stylekit.js?v=34a';
 import {
   createDuskSky, createClouds, createWater, updateWater,
@@ -53,7 +53,7 @@ import { getSeaBiome } from './seaBiomes.js?v=44d';
 import { applyHudTheme } from './hudTheme.js?v=42b';
 import { createWeatherFx } from './weatherFx.js?v=44a';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=44r';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=44q';
 import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=44k';
 import * as sfx from './audio.js?v=42e';
 

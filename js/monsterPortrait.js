@@ -1,4 +1,4 @@
-import * as THREE from '../vendor/three/three.module.js';
+import * as THREE from 'three';
 import { createToonGradient } from './stylekit.js';
 import { createMonsterMesh } from './monsterMeshes.js?v=41e';
 

@@ -1,6 +1,6 @@
 /** 3D hub island — bright pastel look matching the cover lighthouse scene */
 
-import * as THREE from '../vendor/three/three.module.js';
+import * as THREE from 'three';
 import { addOutline, toonMat } from './stylekit.js';
 
 function M(geo, color, gradientMap, outline = 1.05) {
