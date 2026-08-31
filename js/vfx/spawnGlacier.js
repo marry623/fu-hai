@@ -1,7 +1,7 @@
 /**
  * Glacial Crown — open crystal ring + frost veil + falling snow.
  */
-import * as THREE from 'three';
+import * as THREE from '../../vendor/three/three.module.js';
 import { createCrystalGeometry, hash11 } from './geometry.js?v=29y';
 import { DecalType } from './groundDecals.js?v=29u';
 import { BurstMode } from './burstSphere.js?v=29u';

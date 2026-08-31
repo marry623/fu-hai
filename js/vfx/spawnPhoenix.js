@@ -2,7 +2,7 @@
  * Solar Phoenix VFX — adapted from ThreeJSVFX-Demo PhoenixAbility.
  * Charge orb → fire bird with flapping wings flies to target → sun-burst explosion.
  */
-import * as THREE from 'three';
+import * as THREE from '../../vendor/three/three.module.js';
 import { hash11, createPhoenixWingGeometry } from './geometry.js?v=29y';
 import { DecalType } from './groundDecals.js?v=29u';
 import { BurstMode } from './burstSphere.js?v=29u';

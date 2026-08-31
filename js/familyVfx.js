@@ -2,7 +2,7 @@
  * Family resonance VFX — skill-parity glow on the water under the boat
  * (same plane as foam rings), not mounted on the hull.
  */
-import * as THREE from 'three';
+import * as THREE from '../vendor/three/three.module.js';
 import { FAMILIES } from './fishCatalog.js?v=34b';
 import { createGpuSparks } from './vfx/gpuSparks.js?v=32p';
 import { createBurstSystem, BurstMode } from './vfx/burstSphere.js?v=32p';

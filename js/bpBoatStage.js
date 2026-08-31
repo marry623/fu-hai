@@ -1,6 +1,6 @@
 /** In-run backpack slots tab: 3D boat + 6 callouts (hub prep look). */
 
-import * as THREE from 'three';
+import * as THREE from '../vendor/three/three.module.js';
 import { createToonGradient } from './stylekit.js';
 import { createBoat, setBoatVariant, hullUpscale } from './boat.js?v=44b';
 import { equipFish, SLOT_ORDER, SLOT_LABELS } from './slots.js?v=39b';

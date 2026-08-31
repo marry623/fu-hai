@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>浮骸</title>
-  <link rel="stylesheet" href="css/style.css?v=44q" />
+  <link rel="stylesheet" href="css/style.css?v=44r" />
 </head>
 <body>
   <div id="game-root">
@@ -445,10 +445,19 @@
     };
     window.addEventListener('error', (e) => show((e.error && e.error.stack) || e.message));
     window.addEventListener('unhandledrejection', (e) => show(e.reason && e.reason.stack || e.reason));
+    if (location.protocol !== 'file:') {
+      const path = location.pathname || '/';
+      const leaf = path.split('/').pop() || '';
+      if (path && !path.endsWith('/') && !leaf.includes('.')) {
+        location.replace(path + '/' + location.search + location.hash);
+        return;
+      }
+    }
     const fileHint = '请勿直接双击 index.html。运行项目里的 play.bat，或打开 http://127.0.0.1:8787/\nChrome 在 file:// 下无法加载 ES 模块。';
+    const netHint = '脚本没加载成功。请用 Chrome / Edge 打开后硬刷新。微信内置浏览器和部分国内网络可能打不开 github.io。';
     const urls = location.protocol === 'file:'
-      ? ['./js/main.js', './js/main.js?v=44q']
-      : ['./js/main.js?v=44q'];
+      ? ['./js/main.js', './js/main.js?v=44r']
+      : ['./js/main.js?v=44r'];
     if (location.protocol === 'file:') show(fileHint);
     let last = null;
     let ok = false;
@@ -464,7 +473,7 @@
     if (ok) {
       if (location.protocol !== 'file:' && box) box.hidden = true;
     } else {
-      show(((last && last.stack) || last || '') + '\n\n' + fileHint);
+      show(((last && last.stack) || last || '') + '\n\n' + (location.protocol === 'file:' ? fileHint : netHint));
     }
   </script>
 </body>

@@ -1,6 +1,6 @@
 /** Load / clear irregular sea geometry; boat constraint; water tint */
 
-import * as THREE from 'three';
+import * as THREE from '../vendor/three/three.module.js';
 import { addOutline, toonMat } from './stylekit.js';
 import { getSeaMap, constrainToPoly, pointInPoly, EVAC_RADIUS, TUTORIAL_BEATS, TUTORIAL_EVAC_RADIUS } from './seaMaps.js?v=44d';
 import { getSeaBiome } from './seaBiomes.js?v=44d';

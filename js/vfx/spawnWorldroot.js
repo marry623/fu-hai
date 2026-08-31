@@ -1,7 +1,7 @@
 /**
  * Worldroot Bloom — seed arc, trunk/roots/branches, leaf crown, pollen.
  */
-import * as THREE from 'three';
+import * as THREE from '../../vendor/three/three.module.js';
 import { DecalType } from './groundDecals.js?v=29u';
 import { BurstMode } from './burstSphere.js?v=29u';
 

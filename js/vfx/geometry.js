@@ -11,7 +11,7 @@ import {
   IcosahedronGeometry,
   Sphere,
   Vector3,
-} from 'three';
+} from '../../vendor/three/three.module.js';
 
 export const TAU = Math.PI * 2;
 

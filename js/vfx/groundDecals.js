@@ -11,7 +11,7 @@ import {
   Color,
   Vector3,
   Group,
-} from 'three';
+} from '../../vendor/three/three.module.js';
 
 export const DecalType = Object.freeze({
   SCORCH: 0,

@@ -8,7 +8,7 @@ import {
   ShaderMaterial,
   AdditiveBlending,
   Color,
-} from 'three';
+} from '../../vendor/three/three.module.js';
 
 const MAX = 900;
 const _col = new Color();

@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from '../vendor/three/three.module.js';
 
 /** Beat lengths in seconds — kept short so the reward never sits in the sailing view. */
 const RISE = 0.12;

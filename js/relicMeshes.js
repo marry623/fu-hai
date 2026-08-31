@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from '../vendor/three/three.module.js';
 import { addOutline, toonMat } from './stylekit.js';
 
 /** Low-poly relic meshes: sealed black package vs opened treasures. */

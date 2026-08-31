@@ -1,6 +1,6 @@
 /** Cover diorama — red/white lighthouse on a tiny island (flat low-poly) */
 
-import * as THREE from 'three';
+import * as THREE from '../vendor/three/three.module.js';
 import { addOutline, toonMat } from './stylekit.js';
 
 function M(geo, color, gradientMap, outline = 1.05) {

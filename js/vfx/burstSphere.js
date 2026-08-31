@@ -10,7 +10,7 @@ import {
   Color,
   Group,
   DoubleSide,
-} from 'three';
+} from '../../vendor/three/three.module.js';
 
 export const BurstMode = Object.freeze({
   FIRE: 0,

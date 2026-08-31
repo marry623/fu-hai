@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from '../vendor/three/three.module.js';
 import { addOutline, toonMat } from './stylekit.js';
 
 function mesh(geo, color, gm, outline = 1.06) {
