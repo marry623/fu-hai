@@ -39,21 +39,21 @@ import {
   skillLevel, scaledSkillCard, fishmongerGreenMul, ghostWakeCorrMul, talentLevel,
   equippedTalents, driftSalvageMul, ramBlacksmithMul,
   chargeZoneTicket, canDepartZone, saveMeta,
-} from './meta.js?v=44k';
+} from './meta.js?v=44l';
 import { applyLoadoutToRun, collectRunFish } from './loadout.js?v=35l';
-import { createHub } from './hub.js?v=44k';
+import { createHub } from './hub.js?v=44l';
 import { createCoverScene } from './coverScene.js?v=43l';
 import { createHubIsland } from './hubIsland.js?v=43l';
 import { createHubBoatPreview } from './hubBoatPreview.js?v=39s';
 import { createBpBoatStage } from './bpBoatStage.js?v=31g';
-import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=44e';
+import { createSeaWorld, updateWaterFollow, setWaterColor } from './seaWorld.js?v=44n';
 import { ensureAllPropGlbsLoading } from './propGlb.js?v=43k';
 import { hullLength } from './hullGlb.js?v=43k';
 import { getSeaBiome } from './seaBiomes.js?v=44d';
 import { applyHudTheme } from './hudTheme.js?v=42b';
 import { createWeatherFx } from './weatherFx.js?v=44a';
 import { getMonsterDef, resolveMonsterId, monstersForZone, combatCountForZone } from './monsterCatalog.js?v=39d';
-import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=44k';
+import { createSkillVfx, SKILL_CARDS, AIM_HEAD_EXTRA } from './vfx/skillVfx.js?v=44n';
 import { renderManualHtml, renderControlsHtml } from './hubManual.js?v=44k';
 import * as sfx from './audio.js?v=42e';
 
@@ -875,6 +875,7 @@ scene.add(seaWorld.root);
 // rock discs exist — otherwise a share of them sit inside a stone all run.
 seaWorld.setOnPropsReloaded(() => {
   hazards.relocateFromDiscs(seaWorld.getPropDiscs(), seaWorld.getMap());
+  seaWorld.relocateFlotsam(flotsam);
 });
 
 function createTutMarker() {
@@ -1731,6 +1732,7 @@ function resolveSalvage(obj, r) {
       respawnFlotsam(obj, obj.userData.id);
       obj.position.z = paddle.state.z + 40 + Math.random() * 60;
       obj.position.x = (Math.random() - 0.5) * 40;
+      seaWorld.relocateFlotsam([obj]);
     }, 8000);
   }
 }
@@ -3750,6 +3752,7 @@ function tick() {
         if (d > 90) {
           f.position.x = phys.x + (Math.random() - 0.5) * 50;
           f.position.z = phys.z + 20 + Math.random() * 40;
+          seaWorld.relocateFlotsam([f]);
         }
       }
     }

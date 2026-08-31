@@ -56,7 +56,7 @@ import {
   LOADOUT_BAG_SIZE,
   zoneTicketCost,
   canDepartZone,
-} from './meta.js?v=44k';
+} from './meta.js?v=44l';
 import { previewCraftOdds } from './fishCraft.js?v=41c';
 import { HUB_SPOTS } from './hubIsland.js?v=43l';
 import { renderManualHtml } from './hubManual.js?v=44k';
@@ -407,28 +407,41 @@ export function createHub(deps) {
     return Math.max(lo, Math.min(hi, Math.round(n)));
   }
 
+  function maxBuyUnits(item, frags) {
+    const cost = Math.max(1, item?.cost | 0);
+    return Math.max(0, Math.min(999, Math.floor((frags | 0) / cost)));
+  }
+
   function wireWhQtyControls(pop, max, onChange, step = 1) {
     const stepN = Math.max(1, step | 0);
+    const lo = stepN;
+    const hi = Math.max(lo, max | 0);
     const snap = (raw) => {
       const n = Number(raw);
-      if (!Number.isFinite(n)) return stepN;
+      if (!Number.isFinite(n)) return lo;
       const rounded = Math.round(n / stepN) * stepN;
-      return Math.max(stepN, Math.min(max, rounded));
+      return Math.max(lo, Math.min(hi, rounded));
     };
     const range = pop.querySelector('[data-wh-qty-range]');
     const num = pop.querySelector('[data-wh-qty-num]');
-    const sync = (raw, from) => {
-      const v = snap(raw);
+    const apply = (v, writeNum) => {
       if (range) range.value = String(v);
-      if (num && from !== 'num') num.value = String(v);
-      if (num && from === 'num') num.value = String(v);
+      if (writeNum && num) num.value = String(v);
       onChange(v);
       return v;
     };
-    range?.addEventListener('input', () => sync(range.value, 'range'));
-    num?.addEventListener('input', () => sync(num.value, 'num'));
-    num?.addEventListener('change', () => sync(num.value, 'num'));
-    sync(stepN, 'init');
+    range?.addEventListener('input', () => apply(snap(range.value), true));
+    num?.addEventListener('input', () => {
+      const raw = String(num.value ?? '').trim();
+      if (raw === '' || raw === '-' || raw === '+') return;
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return;
+      apply(snap(n), false);
+    });
+    const commit = () => apply(snap(num?.value), true);
+    num?.addEventListener('change', commit);
+    num?.addEventListener('blur', commit);
+    apply(lo, true);
   }
 
   function openWhBuyPop(supplyId) {
@@ -437,10 +450,9 @@ export function createHub(deps) {
     if (!item || !pop) return;
     const meta = deps.getMeta();
     const frags = meta.fragments | 0;
-    const unitStep = Math.max(1, item.amount | 0);
-    const maxPacks = Math.max(0, Math.min(99, Math.floor(frags / item.cost)));
-    const maxUnits = maxPacks * unitStep;
-    if (maxPacks <= 0) {
+    const unitStep = 1;
+    const maxUnits = maxBuyUnits(item, frags);
+    if (maxUnits <= 0) {
       deps.toast('海图碎片不足');
       sfx.uiDeny();
       return;
@@ -449,19 +461,18 @@ export function createHub(deps) {
     pop.setAttribute('aria-label', `购买${item.name}`);
     pop.classList.remove('hidden');
     const paint = (units) => {
-      const packs = Math.max(1, Math.round(units / unitStep));
-      const totalCost = item.cost * packs;
-      const got = unitStep * packs;
+      const n = Math.max(1, units | 0);
+      const totalCost = item.cost * n;
       const priceEl = pop.querySelector('[data-wh-qty-price]');
       const bodyEl = pop.querySelector('[data-wh-qty-body]');
       const go = pop.querySelector('[data-wh-buy-confirm]');
-      if (priceEl) priceEl.textContent = `${totalCost} 海图碎片 · 入手 ${got} 个 · 余额 ${frags}`;
+      if (priceEl) priceEl.textContent = `${totalCost} 海图碎片 · 入手 ${n} 个 · 余额 ${frags}`;
       if (bodyEl) {
-        bodyEl.textContent = `每 ${item.cost} 碎片入手 ${unitStep} 个。购入后尽量装入携带背包。`;
+        bodyEl.textContent = `单价 ${item.cost} 碎片。购入后尽量装入携带背包。`;
       }
       if (go) {
-        go.disabled = packs < 1 || totalCost > frags;
-        go.textContent = go.disabled ? '碎片不足' : `购买 ${got} 个并装入`;
+        go.disabled = n < 1 || totalCost > frags;
+        go.textContent = go.disabled ? '碎片不足' : `购买 ${n} 个并装入`;
       }
     };
     pop.innerHTML = `
@@ -494,10 +505,8 @@ export function createHub(deps) {
       if (!whQtyDlg || whQtyDlg.mode !== 'buy') return;
       const id = whQtyDlg.id;
       const shopItem = SHOP_SUPPLIES.find((s) => s.id === id);
-      const step = Math.max(1, (whQtyDlg.step | 0) || (shopItem?.amount | 0) || 1);
-      const units = clampInt(pop.querySelector('[data-wh-qty-num]')?.value, step, maxUnits);
-      const packs = Math.max(1, Math.round(units / step));
-      const bought = buySupplyQty(deps.getMeta(), id, packs);
+      const units = clampInt(pop.querySelector('[data-wh-qty-num]')?.value, 1, maxUnits);
+      const bought = buySupplyQty(deps.getMeta(), id, units);
       if (!bought.ok) {
         deps.toast(bought.msg);
         sfx.uiDeny();
@@ -1977,12 +1986,9 @@ export function createHub(deps) {
       if (isSupply && shopDetail.actId) {
         const supplyItem = SHOP_SUPPLIES.find((s) => s.id === shopDetail.actId);
         const frags = meta.fragments | 0;
-        const maxPacks = supplyItem
-          ? Math.max(0, Math.min(99, Math.floor(frags / supplyItem.cost)))
-          : 0;
-        const dis = maxPacks < 1 ? 'disabled' : '';
-        const unitStep = Math.max(1, supplyItem?.amount | 0);
-        const maxUnits = maxPacks * unitStep;
+        const maxUnits = supplyItem ? maxBuyUnits(supplyItem, frags) : 0;
+        const dis = maxUnits < 1 ? 'disabled' : '';
+        const unitStep = 1;
         qtyBlock = `
           <div class="hub-shop-qty">
             <label class="hub-shop-qty-label">数量（个）</label>
@@ -2011,21 +2017,17 @@ export function createHub(deps) {
     if (shopDetail?.act === 'supply' && shopDetail.actId) {
       const supplyItem = SHOP_SUPPLIES.find((s) => s.id === shopDetail.actId);
       const frags = meta.fragments | 0;
-      const maxPacks = supplyItem
-        ? Math.max(0, Math.min(99, Math.floor(frags / supplyItem.cost)))
-        : 0;
-      const unitStep = Math.max(1, supplyItem?.amount | 0);
-      const maxUnits = maxPacks * unitStep;
+      const maxUnits = supplyItem ? maxBuyUnits(supplyItem, frags) : 0;
+      const unitStep = 1;
       const paintQty = (units) => {
-        const packs = Math.max(1, Math.round(units / unitStep));
-        const cost = (supplyItem?.cost || 0) * packs;
-        const got = unitStep * packs;
+        const n = Math.max(1, units | 0);
+        const cost = (supplyItem?.cost || 0) * n;
         const priceEl = panel.querySelector('[data-shop-qty-price]');
         const btn = panel.querySelector('[data-shop-act]');
-        if (priceEl) priceEl.textContent = `${cost} 碎片 · 入手 ${got} 个 · 余额 ${frags}`;
+        if (priceEl) priceEl.textContent = `${cost} 碎片 · 入手 ${n} 个 · 余额 ${frags}`;
         if (btn) {
-          btn.disabled = maxPacks < 1 || cost > frags;
-          btn.textContent = maxPacks < 1 ? '碎片不足' : `购入 ${got} 个`;
+          btn.disabled = maxUnits < 1 || cost > frags;
+          btn.textContent = maxUnits < 1 ? '碎片不足' : `购入 ${n} 个`;
         }
       };
       wireWhQtyControls(panel, Math.max(unitStep, maxUnits), paintQty, unitStep);
@@ -2108,12 +2110,9 @@ export function createHub(deps) {
       if (act === 'supply') {
         const qtyNum = panel.querySelector('[data-wh-qty-num]');
         const supplyItem = SHOP_SUPPLIES.find((s) => s.id === actId);
-        const unitStep = Math.max(1, supplyItem?.amount | 0);
-        const maxPacksAct = Math.max(0, Math.min(99, Math.floor((deps.getMeta().fragments | 0) / Math.max(1, supplyItem?.cost | 0))));
-        const maxUnits = Math.max(unitStep, maxPacksAct * unitStep);
-        const units = clampInt(qtyNum?.value || String(unitStep), unitStep, maxUnits);
-        const packs = Math.max(1, Math.round(units / unitStep));
-        const r = buySupplyQty(deps.getMeta(), actId, packs);
+        const maxUnits = supplyItem ? maxBuyUnits(supplyItem, deps.getMeta().fragments | 0) : 1;
+        const units = clampInt(qtyNum?.value || '1', 1, Math.max(1, maxUnits));
+        const r = buySupplyQty(deps.getMeta(), actId, units);
         deps.toast(r.msg);
         if (r.ok) {
           sfx.uiBuy();
@@ -2268,7 +2267,7 @@ export function createHub(deps) {
         cards = SHOP_SUPPLIES.filter((item) => item.zone === shopSupplyZone).map((item) => shopCardHtml({
           key: `supply:${item.id}`,
           title: item.name,
-          sub: `${item.cost} · ×${item.amount}`,
+          sub: `${item.cost} 碎片/个`,
           tone: item.tone,
           itemId: item.id,
         })).join('');
@@ -2442,7 +2441,7 @@ export function createHub(deps) {
             ? {
               title: item.name,
               desc: item.desc,
-              priceLine: `${item.cost} 海图碎片`,
+              priceLine: `${item.cost} 海图碎片/个`,
               act: meta.fragments >= item.cost ? 'supply' : null,
               actId: id,
               actLabel: '购入',

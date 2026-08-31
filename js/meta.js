@@ -435,10 +435,10 @@ export const SHOP_HULLS = [
 ];
 
 export const SHOP_SUPPLIES = [
-  { id: 'baitCrude', zone: 'bait', name: '粗饵', cost: 12, amount: 4, tone: '#8aa090', desc: '星级权重不变。抛竿耗 1。×4 入仓。' },
-  { id: 'baitFresh', zone: 'bait', name: '鲜饵', cost: 20, amount: 3, tone: '#4ecdc4', desc: '抛竿耗 1。×3 入仓。权重 ★−8 / ★★+5 / ★★★+3。' },
-  { id: 'baitScale', zone: 'bait', name: '亮鳞饵', cost: 50, amount: 3, tone: '#d4c060', desc: '抛竿耗 1。×3 入仓。权重 ★−16 / ★★−4 / ★★★+2 / ★★★★+8 / 五星+6 / 隐藏+4。未解锁星的加分拨到本图最高的 2–4 星。' },
-  { id: 'baitAbyss', zone: 'bait', name: '深渊饵', cost: 90, amount: 2, tone: '#6a40a0', desc: '抛竿耗 1。×2 入仓。权重 ★−18 / ★★−10 / ★★★0 / ★★★★+10 / 五星+14 / 隐藏+4。未解锁星的加分拨到本图最高的 2–4 星。' },
+  { id: 'baitCrude', zone: 'bait', name: '粗饵', cost: 3, amount: 1, tone: '#8aa090', desc: '星级权重不变。抛竿耗 1。按个售卖。' },
+  { id: 'baitFresh', zone: 'bait', name: '鲜饵', cost: 7, amount: 1, tone: '#4ecdc4', desc: '抛竿耗 1。按个售卖。权重 ★−8 / ★★+5 / ★★★+3。' },
+  { id: 'baitScale', zone: 'bait', name: '亮鳞饵', cost: 17, amount: 1, tone: '#d4c060', desc: '抛竿耗 1。按个售卖。权重 ★−16 / ★★−4 / ★★★+2 / ★★★★+8 / 五星+6 / 隐藏+4。未解锁星的加分拨到本图最高的 2–4 星。' },
+  { id: 'baitAbyss', zone: 'bait', name: '深渊饵', cost: 45, amount: 1, tone: '#6a40a0', desc: '抛竿耗 1。按个售卖。权重 ★−18 / ★★−10 / ★★★0 / ★★★★+10 / 五星+14 / 隐藏+4。未解锁星的加分拨到本图最高的 2–4 星。' },
   { id: 'plank', zone: 'repair', name: '木板', cost: 40, amount: 1, tone: '#c4a06a', desc: '占背包 1 格。×1 入仓。R +15 耐久。' },
   { id: 'repair', zone: 'repair', name: '修补剂', cost: 60, amount: 1, tone: '#6a9ac4', desc: '可与龙骨膏同带。×1 入仓。+25 耐久。' },
   { id: 'paste', zone: 'repair', name: '龙骨膏', cost: 110, amount: 1, tone: '#c45c1a', desc: '大修。×1 入仓。+45 耐久。' },
@@ -671,15 +671,16 @@ export function buySupply(meta, supplyId) {
   return buySupplyQty(meta, supplyId, 1);
 }
 
-/** Buy `packs` shop bundles of a supply (each pack costs item.cost and adds item.amount). */
-export function buySupplyQty(meta, supplyId, packs = 1) {
+/** Buy `units` of a supply (each unit costs item.cost and adds item.amount, usually 1). */
+export function buySupplyQty(meta, supplyId, units = 1) {
   const item = SHOP_SUPPLIES.find((s) => s.id === supplyId);
   if (!item) return { ok: false, meta, msg: '无效物资' };
-  const n = Math.max(1, Math.min(99, packs | 0));
+  const unitAmt = Math.max(1, item.amount | 0);
+  const n = Math.max(1, Math.min(999, units | 0));
   const cost = item.cost * n;
   if ((meta.fragments | 0) < cost) return { ok: false, meta, msg: '海图碎片不足' };
   const supplies = normalizeSupplies(meta.warehouse?.supplies);
-  supplies[item.id] = (supplies[item.id] || 0) + item.amount * n;
+  supplies[item.id] = (supplies[item.id] || 0) + unitAmt * n;
   const m = {
     ...meta,
     fragments: (meta.fragments | 0) - cost,
@@ -689,9 +690,9 @@ export function buySupplyQty(meta, supplyId, packs = 1) {
   return {
     ok: true,
     meta: m,
-    msg: `购入 ${item.name} ×${item.amount * n}`,
+    msg: `购入 ${item.name} ×${unitAmt * n}`,
     packs: n,
-    amount: item.amount * n,
+    amount: unitAmt * n,
     cost,
   };
 }

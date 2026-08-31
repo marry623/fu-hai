@@ -11,6 +11,39 @@ import {
   getPropCollProfile,
 } from './propGlb.js?v=43k';
 
+/** Clearance past reef / prop-disc radius so flotsam sits in open water. */
+const FLOT_PAD = 4;
+
+function hitsRock(x, z, map, pad = FLOT_PAD) {
+  if (!map) return null;
+  const reefs = map.reefs || [];
+  for (const r of reefs) {
+    if (Math.hypot(x - r.x, z - r.z) < r.r + pad) return r;
+  }
+  const discs = map._propDiscs || [];
+  for (const d of discs) {
+    if (Math.hypot(x - d.x, z - d.z) < d.r + pad) return d;
+  }
+  return null;
+}
+
+function freeSpotOffRock(x, z, map, pad = FLOT_PAD) {
+  const d = hitsRock(x, z, map, pad);
+  if (!d) return null;
+  const poly = map.navigable || null;
+  const target = (d.r || 0) + pad + 0.5;
+  const base = Math.atan2(z - d.z, x - d.x);
+  for (let i = 0; i < 12; i++) {
+    const ang = base + (i === 0 ? 0 : (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.5);
+    const nx = d.x + Math.cos(ang) * target;
+    const nz = d.z + Math.sin(ang) * target;
+    if (poly && !pointInPoly(nx, nz, poly)) continue;
+    if (hitsRock(nx, nz, map, pad)) continue;
+    return { x: nx, z: nz };
+  }
+  return null;
+}
+
 function M(geo, color, gradientMap, outline = 1.05) {
   const m = new THREE.Mesh(geo, toonMat(color, gradientMap, { flatShading: true }));
   if (outline) addOutline(m, outline);
@@ -243,6 +276,21 @@ function propHit(discs, x, z, margin) {
   return false;
 }
 
+function evacKeepoutR(map) {
+  return ((map?.id | 0) === -1) ? TUTORIAL_EVAC_RADIUS : EVAC_RADIUS;
+}
+
+/** True when a disc of radius extraR would overlap a lighthouse evac ring. */
+function nearLighthouse(x, z, map, extraR = 0) {
+  const need = evacKeepoutR(map) + (extraR || 0);
+  for (const lh of map?.lighthouses || []) {
+    if (Math.hypot(x - lh.x, z - lh.z) < need) return true;
+  }
+  return false;
+}
+
+const STONE_LH_CLEAR = EVAC_RADIUS + 28;
+
 /**
  * XZ disc radius from applied uniform scale + mesh AABB. Fallback for props
  * baked before collision profiles existed — the AABB of a tree is its canopy,
@@ -371,6 +419,7 @@ function scatterZone0Rocks(root, map, propDiscs = null) {
   const isTutRock = (map.id | 0) === -1;
   for (const pt of pts) {
     if (isTutRock && inTutorialClearZone(pt.x, pt.z)) continue;
+    if (nearLighthouse(pt.x, pt.z, map)) continue;
     if (propDiscs && propHit(propDiscs, pt.x, pt.z, 7)) continue;
     const rock = tpl.clone(true);
     rock.position.set(pt.x, 0, pt.z);
@@ -381,13 +430,12 @@ function scatterZone0Rocks(root, map, propDiscs = null) {
     const sy = base * (0.55 + hash2(pt.seed, pt.z) * 0.85);
     const sz = base * (0.75 + hash2(pt.x + pt.z, pt.seed) * 0.55);
     rock.scale.set(sx * 0.7, sy * 0.7, sz * 0.7);
+    const scaleXZ = Math.max(sx, sz) * 0.7;
+    const scaleY = sy * 0.7;
+    const r = propCollR('zone0Rock', tpl, scaleXZ, scaleY, 2);
+    if (nearLighthouse(pt.x, pt.z, map, r)) continue;
     root.add(rock);
-    if (propDiscs) {
-      const scaleXZ = Math.max(sx, sz) * 0.7;
-      const scaleY = sy * 0.7;
-      const r = propCollR('zone0Rock', tpl, scaleXZ, scaleY, 2);
-      propDiscs.push({ x: pt.x, z: pt.z, r });
-    }
+    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r });
   }
 }
 
@@ -484,6 +532,7 @@ function scatterZone0ExtraRocks(root, map, propDiscs = null) {
 
   for (const pt of collectExtraZone0Points(map)) {
     if (hash2(pt.seed, pt.x) < 0.42) continue;
+    if (nearLighthouse(pt.x, pt.z, map)) continue;
     if (propDiscs && propHit(propDiscs, pt.x, pt.z, 8)) continue;
     const rock = tpl.clone(true);
     rock.position.set(pt.x, 0, pt.z);
@@ -494,13 +543,12 @@ function scatterZone0ExtraRocks(root, map, propDiscs = null) {
     const sy = base * (0.52 + hash2(pt.seed, pt.z) * 0.92);
     const sz = base * (0.72 + hash2(pt.x + pt.z, pt.seed) * 0.58);
     rock.scale.set(sx * 0.7, sy * 0.7, sz * 0.7);
+    const scaleXZ = Math.max(sx, sz) * 0.7;
+    const scaleY = sy * 0.7;
+    const r = propCollR('zone0RockB', tpl, scaleXZ, scaleY, 2);
+    if (nearLighthouse(pt.x, pt.z, map, r)) continue;
     root.add(rock);
-    if (propDiscs) {
-      const scaleXZ = Math.max(sx, sz) * 0.7;
-      const scaleY = sy * 0.7;
-      const r = propCollR('zone0RockB', tpl, scaleXZ, scaleY, 2);
-      propDiscs.push({ x: pt.x, z: pt.z, r });
-    }
+    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r });
   }
 }
 
@@ -630,6 +678,7 @@ function scatterZone0MoreRocks(root, map, propDiscs = null) {
 
   for (const pt of collectMoreZone0Points(map)) {
     if (hash2(pt.seed + 3, pt.z) < 0.38) continue;
+    if (nearLighthouse(pt.x, pt.z, map)) continue;
     if (propDiscs && propHit(propDiscs, pt.x, pt.z, 8)) continue;
     const rock = tpl.clone(true);
     rock.position.set(pt.x, 0, pt.z);
@@ -641,13 +690,12 @@ function scatterZone0MoreRocks(root, map, propDiscs = null) {
     const sy = base * (0.5 + hash2(pt.seed, pt.z) * 0.95);
     const sz = base * (0.7 + hash2(pt.x + pt.z, pt.seed) * 0.62);
     rock.scale.set(sx * 0.7, sy * 0.7, sz * 0.7);
+    const scaleXZ = Math.max(sx, sz) * 0.7;
+    const scaleY = sy * 0.7;
+    const r = propCollR('zone0RockC', tpl, scaleXZ, scaleY, 2);
+    if (nearLighthouse(pt.x, pt.z, map, r)) continue;
     root.add(rock);
-    if (propDiscs) {
-      const scaleXZ = Math.max(sx, sz) * 0.7;
-      const scaleY = sy * 0.7;
-      const r = propCollR('zone0RockC', tpl, scaleXZ, scaleY, 2);
-      propDiscs.push({ x: pt.x, z: pt.z, r });
-    }
+    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r });
   }
 }
 
@@ -669,6 +717,7 @@ function scatterZone0NewRocks(root, map, propDiscs = null) {
   ];
 
   for (const pt of pts) {
+    if (nearLighthouse(pt.x, pt.z, map)) continue;
     // 不做 propHit，允许在珊瑚旁刷新，少量重叠无妨
     const idx = Math.floor(hash2(pt.x + 13, pt.z + 7) * tpls.length) % tpls.length;
     const { id: rockId, tpl, baseSize } = tpls[idx];
@@ -683,11 +732,10 @@ function scatterZone0NewRocks(root, map, propDiscs = null) {
     const sizeMul = isTut ? Math.min(rawSizeMul, 1.5) : rawSizeMul;
     const s = (sizeMul * ROCK_TARGETS[idx]) / baseSize * 0.7;
     rock.scale.setScalar(s);
+    const r = propCollR(rockId, tpl, s, s, 3);
+    if (nearLighthouse(pt.x, pt.z, map, r)) continue;
     root.add(rock);
-    if (propDiscs) {
-      const r = propCollR(rockId, tpl, s, s, 3);
-      propDiscs.push({ x: pt.x, z: pt.z, r });
-    }
+    if (propDiscs) propDiscs.push({ x: pt.x, z: pt.z, r });
   }
 }
 
@@ -995,7 +1043,7 @@ function scatterZone1GlbProps(root, map, biome, gradientMap) {
   for (let i = 0; i < stoneCount; i++) {
     const id = stoneIds[i % stoneIds.length];
     if (!isPropGlbReady(id)) continue;
-    const pt = tryPlacePoint(150, minDist, i * 1.7, 0);
+    const pt = tryPlacePoint(150, minDist, i * 1.7, STONE_LH_CLEAR);
     if (!pt) continue;
     const _vx = pt.x - spawnX, _vz = pt.z - spawnZ;
     const _along = _vx * corridorDirX + _vz * corridorDirZ;
@@ -1010,8 +1058,9 @@ function scatterZone1GlbProps(root, map, biome, gradientMap) {
     const sizeMul = (0.6 + hash2(pt.x * 1.7, pt.z) * 0.8) * stoneScaleBoost;
     const appliedScale = (2.5 * sizeMul) / baseSize * 0.7;
     tpl.scale.setScalar(appliedScale);
-    root.add(tpl);
     const r = propCollR(id, tpl, appliedScale, appliedScale, 3);
+    if (nearLighthouse(pt.x, pt.z, map, r)) continue;
+    root.add(tpl);
     propDiscs.push({ x: pt.x, z: pt.z, r });
   }
 
@@ -1133,7 +1182,7 @@ function scatterZone2GlbProps(root, map, biome, gradientMap) {
   for (let i = 0; i < stoneCount; i++) {
     const id = stoneIds[i % stoneIds.length];
     if (!isPropGlbReady(id)) continue;
-    const pt = tryPlacePoint(30, minDist, i * 1.7, 0);
+    const pt = tryPlacePoint(30, minDist, i * 1.7, STONE_LH_CLEAR);
     if (!pt) continue;
     const tpl = clonePropGlb(id);
     if (!tpl) continue;
@@ -1144,8 +1193,9 @@ function scatterZone2GlbProps(root, map, biome, gradientMap) {
     const sizeMul = (0.6 + hash2(pt.x * 1.7, pt.z) * 0.8) * stoneScaleBoost;
     const appliedScale = (2.5 * sizeMul) / baseSize * 0.9;
     tpl.scale.setScalar(appliedScale);
-    root.add(tpl);
     const r = propCollR(id, tpl, appliedScale, appliedScale, 3);
+    if (nearLighthouse(pt.x, pt.z, map, r)) continue;
+    root.add(tpl);
     propDiscs.push({ x: pt.x, z: pt.z, r });
   }
 
@@ -1229,7 +1279,7 @@ function scatterZone3GlbProps(root, map, biome, gradientMap) {
   for (let i = 0; i < stoneCount; i++) {
     const id = stoneIds[i % stoneIds.length];
     if (!isPropGlbReady(id)) continue;
-    const pt = tryPlacePoint(30, minDist, i * 1.7, 0);
+    const pt = tryPlacePoint(30, minDist, i * 1.7, STONE_LH_CLEAR);
     if (!pt) continue;
     const tpl = clonePropGlb(id);
     if (!tpl) continue;
@@ -1240,8 +1290,9 @@ function scatterZone3GlbProps(root, map, biome, gradientMap) {
     const sizeMul = (0.6 + hash2(pt.x * 1.7, pt.z) * 0.8) * stoneScaleBoost;
     const appliedScale = (5.0 * sizeMul) / baseSize * 0.9;
     tpl.scale.setScalar(appliedScale);
-    root.add(tpl);
     const r = propCollR(id, tpl, appliedScale, appliedScale, 3);
+    if (nearLighthouse(pt.x, pt.z, map, r)) continue;
+    root.add(tpl);
     propDiscs.push({ x: pt.x, z: pt.z, r });
   }
 
@@ -1324,7 +1375,7 @@ function scatterZone4GlbProps(root, map, biome, gradientMap) {
     const tpl = clonePropGlb(id);
     if (!tpl) continue;
     const baseSize = tpl.userData.baseSize || 4;
-    const pt = tryPlacePoint(30, minDist, i * 1.7, 0);
+    const pt = tryPlacePoint(30, minDist, i * 1.7, STONE_LH_CLEAR);
     if (!pt) continue;
     tpl.position.set(pt.x, 0, pt.z);
     tpl.rotation.y = hash2(pt.x, pt.z) * Math.PI * 2;
@@ -1332,8 +1383,9 @@ function scatterZone4GlbProps(root, map, biome, gradientMap) {
     const sizeMul = (0.6 + hash2(pt.x * 1.7, pt.z) * 0.8) * stoneScaleBoost;
     const appliedScale = (2.5 * sizeMul) / baseSize * 0.7;
     tpl.scale.setScalar(appliedScale);
-    root.add(tpl);
     const r = propCollR(id, tpl, appliedScale, appliedScale, 3);
+    if (nearLighthouse(pt.x, pt.z, map, r)) continue;
+    root.add(tpl);
     propDiscs.push({ x: pt.x, z: pt.z, r });
   }
 
@@ -1754,6 +1806,7 @@ export function createSeaWorld() {
         }
         if (!ok) continue;
         if (Math.hypot(x - current.spawn.x, z - current.spawn.z) < minSpawn) continue;
+        if (hitsRock(x, z, current)) continue;
         obj.position.set(x, 0, z);
         obj.visible = true;
         if (obj.userData) obj.userData.collected = false;
@@ -1764,6 +1817,8 @@ export function createSeaWorld() {
         0,
         current.spawn.z + 35 + (i % 5) * 12
       );
+      const fallback = freeSpotOffRock(obj.position.x, obj.position.z, current);
+      if (fallback) obj.position.set(fallback.x, 0, fallback.z);
       obj.visible = true;
       return false;
     };
@@ -1827,6 +1882,17 @@ export function createSeaWorld() {
     flotsamList?.forEach((f, i) => placeRandom(f, i, 7.7, 16));
   }
 
+  function relocateFlotsam(list) {
+    if (!current || !list?.length) return;
+    for (const obj of list) {
+      if (!obj || obj.userData?.collected) continue;
+      const spot = freeSpotOffRock(obj.position.x, obj.position.z, current);
+      if (!spot) continue;
+      obj.position.x = spot.x;
+      obj.position.z = spot.z;
+    }
+  }
+
   function updateBeacons(time) {
     for (const lh of lighthouses) {
       const b = lh.userData.beacon;
@@ -1877,6 +1943,7 @@ export function createSeaWorld() {
     constrainBoat,
     setHullExtent,
     scatterProps,
+    relocateFlotsam,
     setTutorialReveal,
     updateBeacons,
     setEvacRingActive,
